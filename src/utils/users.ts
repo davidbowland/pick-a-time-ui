@@ -1,9 +1,11 @@
-import { SessionData, User } from '@types'
+import { User } from '@types'
 
 export function displayName(user: User): string {
-  return user.name || user.userId.replace(/[^a-z]+/gi, ' ').trim()
-}
-
-export function isSoloVoter(session: SessionData): boolean {
-  return session.voterCount <= 1 && session.currentRound === 0
+  if (user.name) return user.name
+  return user.userId
+    .replace(/[^a-z]+/gi, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 }

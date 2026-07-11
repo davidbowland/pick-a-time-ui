@@ -2,11 +2,11 @@ import Cookies from 'js-cookie'
 import { useCallback, useState } from 'react'
 
 function getCookieName(sessionId: string): string {
-  return `choosee_user_${sessionId}`
+  return `pat_user_${sessionId}`
 }
 
 function getCookiePath(sessionId: string): string {
-  return `/s/${sessionId}`
+  return `/p/${sessionId}`
 }
 
 export function useSessionCookie(sessionId: string) {

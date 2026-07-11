@@ -10,7 +10,7 @@ const AppBar = (): React.ReactNode => {
   return (
     <NavContainer>
       <Link href="/">
-        <BrandLink>Choosee</BrandLink>
+        <BrandLink>Pick a Time</BrandLink>
       </Link>
       {!isLoading && (
         <>

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  Infrastructure for choosee UI
+  Infrastructure for pick-a-time UI
 
 Parameters:
   Environment:
@@ -14,14 +14,14 @@ Parameters:
 Mappings:
   EnvironmentMap:
     prod:
-      bucketName: choosee-ui-source
-      certificate: adce1a21-90b4-4120-8548-111215e582f0
-      domain: choosee.dbowland.com
-      zoneId: Z072422417XWM8PIXXSFA
+      bucketName: pick-a-time-ui
+      certificate: cdf7b531-7189-4a69-a82c-ea54ef16729e
+      domain: pick-a-time.com
+      zoneId: Z09477181IUYK36D4AQQV
     test:
-      bucketName: choosee-ui-test
+      bucketName: pick-a-time-ui-test
       certificate: 6a48cba7-feb9-4de5-8cbf-d383140fcdef
-      domain: choosee.bowland.link
+      domain: pick-a-time.bowland.link
       zoneId: Z01312547RGU1BYKIJXY
 
 Resources:
@@ -36,8 +36,8 @@ Resources:
           var request = event.request;
           var uri = request.uri;
 
-          if (/^\/s\/[^\/]+(\/)?$/.test(uri)) {
-            request.uri = '/s/[sessionId]/index.html';
+          if (/^\/p\/[^\/]+(\/)?$/.test(uri)) {
+            request.uri = '/p/[sessionId]/index.html';
             return request;
           }
 
@@ -55,7 +55,7 @@ Resources:
           - Domain: !FindInMap [EnvironmentMap, !Ref Environment, domain]
         Runtime: cloudfront-js-2.0
       Name: !Sub
-        - '${Environment}-choosee-ui-url-rewrite'
+        - '${Environment}-pick-a-time-ui-url-rewrite'
         - Environment: !Ref Environment
 
   # Bucket
@@ -63,7 +63,6 @@ Resources:
   UiBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: PublicRead
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -71,9 +70,9 @@ Resources:
       BucketName: !FindInMap [EnvironmentMap, !Ref Environment, bucketName]
       Tags:
         - Key: 'created-by'
-          Value: 'choosee-ui'
+          Value: 'pick-a-time-ui'
         - Key: 'created-for'
-          Value: 'choosee'
+          Value: 'pick-a-time'
         - Key: 'environment'
           Value: !Ref Environment
 
@@ -153,9 +152,9 @@ Resources:
           SslSupportMethod: 'sni-only'
       Tags:
         - Key: 'created-by'
-          Value: 'choosee-ui'
+          Value: 'pick-a-time-ui'
         - Key: 'created-for'
-          Value: 'choosee'
+          Value: 'pick-a-time'
         - Key: 'environment'
           Value: !Ref Environment
 

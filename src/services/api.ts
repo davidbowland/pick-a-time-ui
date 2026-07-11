@@ -3,13 +3,12 @@ import { fetchAuthSession } from 'aws-amplify/auth'
 
 import { apiName, apiNameUnauthenticated } from '@config/amplify'
 import {
-  AddressResult,
-  ChoicesMap,
+  AvailabilityPatchRequest,
+  AvailabilityRecord,
   ErrorCode,
-  NewSessionRequest,
+  NewPlanRequest,
   PatchOperation,
-  SessionConfig,
-  SessionData,
+  PlanData,
   User,
 } from '@types'
 
@@ -71,23 +70,10 @@ async function apiPatch<T>(path: string, authenticated: boolean, reqBody?: AnyBo
 
 // --- Public API ---
 
-export const fetchAddress = (latitude: number, longitude: number, token: string): Promise<AddressResult> =>
-  apiGet(
-    '/reverse-geocode',
-    { latitude: String(latitude), longitude: String(longitude) },
-    { 'x-recaptcha-token': token },
-  )
+export const createPlan = (plan: NewPlanRequest, token: string): Promise<{ sessionId: string }> =>
+  apiPost('/sessions', false, plan, { 'x-recaptcha-token': token })
 
-export const fetchSessionConfig = (): Promise<SessionConfig> => apiGet('/sessions/config')
-
-export const createSession = (session: NewSessionRequest, token: string): Promise<{ sessionId: string }> =>
-  apiPost('/sessions', false, session, { 'x-recaptcha-token': token })
-
-export const fetchSession = (sessionId: string): Promise<SessionData> =>
-  apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
-
-export const fetchChoices = (sessionId: string): Promise<ChoicesMap> =>
-  apiGet(`/sessions/${encodeURIComponent(sessionId)}/choices`)
+export const fetchPlan = (sessionId: string): Promise<PlanData> => apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
 
 export const fetchUsers = (sessionId: string): Promise<User[]> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users`)
@@ -138,16 +124,32 @@ export const patchUser = (
 ): Promise<User> =>
   apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}`, authenticated, operations)
 
-export const closeRound = (sessionId: string, roundId: number): Promise<SessionData> =>
-  apiPost(`/sessions/${encodeURIComponent(sessionId)}/rounds/${roundId}/close`, false)
+export const fetchAvailability = (sessionId: string, userId: string): Promise<AvailabilityRecord> =>
+  apiGet(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`)
 
-export const subscribeToRound = (
+export const patchAvailability = (
   sessionId: string,
-  roundId: number,
   userId: string,
-  authenticated: boolean,
-): Promise<User> =>
-  apiPost(`/sessions/${encodeURIComponent(sessionId)}/rounds/${roundId}/subscribe`, authenticated, { userId, roundId })
+  body: AvailabilityPatchRequest,
+): Promise<AvailabilityRecord> =>
+  apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`, false, body)
+
+export interface OverlapCell {
+  hourIndex: number
+  dayIndex: number
+  freeCount: number
+  freeUserIds: string[]
+}
+
+export interface OverlapResponse {
+  mode: 'pattern' | 'week'
+  weekIndex: number | null
+  grid: { cells: OverlapCell[][]; bestSlot: { hourIndex: number; dayIndex: number; freeCount: number } }
+  exceptions: { weekIndex: number; hourIndex: number; dayIndex: number; description: string }[]
+}
+
+export const fetchOverlap = (sessionId: string, week: 'pattern' | number): Promise<OverlapResponse> =>
+  apiGet(`/sessions/${encodeURIComponent(sessionId)}/overlap`, { week: String(week) })
 
 export interface ShareResult {
   userId: string

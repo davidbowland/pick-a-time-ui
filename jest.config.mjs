@@ -62,7 +62,6 @@ const esmPackages = [
   '@radix-ui',
   'tailwind-merge',
   'dedent',
-  'embla-carousel',
 ].join('|')
 
 const baseCreateJestConfig = createJestConfig(config)

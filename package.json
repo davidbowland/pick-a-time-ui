@@ -1,7 +1,7 @@
 {
-  "name": "choosee-ui",
-  "version": "1.52.0",
-  "description": "UI for choosee",
+  "name": "pick-a-time-ui",
+  "version": "1.0.0",
+  "description": "UI for Pick a Time",
   "author": "David Bowland",
   "engines": {
     "node": "^24.0.0"
@@ -9,12 +9,12 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/davidbowland/choosee-ui.git"
+    "url": "git+https://github.com/davidbowland/pick-a-time-ui.git"
   },
   "bugs": {
-    "url": "https://github.com/davidbowland/choosee-ui/issues"
+    "url": "https://github.com/davidbowland/pick-a-time-ui/issues"
   },
-  "homepage": "https://github.com/davidbowland/choosee-ui#readme",
+  "homepage": "https://github.com/davidbowland/pick-a-time-ui#readme",
   "scripts": {
     "build": "npm run clean && next build",
     "postbuild": "next-export-optimize-images && node scripts/generate-dynamic-pages.js && next-sitemap",
@@ -37,8 +37,6 @@
     "aws-amplify": "^6.18.0",
     "axios": "^1.18.1",
     "axios-retry": "^4.5.0",
-    "embla-carousel-autoplay": "^8.6.0",
-    "embla-carousel-react": "^8.6.0",
     "fast-json-patch": "^3.1.1",
     "framer-motion": "^12.42.2",
     "husky": "^9.1.7",

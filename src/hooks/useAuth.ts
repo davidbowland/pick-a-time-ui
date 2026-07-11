@@ -54,7 +54,7 @@ export function useAuth(): AuthState {
   // We save the current path so the callback page can redirect back.
   const handleSignIn = useCallback(() => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('choosee_auth_return', window.location.pathname + window.location.search)
+      sessionStorage.setItem('pat_auth_return', window.location.pathname + window.location.search)
     }
     void signInWithRedirect({ provider: 'Google' })
   }, [])

@@ -58,57 +58,97 @@ HeroUI (`@heroui/react`) for form controls/buttons/alerts, Tailwind CSS, `js-coo
   Build the Results phase against its documented contract (`pick-a-time-api/docs/superpowers/plans/2026-07-10-pick-a-time-overlap-results.md`)
   anyway — it will simply start returning real data once that API plan ships. Do not block this
   plan on that one.
+- **This repo has two test locations, not one.** Most existing tests live in a top-level `test/`
+  directory mirroring `src/` with flattened names (e.g. `test/components/session-voting.test.tsx`
+  for `src/components/session/voting/`), from before this project started colocating tests next to
+  the component (`src/components/logo/index.test.tsx`, `src/services/api.test.ts`,
+  `src/hooks/useSessionCookie.test.ts` are the colocated exceptions). Both locations run under
+  `npm test` — `jest.config.mjs` doesn't restrict discovery to either one. Whenever a task deletes
+  or replaces a component/util, check `test/` (not just alongside the source file) for its legacy
+  test and delete that too — new tests this plan adds should be colocated, matching the newer
+  convention, but cleanup must find both.
+- **Standing policy: stub forward, don't leave the repo broken between tasks.** This repo's
+  pre-commit hook runs `jest --findRelatedTests` on every staged file, which walks the _whole_
+  dependency graph — including consumers that belong to a later, not-yet-run task. Task 1 hit this
+  (`session/index.tsx` still importing deleted `voting`/`waiting`/`winner`) and Task 3 hits it again
+  (`session-create` still calling API functions Task 3 removes; it isn't rewritten until Task 5).
+  This will keep happening: whenever a task removes something a not-yet-updated consumer depends
+  on, that task must also neutralize the consumer enough to load and pass — delete it and stub its
+  one call site with an inert placeholder if the whole thing is invalidated (as with
+  `session-create`, whose entire body depends on removed functions), or a narrower in-place stub if
+  only part of it broke (as with `session/index.tsx`'s three phase cases). The task that "owns"
+  building the real replacement still does that work in full — this is expected, minor redone work
+  at the placeholder, not a shortcut around it. Never use `git commit --no-verify` to route around
+  this instead.
 
 ## Section Map
 
-| Section | Tasks | What it delivers |
-|---|---|---|
-| 1 — Foundation | 1, 2, 3 | Restaurant domain removed; new types; new API client; cookie renamed |
-| 2 — Identity phase | 4 | Join screen: pick existing name, create new, sign in with Google |
-| 3 — Create-plan page | 5, 6 | The plan-setup form and hero page |
-| 4 — Painting phase | 7, 8 | Drag-to-paint hook + the availability grid screen |
-| 5 — Results + Share | 9, 10 | Pattern/by-week overlap view; share screen adapted |
-| 6 — Wiring + cleanup | 11, 12, 13 | Phase machine, routing, dependency cleanup, final verification |
+| Section              | Tasks      | What it delivers                                                     |
+| -------------------- | ---------- | -------------------------------------------------------------------- |
+| 1 — Foundation       | 1, 2, 3    | Restaurant domain removed; new types; new API client; cookie renamed |
+| 2 — Identity phase   | 4          | Join screen: pick existing name, create new, sign in with Google     |
+| 3 — Create-plan page | 5, 6       | The plan-setup form and hero page                                    |
+| 4 — Painting phase   | 7, 8       | Drag-to-paint hook + the availability grid screen                    |
+| 5 — Results + Share  | 9, 10      | Pattern/by-week overlap view; share screen adapted                   |
+| 6 — Wiring + cleanup | 11, 12, 13 | Phase machine, routing, dependency cleanup, final verification       |
 
 ---
 
 ## File Structure
 
 **Delete:**
+
 - `src/components/bracket-view/`, `src/components/restaurant-card/`, `src/components/photo-carousel/`
-- `src/components/session/voting/`, `src/components/session/waiting/`, `src/components/session/winner/`
+- `src/components/session/voting/`, `src/components/session/waiting/`, `src/components/session/winner/`,
+  `src/components/session/user-select/`, `src/components/session/loading/`,
+  `src/components/session/index.tsx` (+ `helpers.ts`, `elements.tsx`)
 - `src/utils/bracket.ts`, `src/utils/hours.ts`
 - `src/assets/images/*` (restaurant screenshots)
+- `src/pages/s/[sessionId]/index.tsx`
+- Their legacy counterparts in the top-level `test/` suite (see Global Constraints) —
+  `test/components/bracket-view.test.tsx`, `photo-carousel.test.tsx`, `restaurant-card.test.tsx`,
+  `session-voting.test.tsx`, `session-waiting.test.tsx`, `session-winner.test.tsx`,
+  `session-user-select.test.tsx`, `session-loading.test.tsx`, `session.test.tsx`,
+  `session-helpers.test.ts`, `test/utils/bracket.test.ts`, `test/utils/hours.test.ts`,
+  `test/pages/s/[sessionId]/index.test.tsx`
 
 **Modify:**
+
 - `src/types.ts` — remove restaurant types, add `PlanData`, slim `User`, `AvailabilityRecord`,
   `NewPlanRequest`, `AvailabilityCell`, `AvailabilityPatchRequest`
-- `src/services/api.ts` — new endpoint surface
-- `src/hooks/useSessionCookie.ts` (+ test) — rename cookie key prefix, and while touched, bring
-  the test off `beforeEach`/`jest.clearAllMocks()` per current `CLAUDE.md`
-- `src/utils/users.ts` — `displayName` title-cases adjective-noun IDs
+- `src/services/api.ts` (+ colocated test) — new endpoint surface
+- `src/hooks/useSessionCookie.ts` (+ colocated test) — rename cookie key prefix, and while
+  touched, bring the test off `beforeEach`/`jest.clearAllMocks()` per current `CLAUDE.md`
+- `src/utils/users.ts` + `test/utils/users.test.ts` — `displayName` title-cases adjective-noun IDs
 - `src/components/session-create/` → rewritten as `src/components/plan-create/`
-- `src/components/session/user-select/` → rewritten as `src/components/plan/identity/`
-- `src/components/share/` — route/copy update
-- `src/pages/index.tsx`, `src/pages/s/[sessionId]/index.tsx` → `src/pages/p/[sessionId]/index.tsx`
+- `src/components/share/` + `test/components/share.test.tsx` — route/copy update
+- `src/pages/index.tsx` + `test/pages/index.test.tsx`
 - `package.json` — drop `embla-carousel-react`, `embla-carousel-autoplay`
 
 **Create:**
-- `src/hooks/usePaintGesture.ts` (+ test)
+
+- `src/hooks/usePaintGesture.ts` (+ colocated test)
+- `src/components/plan/identity/` (replaces `src/components/session/user-select/`)
 - `src/components/plan/painting/` (grid + toolbar + week strip + calendar toggle)
 - `src/components/plan/results/` (tabs + heatmap + best banner + exceptions)
 - `src/components/plan/index.tsx` (the phase machine, replaces `src/components/session/index.tsx`)
+- `src/pages/p/[sessionId]/index.tsx` + `test/pages/p/[sessionId]/index.test.tsx`
 
 ---
 
 ### Task 1: Remove the restaurant/bracket domain
 
 **Files:**
+
 - Delete: `src/components/bracket-view/`, `src/components/restaurant-card/`,
   `src/components/photo-carousel/`, `src/components/session/voting/`,
   `src/components/session/waiting/`, `src/components/session/winner/`, `src/utils/bracket.ts`,
   `src/utils/hours.ts`, `src/assets/images/automatic-location.png`, `restaurant-search.png`,
   `text-others.png`, `vote-options.png`, `winning-decision.png`, `contact-info.png`
+- Delete (legacy top-level test suite — see Global Constraints): `test/components/bracket-view.test.tsx`,
+  `test/components/photo-carousel.test.tsx`, `test/components/restaurant-card.test.tsx`,
+  `test/components/session-voting.test.tsx`, `test/components/session-waiting.test.tsx`,
+  `test/components/session-winner.test.tsx`, `test/utils/bracket.test.ts`, `test/utils/hours.test.ts`
 - Modify: `src/types.ts` (partial — remove restaurant-only exports; the plan/availability types
   are added in Task 2, not here)
 
@@ -120,6 +160,10 @@ HeroUI (`@heroui/react`) for form controls/buttons/alerts, Tailwind CSS, `js-coo
 git rm -r src/components/bracket-view src/components/restaurant-card src/components/photo-carousel \
   src/components/session/voting src/components/session/waiting src/components/session/winner \
   src/utils/bracket.ts src/utils/hours.ts
+git rm test/components/bracket-view.test.tsx test/components/photo-carousel.test.tsx \
+  test/components/restaurant-card.test.tsx test/components/session-voting.test.tsx \
+  test/components/session-waiting.test.tsx test/components/session-winner.test.tsx \
+  test/utils/bracket.test.ts test/utils/hours.test.ts
 ```
 
 - [ ] **Step 2: Delete the now-unused restaurant screenshot assets**
@@ -139,15 +183,41 @@ Delete: `PriceLevel`, `PlaceTypeDisplay`, `ChoiceDetail`, `ChoicesMap`, `SortOpt
 `RadiusConfig`, `SessionConfig`, `AddressResult`. Leave `PatchOperation`, `ErrorCode`,
 `SessionData`, `User`, `NewSessionRequest` untouched for now — Task 2 replaces those.
 
-- [ ] **Step 4: Confirm the tree is still consistent**
+- [ ] **Step 4: Stub the now-dangling imports in `src/components/session/index.tsx`**
+
+This repo's pre-commit hook runs `jest --findRelatedTests` on staged files. `session/index.tsx`
+still imports `VotingPhase`/`WaitingPhase`/`WinnerPhase` from the directories just deleted, so it
+(and anything that transitively depends on `src/types.ts`, which the hook will walk into once
+Step 3 stages that file) fails to even load — which fails the hook, not just `typecheck`. Task 11
+replaces this whole file, but that's 10 tasks away; leaving it broken for that long blocks every
+intermediate commit. Patch it minimally now:
+
+- Remove the `import VotingPhase from './voting'`, `import WaitingPhase from './waiting'`,
+  `import WinnerPhase from './winner'` lines.
+- In `renderPhase`, replace the `case 'voting':`, `case 'waiting':`, and `case 'winner':` bodies
+  with `return null` each, and add a one-line comment: `// stubbed — Task 11 replaces this whole
+file`.
+- Delete `src/components/session/index.test.tsx` and `test/components/session.test.tsx` — both
+  assert on the voting/waiting/winner phases this stub just removed, and Task 11 was already going
+  to delete both files wholesale. Doing it now (rather than carrying 10 tasks of red tests) is the
+  same end state, just sooner.
+- Leave `test/pages/s/[sessionId]/index.test.tsx` alone — it `jest.mock()`s `@components/session`
+  as a whole and doesn't assert on voting/waiting/winner specifics, so it passes again once
+  `session/index.tsx` loads cleanly.
+
+- [ ] **Step 5: Confirm the tree is still consistent**
 
 Run: `npm run typecheck`
-Expected: errors concentrated in files this task didn't touch yet (`src/components/session/index.tsx`,
-`src/services/api.ts`, `src/components/session-create/*`, anything importing the deleted
-components/types) — those are fixed in later tasks. If typecheck errors on something *outside*
-that set, you deleted something still in use — restore it.
+Expected: errors concentrated in files this task didn't touch yet (`src/services/api.ts`,
+`src/components/session-create/*`, anything importing the deleted restaurant types) — those are
+fixed in later tasks. If typecheck errors on something _outside_ that set, you deleted something
+still in use — restore it.
 
-- [ ] **Step 5: Commit**
+Run: `npm test`
+Expected: passes (no suites failing to load) — the Step 4 stub is what makes this possible before
+Task 11 lands.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -159,9 +229,11 @@ git commit -m "chore: remove restaurant/bracket domain components and assets"
 ### Task 2: New client types
 
 **Files:**
+
 - Modify: `src/types.ts`
 
 **Interfaces:**
+
 - Produces: `PlanData`, `User` (slimmed), `AvailabilityRecord`, `NewPlanRequest`,
   `AvailabilityCell`, `AvailabilityPatchRequest` — every later task imports these from `@types`.
 
@@ -221,7 +293,7 @@ Leave `PatchOperation`, `ErrorCode` untouched.
 - [ ] **Step 2: Run typecheck to confirm this file compiles on its own**
 
 Run: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep types.ts || echo "types.ts clean"`
-Expected: `types.ts clean` (errors in *other* files that reference the old shapes are expected and
+Expected: `types.ts clean` (errors in _other_ files that reference the old shapes are expected and
 fixed by later tasks)
 
 - [ ] **Step 3: Commit**
@@ -236,10 +308,16 @@ git commit -m "feat: add Plan/Availability client types, remove restaurant types
 ### Task 3: API client + cookie rename
 
 **Files:**
+
 - Modify: `src/services/api.ts`, `src/services/api.test.ts`, `src/hooks/useSessionCookie.ts`,
-  `src/hooks/useSessionCookie.test.ts`
+  `src/hooks/useSessionCookie.test.ts`, `src/pages/index.tsx` (stubbed), `test/pages/index.test.tsx`
+  (stubbed)
+- Delete: `src/components/session-create/` (its whole body depends on functions this task
+  removes — see Step 9; Task 5 rebuilds it fresh as `plan-create`, so nothing here is wasted beyond
+  the deletion itself)
 
 **Interfaces:**
+
 - Consumes: `PlanData`, `User`, `AvailabilityRecord`, `NewPlanRequest`, `AvailabilityPatchRequest`
   (Task 2)
 - Produces: `createPlan`, `fetchPlan`, `fetchUsers`, `createUser`, `patchUser`, `fetchAvailability`,
@@ -253,8 +331,9 @@ Rewrite `src/services/api.test.ts`'s session-creation/fetch tests (keep the exis
 domain-agnostic):
 
 ```ts
-import { createPlan, fetchAvailability, fetchPlan, patchAvailability } from './api'
 import { get, patch, post } from 'aws-amplify/api'
+
+import { createPlan, fetchAvailability, fetchPlan, patchAvailability } from './api'
 
 // ... existing jest.mock('aws-amplify/api') / jest.mock('aws-amplify/auth') setup stays
 
@@ -347,8 +426,7 @@ Keep `authHeaders`, `endpointFor`, `apiGet`, `apiPost`, `apiPatch`, `parseApiMes
 export const createPlan = (plan: NewPlanRequest, token: string): Promise<{ sessionId: string }> =>
   apiPost('/sessions', false, plan, { 'x-recaptcha-token': token })
 
-export const fetchPlan = (sessionId: string): Promise<PlanData> =>
-  apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
+export const fetchPlan = (sessionId: string): Promise<PlanData> => apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
 
 export const fetchUsers = (sessionId: string): Promise<User[]> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users`)
@@ -510,10 +588,29 @@ No other logic changes.
 Run: `npx jest useSessionCookie.test.ts api.test.ts`
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Stub the now-broken `session-create` consumer (see Global Constraints' standing
+      policy)**
+
+`src/components/session-create/index.tsx` calls `fetchSessionConfig`, `fetchAddress`, and the old
+`createSession` — all removed by this task. Its entire body depends on removed functions (this
+isn't a partial break like Task 1's), so there's no smaller stub than replacing it outright:
+
+- Delete `src/components/session-create/` (including its colocated `index.test.tsx`) — Task 5
+  rebuilds this from scratch as `plan-create` anyway.
+- In `src/pages/index.tsx`, remove `import SessionCreate from '@components/session-create'` and
+  replace `<SessionCreate />` with a plain placeholder: `<p>Plan creation coming soon.</p>` plus a
+  comment `{/* stubbed — Task 5/6 replace this with PlanCreate */}`.
+- In `test/pages/index.test.tsx`, remove the `jest.mock('@components/session-create')` line and
+  the `SessionCreate`-related mock/assertion (`should render SessionCreate`) — keep the `AppBar`
+  and `PrivacyLink` tests as-is. Task 6 replaces this whole file for real when `PlanCreate` exists.
+
+Run `npm test` again after this to confirm the whole suite is green, not just this task's own new
+files.
+
+- [ ] **Step 10: Commit**
 
 ```bash
-git add src/services/api.ts src/services/api.test.ts src/hooks/useSessionCookie.ts src/hooks/useSessionCookie.test.ts
+git add -A
 git commit -m "feat: rewrite API client for plan/availability domain, rename session cookie"
 ```
 
@@ -527,12 +624,15 @@ the combined diff of Tasks 1-3 before starting Task 4. Single pass, not looped.*
 ### Task 4: Identity phase
 
 **Files:**
+
 - Create: `src/components/plan/identity/index.tsx`, `src/components/plan/identity/elements.tsx`
 - Test: `src/components/plan/identity/index.test.tsx`
-- Modify: `src/utils/users.ts` (+ test)
-- Delete: `src/components/session/user-select/`
+- Modify: `src/utils/users.ts`, `test/utils/users.test.ts` (the real location of this file's test
+  today — not colocated; see Global Constraints)
+- Delete: `src/components/session/user-select/`, `test/components/session-user-select.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `createUser`, `parseApiMessage` (Task 3), `useAuthContext` (unchanged), `User` (Task 2)
 - Produces: `IdentityPhase` component — `{ sessionId, users, onUserSelected }` props, same shape as
   today's `UserSelectPhase` — Task 11's phase machine wires it in exactly where `UserSelectPhase`
@@ -540,24 +640,54 @@ the combined diff of Tasks 1-3 before starting Task 4. Single pass, not looped.*
 
 - [ ] **Step 1: Write the failing test for title-cased display names**
 
+Replace `test/utils/users.test.ts` in full (this file's real location; it is NOT colocated in
+`src/` today — see Global Constraints). It updates `makeUser` for the slimmed `User` shape from
+Task 2 and keeps the existing edge-case coverage (collapsing separators, trimming, all-non-alpha),
+adding title-casing:
+
 ```ts
-// src/utils/users.test.ts — add to the existing file
-import { displayName } from './users'
+import { User } from '@types'
+import { displayName } from '@utils/users'
+
+const makeUser = (overrides: Partial<User> = {}): User => ({
+  userId: 'abc-123-def',
+  name: null,
+  phone: null,
+  textsSent: 0,
+  ...overrides,
+})
 
 describe('displayName', () => {
-  it('should title-case an adjective-noun userId when name is not set', () => {
-    expect(displayName({ userId: 'quiet-falcon', name: null, phone: null, textsSent: 0 })).toBe('Quiet Falcon')
+  it('should return the user name when set', () => {
+    expect(displayName(makeUser({ name: 'Alice' }))).toBe('Alice')
   })
 
-  it('should prefer the set name over the userId', () => {
-    expect(displayName({ userId: 'quiet-falcon', name: 'Alex', phone: null, textsSent: 0 })).toBe('Alex')
+  it('should title-case an adjective-noun userId when name is null', () => {
+    expect(displayName(makeUser({ userId: 'quiet-falcon' }))).toBe('Quiet Falcon')
+  })
+
+  it('should collapse consecutive non-alpha characters into a single space', () => {
+    expect(displayName(makeUser({ userId: 'abc--123--def' }))).toBe('Abc Def')
+  })
+
+  it('should trim leading and trailing non-alpha characters', () => {
+    expect(displayName(makeUser({ userId: '123abc456' }))).toBe('Abc')
+  })
+
+  it('should return empty string when userId is all non-alpha', () => {
+    expect(displayName(makeUser({ userId: '123-456' }))).toBe('')
   })
 })
 ```
 
+(The old file's "prefer name over userId even if name is whitespace-only" case documented an edge
+case of the old truthy-string check — still accurate after this change, since `user.name`'s
+truthiness check is unchanged, but it's a low-value case to keep; drop it rather than port it
+forward mechanically.)
+
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx jest users.test.ts`
+Run: `npx jest test/utils/users.test.ts`
 Expected: FAIL — current `displayName` returns `'quiet falcon'`, not `'Quiet Falcon'`
 
 - [ ] **Step 3: Update `src/utils/users.ts`**
@@ -715,8 +845,7 @@ export const GoogleSignInButton = ({ onPress }: { onPress: () => void }): React.
 
 export const CalendarSyncNote = (): React.ReactNode => (
   <p className="text-center text-xs text-[#6B7280]">
-    Signing in with Google also blocks off times you&apos;re already busy, across every week of
-    this plan.
+    Signing in with Google also blocks off times you&apos;re already busy, across every week of this plan.
   </p>
 )
 ```
@@ -732,9 +861,16 @@ import { useMutation } from '@tanstack/react-query'
 import { ApiError } from 'aws-amplify/api'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
-import { CalendarSyncNote, ErrorMessage, GoogleSignInButton, SectionContainer, SectionTitle, UserOptions } from './elements'
-import { PillArrowButton } from '@components/pill-arrow-button'
+import {
+  CalendarSyncNote,
+  ErrorMessage,
+  GoogleSignInButton,
+  SectionContainer,
+  SectionTitle,
+  UserOptions,
+} from './elements'
 import { useAuthContext } from '@components/auth-context'
+import { PillArrowButton } from '@components/pill-arrow-button'
 import { createUser, parseApiMessage } from '@services/api'
 import { User } from '@types'
 import { displayName } from '@utils/users'
@@ -826,13 +962,13 @@ export default IdentityPhase
 
 - [ ] **Step 9: Run tests to verify they pass**
 
-Run: `npx jest src/components/plan/identity src/utils/users.test.ts`
+Run: `npx jest src/components/plan/identity test/utils/users.test.ts`
 Expected: PASS
 
-- [ ] **Step 10: Delete the old user-select component**
+- [ ] **Step 10: Delete the old user-select component and its legacy test**
 
 ```bash
-git rm -r src/components/session/user-select
+git rm -r src/components/session/user-select test/components/session-user-select.test.tsx
 ```
 
 - [ ] **Step 11: Commit**
@@ -851,14 +987,20 @@ git commit -m "feat: add identity phase with title-cased adjective-noun display 
 ### Task 5: Plan-create form
 
 **Files:**
+
 - Create: `src/components/plan-create/index.tsx`, `src/components/plan-create/elements.tsx`
 - Test: `src/components/plan-create/index.test.tsx`
-- Delete: `src/components/session-create/`
 
 **Interfaces:**
+
 - Consumes: `createPlan` (Task 3), `NewPlanRequest` (Task 2)
-- Produces: `PlanCreate` component, no props — Task 6 mounts it on the home page exactly where
-  `SessionCreate` is today.
+- Produces: `PlanCreate` component, no props — Task 6 mounts it on the home page in place of the
+  placeholder Task 3 left there.
+
+Note: `src/components/session-create/` no longer exists — Task 3 already deleted it (its whole body
+depended on API functions that task removed; see that task's Step 9 and the Global Constraints'
+standing "stub forward" policy). This task only needs to create the new component, not delete an
+old one.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1050,8 +1192,8 @@ import { useRouter } from 'next/router'
 import React, { useEffect, useState } from 'react'
 
 import { CreateCard, HourRangeFields, PlanNameField, WeekCountStepper, WeekdayPicker } from './elements'
-import { PillArrowButton } from '@components/pill-arrow-button'
 import FeedbackMessage from '@components/feedback-message'
+import { PillArrowButton } from '@components/pill-arrow-button'
 import { createPlan } from '@services/api'
 
 const RECAPTCHA_SCRIPT_ID = 'recaptcha-v3-script'
@@ -1177,13 +1319,7 @@ is a real gap between the form as sketched here and the API contract it calls.
 Run: `npx jest src/components/plan-create`
 Expected: PASS
 
-- [ ] **Step 6: Delete the old session-create component**
-
-```bash
-git rm -r src/components/session-create
-```
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1195,12 +1331,68 @@ git commit -m "feat: add plan-create form, flag startDate/weekdays[0] validation
 ### Task 6: Home page hero
 
 **Files:**
-- Modify: `src/pages/index.tsx`
+
+- Modify: `src/pages/index.tsx`, `test/pages/index.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `PlanCreate` (Task 5)
 
-- [ ] **Step 1: Update `src/pages/index.tsx`**
+- [ ] **Step 1: Update the failing test first**
+
+`test/pages/index.test.tsx` currently only tests `AppBar`/`PrivacyLink` — Task 3 stripped its
+`SessionCreate` mock/assertion when it stubbed the page (see that task's Step 9). Restore full
+coverage, this time mocking `@components/plan-create`:
+
+```tsx
+import Index from '@pages/index'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
+import React from 'react'
+
+import AppBar from '@components/app-bar'
+import PlanCreate from '@components/plan-create'
+import PrivacyLink from '@components/privacy-link'
+
+jest.mock('@components/app-bar')
+jest.mock('@components/privacy-link')
+jest.mock('@components/plan-create')
+
+describe('Index page', () => {
+  beforeAll(() => {
+    jest.mocked(AppBar).mockReturnValue(<></>)
+    jest.mocked(PrivacyLink).mockReturnValue(<></>)
+    jest.mocked(PlanCreate).mockReturnValue(<></>)
+  })
+
+  it('should render AppBar', () => {
+    render(<Index />)
+    expect(AppBar).toHaveBeenCalledTimes(1)
+  })
+
+  it('should render PlanCreate', () => {
+    render(<Index />)
+    expect(PlanCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('should render PrivacyLink', () => {
+    render(<Index />)
+    expect(PrivacyLink).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+(This file uses `beforeAll` for shared mock setup, consistent with this repo's `CLAUDE.md` — no
+change needed there, just the swapped import/component.)
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx jest test/pages/index.test.tsx`
+Expected: FAIL — `@components/plan-create` doesn't exist yet if Task 5 wasn't completed first (it
+was — this task runs after Task 5 in the plan), or FAIL because `src/pages/index.tsx` still
+imports `SessionCreate`
+
+- [ ] **Step 3: Update `src/pages/index.tsx`**
 
 ```tsx
 import Head from 'next/head'
@@ -1227,9 +1419,8 @@ const Index = (): React.ReactNode => (
             <span className="text-[#F59E0B]">EVERYONE&apos;S FREE</span>
           </h1>
           <p className="max-w-[320px] text-sm leading-[1.7] text-[#4B5563]">
-            No accounts, no reply-all thread. Start a plan, send one link, and watch the free time
-            appear where everyone&apos;s schedules overlap — for one afternoon, or a whole season
-            of Thursday practices.
+            No accounts, no reply-all thread. Start a plan, send one link, and watch the free time appear where
+            everyone&apos;s schedules overlap — for one afternoon, or a whole season of Thursday practices.
           </p>
         </div>
         <div>
@@ -1244,16 +1435,15 @@ const Index = (): React.ReactNode => (
 export default Index
 ```
 
-- [ ] **Step 2: Manually verify**
+- [ ] **Step 4: Run test to verify it passes**
 
-Run: `npm start`, load `/`, confirm the hero renders and the form is interactive (this page has no
-automated test today — `SessionCreate`'s test coverage lives in Task 5's component test, not a
-page-level test; keep that pattern).
+Run: `npx jest test/pages/index.test.tsx`
+Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/pages/index.tsx
+git add src/pages/index.tsx test/pages/index.test.tsx
 git commit -m "feat: update home page hero copy for Pick a Time"
 ```
 
@@ -1266,10 +1456,12 @@ git commit -m "feat: update home page hero copy for Pick a Time"
 ### Task 7: Paint-gesture hook
 
 **Files:**
+
 - Create: `src/hooks/usePaintGesture.ts`
 - Test: `src/hooks/usePaintGesture.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing external — pure state-and-callback hook
 - Produces: `usePaintGesture(grid, onCommit)` — Task 8's grid component owns the pointer event
   wiring and calls into this for state; `onCommit(cells: AvailabilityCell[])` fires once per
@@ -1387,16 +1579,13 @@ export function usePaintGesture(baseGrid: boolean[][], onCommit: (cells: Availab
     [overlay, baseGrid],
   )
 
-  const paintCell = useCallback(
-    (hourIndex: number, dayIndex: number, value: boolean) => {
-      setOverlay((prev) => {
-        const next = new Map(prev)
-        next.set(key(hourIndex, dayIndex), value)
-        return next
-      })
-    },
-    [],
-  )
+  const paintCell = useCallback((hourIndex: number, dayIndex: number, value: boolean) => {
+    setOverlay((prev) => {
+      const next = new Map(prev)
+      next.set(key(hourIndex, dayIndex), value)
+      return next
+    })
+  }, [])
 
   const startPaint = useCallback(
     (hourIndex: number, dayIndex: number) => {
@@ -1447,11 +1636,13 @@ git commit -m "feat: add paint-gesture hook for the availability grid"
 ### Task 8: Painting phase
 
 **Files:**
+
 - Create: `src/components/plan/painting/index.tsx`, `src/components/plan/painting/elements.tsx`,
   `src/components/plan/painting/grid.tsx`
 - Test: `src/components/plan/painting/index.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `usePaintGesture` (Task 7), `fetchAvailability`, `patchAvailability` (Task 3)
 - Produces: `PaintingPhase` component — `{ sessionId, userId, plan }` props; Task 11's phase
   machine mounts this alongside `ResultsPhase` (see the tabs-vs-linear decision flagged in the
@@ -1461,9 +1652,9 @@ git commit -m "feat: add paint-gesture hook for the availability grid"
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
 import { render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 import PaintingPhase from './index'
@@ -1676,7 +1867,10 @@ const PaintingPhase = ({ sessionId, userId, plan }: PaintingPhaseProps): React.R
 
   return (
     <div className="flex flex-col gap-4">
-      <Toolbar onAllDay={() => handleCommit(allCells(hourLabels.length, dayLabels.length, true))} onClear={() => handleCommit(allCells(hourLabels.length, dayLabels.length, false))} />
+      <Toolbar
+        onAllDay={() => handleCommit(allCells(hourLabels.length, dayLabels.length, true))}
+        onClear={() => handleCommit(allCells(hourLabels.length, dayLabels.length, false))}
+      />
       <PaintGrid dayLabels={dayLabels} grid={availability.template} hourLabels={hourLabels} onCommit={handleCommit} />
       <CalendarToggle connected={availability.calendarConnected ?? false} onToggle={() => {}} />
     </div>
@@ -1726,20 +1920,22 @@ git commit -m "feat: add painting phase with drag-to-paint availability grid"
 ### Task 9: Results phase
 
 **Files:**
+
 - Create: `src/components/plan/results/index.tsx`, `src/components/plan/results/elements.tsx`
 - Test: `src/components/plan/results/index.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchOverlap`, `OverlapResponse` (Task 3)
 - Produces: `ResultsPhase` component — `{ sessionId, plan }` props
 
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 import ResultsPhase from './index'
@@ -1925,27 +2121,40 @@ git commit -m "feat: add results phase with pattern/by-week overlap tabs"
 ### Task 10: Share component
 
 **Files:**
-- Modify: `src/components/share/index.tsx`
+
+- Modify: `src/components/share/index.tsx`, `test/components/share.test.tsx` (this component's
+  real test location — not colocated; see Global Constraints)
 
 **Interfaces:**
+
 - Consumes: `shareSession` (unchanged signature from Task 3)
 
-- [ ] **Step 1: Update the route and copy in `src/components/share/index.tsx`**
+- [ ] **Step 1: Update the failing assertion first**
 
-Change `` `${...}/s/${sessionId}` `` to `` `${...}/p/${sessionId}` ``. No test changes needed if
-the existing `share/index.test.tsx` (if any) asserts on the URL — check for one and update its
-expected path the same way; everything else in this component (QR code, copy button, SMS gate) is
+`test/components/share.test.tsx` has one assertion tied to the old route
+(`expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining(`/s/${sessionId}`))`) — change
+`/s/` to `/p/` there. Everything else in this test (the copy-URL flow, the SMS invite gate) is
 domain-agnostic and stays as-is.
 
-- [ ] **Step 2: Run tests to verify they still pass**
+- [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx jest src/components/share`
+Run: `npx jest test/components/share.test.tsx`
+Expected: FAIL — component still builds the URL with `/s/`
+
+- [ ] **Step 3: Update the route in `src/components/share/index.tsx`**
+
+Change `` `${...}/s/${sessionId}` `` to `` `${...}/p/${sessionId}` ``. Nothing else in this
+component changes (QR code, copy button, SMS gate are all domain-agnostic).
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx jest test/components/share.test.tsx`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/share
+git add src/components/share test/components/share.test.tsx
 git commit -m "feat: update share link to /p/ route"
 ```
 
@@ -1958,12 +2167,22 @@ git commit -m "feat: update share link to /p/ route"
 ### Task 11: Phase machine
 
 **Files:**
+
 - Create: `src/components/plan/index.tsx`, `src/components/plan/helpers.ts`
 - Test: `src/components/plan/index.test.tsx`
-- Delete: `src/components/session/index.tsx`, `src/components/session/index.test.tsx`,
-  `src/components/session/helpers.ts`, `src/components/session/elements.tsx`
+- Delete: `src/components/session/index.tsx`, `src/components/session/helpers.ts`,
+  `src/components/session/elements.tsx`, `src/components/session/loading/` (orphaned once Task 5
+  removed its only other consumer, `session-create`'s `LoadingCard`)
+- Delete (legacy top-level tests — see Global Constraints): `test/components/session-helpers.test.ts`,
+  `test/components/session-loading.test.tsx`
+- (`src/components/session/index.test.tsx` and `test/components/session.test.tsx` were already
+  deleted in Task 1, Step 4 — that task had to stub `session/index.tsx`'s dangling
+  voting/waiting/winner imports early to keep the pre-commit hook's `jest --findRelatedTests`
+  green, and deleted their now-inapplicable tests at the same time. Don't try to re-delete them
+  here — `git rm` on an already-gone path just errors.)
 
 **Interfaces:**
+
 - Consumes: `IdentityPhase` (Task 4), `PaintingPhase` (Task 8), `ResultsPhase` (Task 9),
   `fetchPlan`, `fetchUsers` (Task 3)
 - Produces: `Plan` component — `{ sessionId }` props, same as today's `Session` — Task 12 mounts it
@@ -1977,9 +2196,9 @@ user can flip between them), not a phase.
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 import Plan from './index'
@@ -2131,11 +2350,16 @@ Expected: PASS
 - [ ] **Step 6: Delete the old session phase-machine component**
 
 ```bash
-git rm -r src/components/session/index.tsx src/components/session/index.test.tsx \
-  src/components/session/helpers.ts src/components/session/elements.tsx
+git rm -r src/components/session/index.tsx src/components/session/helpers.ts \
+  src/components/session/elements.tsx src/components/session/loading
+git rm test/components/session-helpers.test.ts test/components/session-loading.test.tsx
 ```
 
-(If `src/components/session/` is now empty, remove the directory too.)
+(`src/components/session/index.test.tsx` and `test/components/session.test.tsx` are already gone
+— deleted in Task 1, Step 4.)
+
+`src/components/session/` should now be empty (`user-select/`, `voting/`, `waiting/`, `winner/`
+were removed in Tasks 1 and 4) — remove the directory too if so.
 
 - [ ] **Step 7: Commit**
 
@@ -2149,31 +2373,164 @@ git commit -m "feat: replace bracket phase machine with plan phase machine (iden
 ### Task 12: Page routing
 
 **Files:**
-- Create: `src/pages/p/[sessionId]/index.tsx`
-- Delete: `src/pages/s/[sessionId]/index.tsx`
+
+- Create: `src/pages/p/[sessionId]/index.tsx`, `test/pages/p/[sessionId]/index.test.tsx`
+- Delete: `src/pages/s/[sessionId]/index.tsx`, `test/pages/s/[sessionId]/index.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `Plan` (Task 11)
 
-- [ ] **Step 1: Create `src/pages/p/[sessionId]/index.tsx`**
+- [ ] **Step 1: Write the failing test at the new location**
 
-Copy today's `src/pages/s/[sessionId]/index.tsx` verbatim except: the path-match regex becomes
-`/^\/p\/([^/]+)/`, the import is `Plan` instead of `Session`, and the page title becomes
-`Pick a Time`.
+Adapted from `test/pages/s/[sessionId]/index.test.tsx`, updated for the new route/component and
+brought onto this repo's current `CLAUDE.md` convention (named `setup()`, no `beforeEach`):
 
-- [ ] **Step 2: Delete the old route**
+```tsx
+import PlanPage, { getStaticPaths, getStaticProps } from '@pages/p/[sessionId]/index'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
+import React from 'react'
 
-```bash
-git rm -r src/pages/s
+import AppBar from '@components/app-bar'
+import Plan from '@components/plan'
+import PrivacyLink from '@components/privacy-link'
+
+jest.mock('@components/app-bar')
+jest.mock('@components/privacy-link')
+jest.mock('@components/plan')
+
+describe('Plan page', () => {
+  beforeAll(() => {
+    jest.mocked(AppBar).mockReturnValue(<>AppBar</>)
+    jest.mocked(PrivacyLink).mockReturnValue(<></>)
+    jest.mocked(Plan).mockReturnValue(<></>)
+  })
+
+  function setup(pathname: string): void {
+    Object.defineProperty(window, 'location', { value: { pathname }, writable: true })
+  }
+
+  it('should render AppBar', () => {
+    setup('/p/amber-harbor/')
+    render(<PlanPage />)
+    expect(AppBar).toHaveBeenCalled()
+  })
+
+  it('should render PrivacyLink', () => {
+    setup('/p/amber-harbor/')
+    render(<PlanPage />)
+    expect(PrivacyLink).toHaveBeenCalled()
+  })
+
+  it('should render Plan with sessionId from pathname', () => {
+    setup('/p/amber-harbor/')
+    render(<PlanPage />)
+    expect(Plan).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'amber-harbor' }), undefined)
+  })
+
+  it('should not render Plan when pathname has no sessionId', () => {
+    setup('/')
+    render(<PlanPage />)
+    expect(Plan).not.toHaveBeenCalled()
+  })
+
+  it('should return blocking fallback with empty paths in development', () => {
+    const originalEnv = process.env.NODE_ENV
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', configurable: true })
+    expect(getStaticPaths({})).toEqual({ fallback: 'blocking', paths: [] })
+    Object.defineProperty(process.env, 'NODE_ENV', { value: originalEnv, configurable: true })
+  })
+
+  it('should return placeholder path in production', () => {
+    const originalEnv = process.env.NODE_ENV
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', configurable: true })
+    expect(getStaticPaths({})).toEqual({ fallback: false, paths: [{ params: { sessionId: '__placeholder__' } }] })
+    Object.defineProperty(process.env, 'NODE_ENV', { value: originalEnv, configurable: true })
+  })
+
+  it('should return empty props from getStaticProps', async () => {
+    expect(await getStaticProps({} as any)).toEqual({ props: {} })
+  })
+})
 ```
 
-- [ ] **Step 3: Manually verify**
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx jest "test/pages/p/\[sessionId\]/index.test.tsx"`
+Expected: FAIL — `src/pages/p/[sessionId]/index.tsx` doesn't exist yet
+
+- [ ] **Step 3: Create `src/pages/p/[sessionId]/index.tsx`**
+
+Copy today's `src/pages/s/[sessionId]/index.tsx` structure, changing: the path-match regex to
+`/^\/p\/([^/]+)/`, the import/render to `Plan` instead of `Session`, and the page title to
+`Pick a Time`:
+
+```tsx
+import type { GetStaticPaths, GetStaticProps } from 'next'
+import Head from 'next/head'
+import React, { useEffect, useState } from 'react'
+
+import AppBar from '@components/app-bar'
+import Plan from '@components/plan'
+import PrivacyLink from '@components/privacy-link'
+
+function useSessionIdFromPath(): string | undefined {
+  const [sessionId, setSessionId] = useState<string | undefined>()
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/p\/([^/]+)/)
+    if (match) setSessionId(decodeURIComponent(match[1]))
+  }, [])
+  return sessionId
+}
+
+const PlanPage = (): React.ReactNode => {
+  const sessionId = useSessionIdFromPath()
+
+  return (
+    <>
+      <Head>
+        <title>Pick a Time</title>
+      </Head>
+      <AppBar />
+      <main className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col px-4 py-6">
+        <div className="flex-1">{sessionId ? <Plan sessionId={sessionId} /> : null}</div>
+        <PrivacyLink />
+      </main>
+    </>
+  )
+}
+
+export const getStaticPaths: GetStaticPaths = () => {
+  if (process.env.NODE_ENV === 'development') {
+    return { fallback: 'blocking', paths: [] }
+  }
+  return { fallback: false, paths: [{ params: { sessionId: '__placeholder__' } }] }
+}
+
+export const getStaticProps: GetStaticProps = () => ({ props: {} })
+
+export default PlanPage
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx jest "test/pages/p/\[sessionId\]/index.test.tsx"`
+Expected: PASS
+
+- [ ] **Step 5: Delete the old route and its test**
+
+```bash
+git rm -r src/pages/s test/pages/s
+```
+
+- [ ] **Step 6: Manually verify**
 
 Run: `npm start`, visit `/p/<some-id>` and confirm the page loads (will 404 against a real API
 until `pick-a-time-api`'s Plan A is deployed — that's expected; confirm the Next.js routing itself
 resolves, which is what this task delivers).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -2185,6 +2542,7 @@ git commit -m "feat: move plan route from /s/{id} to /p/{id}"
 ### Task 13: Dependency cleanup + final verification
 
 **Files:**
+
 - Modify: `package.json`
 
 **Interfaces:** None — cleanup only.

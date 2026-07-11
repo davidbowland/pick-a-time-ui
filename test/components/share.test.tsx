@@ -44,7 +44,7 @@ describe('Share', () => {
     const writeTextSpy = jest.spyOn(navigator.clipboard, 'writeText')
     await user.click(screen.getByText('Invite'))
     await user.click(screen.getByText('Copy URL'))
-    expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining(`/s/${sessionId}`))
+    expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining(`/p/${sessionId}`))
     writeTextSpy.mockRestore()
   })
 

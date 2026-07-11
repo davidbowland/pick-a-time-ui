@@ -23,8 +23,8 @@ const AuthCallback = (): React.ReactNode => {
     // We wait for the Hub 'signedIn' event to confirm the exchange is complete
     // before redirecting, so we don't navigate away and lose the code.
     const redirect = () => {
-      const returnTo = sessionStorage.getItem('choosee_auth_return') ?? '/'
-      sessionStorage.removeItem('choosee_auth_return')
+      const returnTo = sessionStorage.getItem('pat_auth_return') ?? '/'
+      sessionStorage.removeItem('pat_auth_return')
       router.replace(returnTo)
     }
 
@@ -50,7 +50,7 @@ const AuthCallback = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>{failed ? 'Sign-in failed' : 'Signing in…'} | Choosee</title>
+        <title>{failed ? 'Sign-in failed' : 'Signing in…'} | Pick a Time</title>
       </Head>
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         {failed ? (

@@ -56,7 +56,7 @@ whatever the server returns — never to its own optimistic guess.
   use actual display faces instead — worth revisiting the mockup's serif choice against what's
   already installed here rather than adding a third font package.
 - **`fast-json-patch`** stays for the `/name`/`/phone` user patch (still RFC 6902-shaped on the
-  wire per the API's Task 8) but is *not* used for availability — see below.
+  wire per the API's Task 8) but is _not_ used for availability — see below.
 
 ## What gets removed (restaurant/bracket domain)
 
@@ -128,11 +128,11 @@ export interface AvailabilityPatchRequest {
 
 ## New pages
 
-| Route | Was | Now |
-|---|---|---|
-| `/` (`src/pages/index.tsx`) | Restaurant search hero + `SessionCreate` | Hero + `PlanCreate`: plan name, weekday picker, week-count stepper, hour-range slider — the actual fields from storybook scene 2 |
-| `/p/[sessionId]` (was `/s/[sessionId]`) | `Session` phase machine: loading → error → winner → user-select → voting → waiting | `Plan` phase machine: loading → error → identity → painting → results (see below) |
-| `/auth/callback`, `400`/`403`/`404`/`500` | — | unchanged |
+| Route                                     | Was                                                                                | Now                                                                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `/` (`src/pages/index.tsx`)               | Restaurant search hero + `SessionCreate`                                           | Hero + `PlanCreate`: plan name, weekday picker, week-count stepper, hour-range slider — the actual fields from storybook scene 2 |
+| `/p/[sessionId]` (was `/s/[sessionId]`)   | `Session` phase machine: loading → error → winner → user-select → voting → waiting | `Plan` phase machine: loading → error → identity → painting → results (see below)                                                |
+| `/auth/callback`, `400`/`403`/`404`/`500` | —                                                                                  | unchanged                                                                                                                        |
 
 The URL prefix change (`/s/` → `/p/`) matches the share-link format already designed in the
 storybook mockup (`pick-a-time.com/p/amber-harbor`) — confirm this against whatever routing
@@ -140,11 +140,11 @@ storybook mockup (`pick-a-time.com/p/amber-harbor`) — confirm this against wha
 
 ### Phase mapping (`src/components/session/index.tsx` → `src/components/plan/index.tsx`)
 
-| Old phase | New phase | Old component | New component, modeled on storybook scene |
-|---|---|---|---|
-| `user-select` | `identity` | `UserSelectPhase` | Near-identical shape — pick an existing name from the list or create new; add the "Continue with Google" secondary action and the calendar-sync consent copy from storybook scene 3 |
-| `voting` | `painting` | `VotingPhase` (bracket matchups) | New: the drag-to-paint grid, week strip with override dots, the Google Calendar auto-block toggle, from storybook scene 4 |
-| `waiting` + `winner` | `results` | `WaitingPhase`/`WinnerPhase` | New: Pattern/By-week tabs, the heatmap, best-slot banner, exceptions list, from storybook scene 5 — merges what used to be two separate phases, since there's no single terminal "winner" moment, just an always-current computed result |
+| Old phase            | New phase  | Old component                    | New component, modeled on storybook scene                                                                                                                                                                                                |
+| -------------------- | ---------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user-select`        | `identity` | `UserSelectPhase`                | Near-identical shape — pick an existing name from the list or create new; add the "Continue with Google" secondary action and the calendar-sync consent copy from storybook scene 3                                                      |
+| `voting`             | `painting` | `VotingPhase` (bracket matchups) | New: the drag-to-paint grid, week strip with override dots, the Google Calendar auto-block toggle, from storybook scene 4                                                                                                                |
+| `waiting` + `winner` | `results`  | `WaitingPhase`/`WinnerPhase`     | New: Pattern/By-week tabs, the heatmap, best-slot banner, exceptions list, from storybook scene 5 — merges what used to be two separate phases, since there's no single terminal "winner" moment, just an always-current computed result |
 
 `derivePhase`'s shape (a pure function of plan/user/data-loaded state, switched over in one
 `renderPhase`) is worth keeping exactly as-is — it's a clean pattern, just re-derive the phase enum

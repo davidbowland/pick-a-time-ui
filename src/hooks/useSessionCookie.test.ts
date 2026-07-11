@@ -10,25 +10,23 @@ describe('useSessionCookie', () => {
   const mockSet = jest.mocked(Cookies.set)
   const mockRemove = jest.mocked(Cookies.remove)
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-    Object.defineProperty(window, 'location', {
-      value: { protocol: 'https:' },
-      writable: true,
-    })
-  })
+  function setup(protocol: 'https:' | 'http:' = 'https:'): void {
+    Object.defineProperty(window, 'location', { value: { protocol }, writable: true })
+  }
 
   it('should read userId from cookie on mount', () => {
-    mockGet.mockReturnValue('user-123' as any)
+    setup()
+    mockGet.mockReturnValueOnce('user-123' as any)
 
     const { result } = renderHook(() => useSessionCookie('abc'))
 
-    expect(mockGet).toHaveBeenCalledWith('choosee_user_abc')
+    expect(mockGet).toHaveBeenCalledWith('pat_user_abc')
     expect(result.current.userId).toBe('user-123')
   })
 
   it('should return undefined when no cookie exists', () => {
-    mockGet.mockReturnValue(undefined as any)
+    setup()
+    mockGet.mockReturnValueOnce(undefined as any)
 
     const { result } = renderHook(() => useSessionCookie('abc'))
 
@@ -36,16 +34,14 @@ describe('useSessionCookie', () => {
   })
 
   it('should set cookie and update state', () => {
-    mockGet.mockReturnValue(undefined as any)
+    setup()
+    mockGet.mockReturnValueOnce(undefined as any)
 
     const { result } = renderHook(() => useSessionCookie('abc'))
+    act(() => result.current.setUserId('user-456'))
 
-    act(() => {
-      result.current.setUserId('user-456')
-    })
-
-    expect(mockSet).toHaveBeenCalledWith('choosee_user_abc', 'user-456', {
-      path: '/s/abc',
+    expect(mockSet).toHaveBeenCalledWith('pat_user_abc', 'user-456', {
+      path: '/p/abc',
       expires: 1,
       sameSite: 'Strict',
       secure: true,
@@ -54,38 +50,23 @@ describe('useSessionCookie', () => {
   })
 
   it('should set secure to false on http', () => {
-    Object.defineProperty(window, 'location', {
-      value: { protocol: 'http:' },
-      writable: true,
-    })
-    mockGet.mockReturnValue(undefined as any)
+    setup('http:')
+    mockGet.mockReturnValueOnce(undefined as any)
 
     const { result } = renderHook(() => useSessionCookie('abc'))
+    act(() => result.current.setUserId('user-456'))
 
-    act(() => {
-      result.current.setUserId('user-456')
-    })
-
-    expect(mockSet).toHaveBeenCalledWith('choosee_user_abc', 'user-456', {
-      path: '/s/abc',
-      expires: 1,
-      sameSite: 'Strict',
-      secure: false,
-    })
+    expect(mockSet).toHaveBeenCalledWith('pat_user_abc', 'user-456', expect.objectContaining({ secure: false }))
   })
 
   it('should clear cookie and reset state', () => {
-    mockGet.mockReturnValue('user-123' as any)
+    setup()
+    mockGet.mockReturnValueOnce('user-123' as any)
 
     const { result } = renderHook(() => useSessionCookie('abc'))
+    act(() => result.current.clearUserId())
 
-    expect(result.current.userId).toBe('user-123')
-
-    act(() => {
-      result.current.clearUserId()
-    })
-
-    expect(mockRemove).toHaveBeenCalledWith('choosee_user_abc', { path: '/s/abc' })
+    expect(mockRemove).toHaveBeenCalledWith('pat_user_abc', { path: '/p/abc' })
     expect(result.current.userId).toBeUndefined()
   })
 })

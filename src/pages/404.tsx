@@ -8,7 +8,7 @@ const NotFound = (): React.ReactNode => {
   const [display404, setDisplay404] = useState(false)
 
   useEffect(() => {
-    setDisplay404(window.location.pathname.match(/^\/s\/[^/]+$/) === null)
+    setDisplay404(window.location.pathname.match(/^\/p\/[^/]+$/) === null)
   }, [])
 
   if (display404) {

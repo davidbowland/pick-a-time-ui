@@ -41,8 +41,8 @@ describe('404 error page', () => {
     expect(await screen.findByText(/expired|mistyped/i)).toBeInTheDocument()
   })
 
-  it('should not render error content when path begins /s/', async () => {
-    window.location.pathname = '/s/aeiou'
+  it('should not render error content when path begins /p/', async () => {
+    window.location.pathname = '/p/aeiou'
     await act(async () => {
       render(<NotFound />)
     })
@@ -52,7 +52,7 @@ describe('404 error page', () => {
   })
 
   it('should render when pathname has three slashes', async () => {
-    window.location.pathname = '/s/aeiou/y'
+    window.location.pathname = '/p/aeiou/y'
     await act(async () => {
       render(<NotFound />)
     })

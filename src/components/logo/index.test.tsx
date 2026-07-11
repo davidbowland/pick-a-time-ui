@@ -8,6 +8,6 @@ describe('Logo component', () => {
   it('should display the title', async () => {
     render(<Logo />)
 
-    expect(await screen.getByText('Choosee')).toBeInTheDocument()
+    expect(await screen.getByText('Pick a Time')).toBeInTheDocument()
   })
 })

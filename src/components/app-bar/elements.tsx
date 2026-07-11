@@ -13,7 +13,7 @@ export const NavContainer = ({ children }: { children: React.ReactNode }): React
 )
 
 export const BrandLink = ({ children }: { children: React.ReactNode }): React.ReactNode => (
-  <span className="choosee-brand text-2xl text-[#F59E0B]">{children}</span>
+  <span className="brand-display text-2xl text-[#F59E0B]">{children}</span>
 )
 
 export const GoogleSignInButton = ({ onPress }: { onPress: () => void }): React.ReactNode => (

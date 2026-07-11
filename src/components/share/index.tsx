@@ -18,7 +18,7 @@ const Share = ({ sessionId, userId }: ShareProps): React.ReactNode => {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
-  const sessionUrl = `${typeof window === 'undefined' ? '' : window.location.origin}/s/${sessionId}`
+  const sessionUrl = `${typeof window === 'undefined' ? '' : window.location.origin}/p/${sessionId}`
 
   const handleCopy = async (): Promise<void> => {
     try {

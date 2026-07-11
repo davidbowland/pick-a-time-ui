@@ -1,40 +1,33 @@
-import { Utensils } from 'lucide-react'
 import Head from 'next/head'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
+import PlanCreate from '@components/plan-create'
 import PrivacyLink from '@components/privacy-link'
-import SessionCreate from '@components/session-create'
 
 const Index = (): React.ReactNode => (
   <>
     <Head>
-      <title>Choosee | dbowland.com</title>
+      <title>Pick a Time</title>
     </Head>
     <AppBar />
     <main className="mx-auto max-w-[1060px] px-5 pt-10 pb-12">
       <div className="flex flex-col gap-10 md:grid md:grid-cols-[1fr_460px] md:gap-11 md:pt-4">
-        {/* Hero left column */}
         <div className="flex flex-col justify-center gap-5">
-          <div className="arena-eyebrow flex items-center gap-2">
-            <Utensils aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            Find your next restaurant
-          </div>
-          <h1 className="choosee-brand text-[clamp(64px,7.5vw,100px)] leading-[0.9] tracking-[0.04em] text-[#F5F5F5]">
-            WHERE ARE
+          <h1 className="brand-display text-[clamp(64px,7.5vw,100px)] leading-[0.9] tracking-[0.04em] text-[#F5F5F5]">
+            FIND THE
             <br />
-            WE
+            MINUTE
             <br />
-            <span className="text-[#F59E0B]">EATING?</span>
+            <span className="text-[#F59E0B]">EVERYONE&apos;S FREE</span>
           </h1>
           <p className="max-w-[320px] text-sm leading-[1.7] text-[#4B5563]">
-            Can&apos;t agree on where to eat? We&apos;ll line up restaurants near you, and your group votes until
-            there&apos;s a winner.
+            No accounts, no reply-all thread. Start a plan, send one link, and watch the free time appear where
+            everyone&apos;s schedules overlap — for one afternoon, or a whole season of Thursday practices.
           </p>
         </div>
-        {/* Form right column */}
         <div>
-          <SessionCreate />
+          <PlanCreate />
         </div>
       </div>
     </main>

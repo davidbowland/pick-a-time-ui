@@ -5,17 +5,17 @@ env:
   HUSKY: 0
   PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/choosee-cloudformation
-  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/choosee-pipeline
+  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pick-a-time-cloudformation
+  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pick-a-time-pipeline
   PROD_REGION: ${{ secrets.AWS_REGION }}
-  PROD_S3_BUCKET: choosee-ui-source
-  PROD_STACK_NAME: choosee-ui
+  PROD_S3_BUCKET: pick-a-time-ui
+  PROD_STACK_NAME: pick-a-time-ui
   TEMPLATE_NAME: template.yaml
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/choosee-cloudformation-test
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/choosee-pipeline-test
+  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pick-a-time-cloudformation-test
+  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/pick-a-time-pipeline-test
   TESTING_REGION: ${{ secrets.AWS_REGION }}
-  TESTING_S3_BUCKET: choosee-ui-test
-  TESTING_STACK_NAME: choosee-ui-test
+  TESTING_S3_BUCKET: pick-a-time-ui-test
+  TESTING_STACK_NAME: pick-a-time-ui-test
 
 on: push
 

@@ -4,11 +4,11 @@ import { Amplify } from 'aws-amplify'
 import 'aws-amplify/auth/enable-oauth-listener'
 
 const origin = process.env.NEXT_PUBLIC_ORIGIN
-const baseUrl = process.env.NEXT_PUBLIC_CHOOSEE_API_BASE_URL
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
 // API endpoint names used by services/api.ts
-export const apiName = 'ChooseeAPI'
-export const apiNameUnauthenticated = 'ChooseeAPIUnauthenticated'
+export const apiName = 'PickATimeAPI'
+export const apiNameUnauthenticated = 'PickATimeAPIUnauthenticated'
 
 Amplify.configure({
   Auth: {

@@ -4,7 +4,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const outDir = path.join(__dirname, '..', 'out', 's')
+const outDir = path.join(__dirname, '..', 'out', 'p')
 const srcDir = path.join(outDir, '__placeholder__')
 const destDir = path.join(outDir, '[sessionId]')
 
@@ -21,4 +21,4 @@ copyAndPatch(path.join(srcDir, 'index.html'), path.join(destDir, 'index.html'))
 // Remove placeholder from out/ so it doesn't get uploaded to S3
 fs.rmSync(srcDir, { recursive: true })
 
-console.log('✓ Generated out/s/[sessionId]/index.html')
+console.log('✓ Generated out/p/[sessionId]/index.html')

@@ -16,8 +16,8 @@ const PrivacyPolicy = (): React.ReactNode => {
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#F59E0B]">Legal</p>
         <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
         <p className="text-[#D4D4D4]">
-          This policy describes how choosee.dbowland.com handles your data. The short version: we collect very little,
-          we keep it briefly, and we never sell it.
+          This policy describes how pick-a-time.com handles your data. The short version: we collect very little, we
+          keep it briefly, and we never sell it.
         </p>
       </div>
 
@@ -96,7 +96,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           or write to:
         </p>
         <p>
-          choosee.dbowland.com Privacy
+          pick-a-time.com Privacy
           <br />
           P.O. Box 81226, Seattle, WA 98108-1226
         </p>
@@ -105,7 +105,7 @@ const PrivacyPolicy = (): React.ReactNode => {
       <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] pt-6 text-sm text-[#4B5563]">
         <Link className="flex items-center gap-1 hover:text-[#D4D4D4]" href="/">
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-          Back to Choosee
+          Back to Pick a Time
         </Link>
         <span>Last updated June 2026</span>
       </div>

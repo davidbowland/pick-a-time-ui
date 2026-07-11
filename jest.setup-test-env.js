@@ -1,5 +1,5 @@
 // Environment variables
-process.env.NEXT_PUBLIC_CHOOSEE_API_BASE_URL = 'http://localhost'
+process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost'
 process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID = 'somereallylongvalue1111'
 process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID = 'us-east_clientId'
 process.env.NEXT_PUBLIC_DELAY_BETWEEN_REFRESH_MS = '500'
@@ -10,6 +10,11 @@ window.URL.createObjectURL = jest.fn()
 
 // Polyfill scrollIntoView for jsdom (not implemented)
 Element.prototype.scrollIntoView = jest.fn()
+
+// Polyfill getAnimations for jsdom (not implemented). HeroUI's Tabs indicator
+// (react-aria-components' SharedElementTransition) calls this unconditionally whenever
+// selection changes, even with no CSS transition actually running in jsdom.
+Element.prototype.getAnimations = jest.fn(() => [])
 
 // Polyfill matchMedia for jsdom (used by device-detection and Embla)
 Object.defineProperty(window, 'matchMedia', {

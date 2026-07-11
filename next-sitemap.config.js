@@ -1,4 +1,4 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: 'https://choosee.bowland.link',
+  siteUrl: 'https://pick-a-time.bowland.link',
 }

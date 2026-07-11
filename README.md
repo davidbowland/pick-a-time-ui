@@ -1,6 +1,6 @@
-# choosee-ui
+# pick-a-time-ui
 
-Next.js and Amplify implementation of choosee-session-api and choosee-infrastructure. Example: <https://choosee.dbowland.com/>
+Next.js and Amplify implementation of pick-a-time-api and pick-a-time-infrastructure. Example: <https://pick-a-time.com/>
 
 ## Static Site
 
