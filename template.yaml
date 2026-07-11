@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Infrastructure for choosee UI
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - prod
+      - test
+    Description: Environment for deploy
+
+Mappings:
+  EnvironmentMap:
+    prod:
+      bucketName: choosee-ui-source
+      certificate: adce1a21-90b4-4120-8548-111215e582f0
+      domain: choosee.dbowland.com
+      zoneId: Z072422417XWM8PIXXSFA
+    test:
+      bucketName: choosee-ui-test
+      certificate: 6a48cba7-feb9-4de5-8cbf-d383140fcdef
+      domain: choosee.bowland.link
+      zoneId: Z01312547RGU1BYKIJXY
+
+Resources:
+  # CloudFront Function
+
+  UiUrlRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      AutoPublish: true
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+
+          if (/^\/s\/[^\/]+(\/)?$/.test(uri)) {
+            request.uri = '/s/[sessionId]/index.html';
+            return request;
+          }
+
+          if (uri.endsWith('/')) {
+            request.uri += 'index.html';
+          } else if (!/\.[^/]+$/.test(uri)) {
+            request.uri += '/index.html';
+          }
+
+          return request;
+        }
+      FunctionConfig:
+        Comment: !Sub
+          - 'URL rewrite for ${Domain} - appends index.html and rewrites dynamic session routes'
+          - Domain: !FindInMap [EnvironmentMap, !Ref Environment, domain]
+        Runtime: cloudfront-js-2.0
+      Name: !Sub
+        - '${Environment}-choosee-ui-url-rewrite'
+        - Environment: !Ref Environment
+
+  # Bucket
+
+  UiBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !FindInMap [EnvironmentMap, !Ref Environment, bucketName]
+      Tags:
+        - Key: 'created-by'
+          Value: 'choosee-ui'
+        - Key: 'created-for'
+          Value: 'choosee'
+        - Key: 'environment'
+          Value: !Ref Environment
+
+  UiBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: UiBucket
+    Properties:
+      Bucket: !Ref UiBucket
+      PolicyDocument:
+        Statement:
+          - Action: 's3:Get*'
+            Effect: Allow
+            Resource: !Sub 'arn:aws:s3:::${UiBucket}/*'
+            Principal:
+              CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
+
+  # CDN
+
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub
+          - 'Access identity for ${Domain}'
+          - Domain: !FindInMap [EnvironmentMap, !Ref Environment, domain]
+
+  UiCloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !FindInMap [EnvironmentMap, !Ref Environment, domain]
+        CustomErrorResponses:
+          - ErrorCode: 400
+            ResponseCode: 400
+            ResponsePagePath: /400/index.html
+          - ErrorCode: 403
+            ResponseCode: 403
+            ResponsePagePath: /403/index.html
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404/index.html
+          - ErrorCode: 500
+            ResponseCode: 500
+            ResponsePagePath: /500/index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - 'GET'
+            - 'HEAD'
+            - 'OPTIONS'
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6' # Managed-CachingOptimized
+          Compress: true
+          DefaultTTL: 0
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt UiUrlRewriteFunction.FunctionARN
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # Managed-SecurityHeadersPolicy
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: 'redirect-to-https'
+        DefaultRootObject: 'index.html'
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt UiBucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub
+                - 'origin-access-identity/cloudfront/${Identity}'
+                - Identity: !Ref OriginAccessIdentity
+        PriceClass: 'PriceClass_100'
+        ViewerCertificate:
+          AcmCertificateArn: !Sub
+            - 'arn:aws:acm:us-east-1:${AWS::AccountId}:certificate/${Certificate}'
+            - Certificate: !FindInMap [EnvironmentMap, !Ref Environment, certificate]
+          MinimumProtocolVersion: 'TLSv1.2_2018'
+          SslSupportMethod: 'sni-only'
+      Tags:
+        - Key: 'created-by'
+          Value: 'choosee-ui'
+        - Key: 'created-for'
+          Value: 'choosee'
+        - Key: 'environment'
+          Value: !Ref Environment
+
+  # DNS
+
+  DomainDns:
+    Type: AWS::Route53::RecordSet
+    DependsOn: UiCloudfrontDistribution
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt UiCloudfrontDistribution.DomainName
+        EvaluateTargetHealth: false
+        HostedZoneId: Z2FDTNDATAQYW2 # CloudFront resources HostedZoneId
+      HostedZoneId: !FindInMap [EnvironmentMap, !Ref Environment, zoneId]
+      Name: !FindInMap [EnvironmentMap, !Ref Environment, domain]
+      Type: A
