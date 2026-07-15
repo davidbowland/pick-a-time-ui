@@ -1,0 +1,91 @@
+import { useQuery } from '@tanstack/react-query'
+import React, { useMemo } from 'react'
+
+import { BestSlotBanner, EmptyBestSlot, ErrorState, formatMeetingLabel, LoadingState, SuggestedTimes } from './elements'
+import { HeatGrid } from './heat-grid'
+import { fetchOverlap, OverlapResponse } from '@services/api'
+import { PollData, User } from '@types'
+import { formatShortDate } from '@utils/dates'
+import { detectViewerTimezone } from '@utils/detectViewerTimezone'
+import { formatViewerSlotLabel } from '@utils/timezone'
+
+export interface ResultsPhaseProps {
+  sessionId: string
+  poll: PollData
+  users: User[]
+}
+
+const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.ReactNode => {
+  const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
+  const { data, isLoading, isError, refetch } = useQuery<OverlapResponse>({
+    queryKey: ['overlap', sessionId],
+    queryFn: () => fetchOverlap(sessionId),
+  })
+
+  if (isLoading) return <LoadingState />
+  if (isError || !data) return <ErrorState onRetry={() => refetch()} />
+
+  // Defensive: the API contract promises `grid`/`bestSlot`, but don't let a genuinely empty
+  // or not-yet-fully-robust response take the whole screen down with it.
+  const bestSlot = data.grid?.bestSlot
+  const bestDate = bestSlot ? poll.dates[bestSlot.dateIndex] : undefined
+  const bestCell = bestSlot ? data.grid.cells[bestSlot.dateIndex]?.[bestSlot.slotIndex] : undefined
+  const label = bestSlot
+    ? formatMeetingLabel(poll, bestDate, bestCell?.startMinute ?? 0, bestCell?.endMinute ?? 1440, viewerTimezone)
+    : ''
+
+  const dateLabels = poll.dates.map((date) => formatShortDate(date))
+  // Mirrors painting/grid.tsx's `showSlotHeader` rule exactly (`slots.length > 1`, not
+  // `poll.usesTimes`) — a timed poll whose window resolves to exactly one slot (a valid,
+  // already-exercised shape: a 60-minute window with a 60-minute meeting length) has one
+  // implicit column just like a dates-only poll, and both grids must agree on that or the same
+  // poll renders a time label in one and not the other.
+  const slotLabels =
+    poll.slots.length > 1
+      ? poll.slots.map((slot) =>
+        formatViewerSlotLabel(poll.dates[0], slot.startMinute, slot.endMinute, poll.timezone, viewerTimezone),
+      )
+      : []
+  // That same collapse means `BestSlotBanner`/`SuggestedTimes` are the only place a single-slot
+  // timed poll's meeting time would show — and neither renders at all before anyone's overlap
+  // exists (the `EmptyBestSlot` state, which is also the very first state anyone sees on a
+  // freshly-created poll). State it here too, same as the painting grid does.
+  const singleSlotWindow = poll.usesTimes && poll.slots.length === 1 ? poll.slots[0] : undefined
+
+  return (
+    <div className="flex flex-col gap-4">
+      {singleSlotWindow && (
+        <p className="text-xs text-[var(--slate)]">
+          Meeting time:{' '}
+          {formatViewerSlotLabel(
+            poll.dates[0],
+            singleSlotWindow.startMinute,
+            singleSlotWindow.endMinute,
+            poll.timezone,
+            viewerTimezone,
+          )}
+        </p>
+      )}
+      {!bestSlot || bestSlot.freeCount === 0 ? (
+        <EmptyBestSlot />
+      ) : (
+        <BestSlotBanner freeCount={bestSlot.freeCount} label={label} total={poll.participantCount} />
+      )}
+      <HeatGrid
+        cells={data.grid?.cells ?? []}
+        dateLabels={dateLabels}
+        participantCount={poll.participantCount}
+        slotLabels={slotLabels}
+        users={users}
+      />
+      <SuggestedTimes
+        meetings={data.recommendedMeetings ?? []}
+        poll={poll}
+        users={users}
+        viewerTimezone={viewerTimezone}
+      />
+    </div>
+  )
+}
+
+export default ResultsPhase

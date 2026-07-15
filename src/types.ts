@@ -4,49 +4,69 @@ export enum ErrorCode {
   ROUND_NOT_CURRENT = 'ROUND_NOT_CURRENT',
 }
 
-export interface PlanData {
+export interface Slot {
+  slotIndex: number
+  startMinute: number
+  endMinute: number
+}
+
+export interface DatesOnlyPoll {
+  usesTimes: false
+}
+
+export interface TimedPoll {
+  usesTimes: true
+  startMinute: number
+  endMinute: number
+  slotMinutes: 15 | 30 | 60 | 90 | 120
+}
+
+export type PollData = (DatesOnlyPoll | TimedPoll) & {
   sessionId: string
   name: string
-  weekdays: number[] // 0=Sun..6=Sat, display column order
-  startDate: string // "YYYY-MM-DD"
-  weekCount: number
-  startHour: number
-  endHour: number
+  dates: string[] // ISO "YYYY-MM-DD", sorted ascending
   timezone: string
+  expiration: number
   participantCount: number
+  slots: Slot[] // server-computed; always a single 0-1440 slot when usesTimes is false
+}
+
+export type NewPollRequest = (DatesOnlyPoll | TimedPoll) & {
+  name: string
+  dates: string[]
+  timezone: string
+}
+
+export interface ConfigData {
+  maxPollDates: number
+  pollNameMaxLength: number
+  participantNameMaxLength: number
+  allowedSlotMinutes: number[]
+  defaultSlotMinutes: number
+  startEndMinuteStep: number
+  maxPollDateRangeDays: number
+  maxUsersPerSession: number
+  sessionExpireHours: number
 }
 
 export interface User {
   userId: string
   name: string | null
-  phone: string | null
-  textsSent: number
+  calendarStatus: 'not_connected' | 'connected' | 'error'
 }
 
 export interface AvailabilityRecord {
   userId: string
-  template: boolean[][] // [hourIndex][dayIndex]
-  overrides: Record<number, boolean[][]>
-}
-
-export interface NewPlanRequest {
-  name: string
-  weekdays: number[]
-  startDate: string
-  weekCount: number
-  startHour: number
-  endHour: number
-  timezone: string
+  free: boolean[][] // [dateIndex][slotIndex]; slotIndex always 0 when the poll's usesTimes is false
+  expiration: number
 }
 
 export interface AvailabilityCell {
-  hourIndex: number
-  dayIndex: number
+  dateIndex: number
+  slotIndex: number
   value: boolean
 }
 
 export interface AvailabilityPatchRequest {
-  weekIndex: number | null
   cells: AvailabilityCell[]
-  resetToPattern: boolean
 }

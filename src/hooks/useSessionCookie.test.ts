@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
 import Cookies from 'js-cookie'
 
-import { useSessionCookie } from './useSessionCookie'
+import { clearSessionCookie, setSessionCookie, useSessionCookie } from './useSessionCookie'
 
 jest.mock('js-cookie')
 
@@ -42,7 +42,7 @@ describe('useSessionCookie', () => {
 
     expect(mockSet).toHaveBeenCalledWith('pat_user_abc', 'user-456', {
       path: '/p/abc',
-      expires: 1,
+      expires: 14,
       sameSite: 'Strict',
       secure: true,
     })
@@ -68,5 +68,38 @@ describe('useSessionCookie', () => {
 
     expect(mockRemove).toHaveBeenCalledWith('pat_user_abc', { path: '/p/abc' })
     expect(result.current.userId).toBeUndefined()
+  })
+
+  describe('setSessionCookie', () => {
+    it('should set the cookie with the standard options', () => {
+      setup()
+
+      setSessionCookie('abc', 'user-456')
+
+      expect(mockSet).toHaveBeenCalledWith('pat_user_abc', 'user-456', {
+        path: '/p/abc',
+        expires: 14,
+        sameSite: 'Strict',
+        secure: true,
+      })
+    })
+
+    it('should set secure to false on http', () => {
+      setup('http:')
+
+      setSessionCookie('abc', 'user-456')
+
+      expect(mockSet).toHaveBeenCalledWith('pat_user_abc', 'user-456', expect.objectContaining({ secure: false }))
+    })
+  })
+
+  describe('clearSessionCookie', () => {
+    it('should remove the cookie', () => {
+      setup()
+
+      clearSessionCookie('abc')
+
+      expect(mockRemove).toHaveBeenCalledWith('pat_user_abc', { path: '/p/abc' })
+    })
   })
 })

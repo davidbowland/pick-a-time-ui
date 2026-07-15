@@ -9,29 +9,36 @@ function getCookiePath(sessionId: string): string {
   return `/p/${sessionId}`
 }
 
+export function setSessionCookie(sessionId: string, userId: string): void {
+  Cookies.set(getCookieName(sessionId), userId, {
+    path: getCookiePath(sessionId),
+    expires: 14,
+    sameSite: 'Strict',
+    secure: typeof window !== 'undefined' && location.protocol === 'https:',
+  })
+}
+
+export function clearSessionCookie(sessionId: string): void {
+  Cookies.remove(getCookieName(sessionId), { path: getCookiePath(sessionId) })
+}
+
 export function useSessionCookie(sessionId: string) {
   const cookieName = getCookieName(sessionId)
-  const cookiePath = getCookiePath(sessionId)
 
   const [userId, setUserIdState] = useState<string | undefined>(() => Cookies.get(cookieName))
 
   const setUserId = useCallback(
     (id: string) => {
-      Cookies.set(cookieName, id, {
-        path: cookiePath,
-        expires: 1,
-        sameSite: 'Strict',
-        secure: typeof window !== 'undefined' && location.protocol === 'https:',
-      })
+      setSessionCookie(sessionId, id)
       setUserIdState(id)
     },
-    [cookieName, cookiePath],
+    [sessionId],
   )
 
   const clearUserId = useCallback(() => {
-    Cookies.remove(cookieName, { path: cookiePath })
+    clearSessionCookie(sessionId)
     setUserIdState(undefined)
-  }, [cookieName, cookiePath])
+  }, [sessionId])
 
   return { userId, setUserId, clearUserId }
 }

@@ -3,6 +3,8 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import React, { useEffect, useState } from 'react'
 
+import { Mark } from '@components/mark'
+
 const TIMEOUT_MS = 15_000
 
 const AuthCallback = (): React.ReactNode => {
@@ -53,6 +55,7 @@ const AuthCallback = (): React.ReactNode => {
         <title>{failed ? 'Sign-in failed' : 'Signing in…'} | Pick a Time</title>
       </Head>
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <Mark className={failed ? undefined : 'animate-breathe'} size={56} />
         {failed ? (
           <>
             <p className="text-default-500">Sign-in failed. Please try again.</p>

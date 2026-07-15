@@ -1,21 +1,21 @@
-import PlanPage, { getStaticPaths, getStaticProps } from '@pages/p/[sessionId]/index'
+import PollPage, { getStaticPaths, getStaticProps } from '@pages/p/[sessionId]/index'
 import '@testing-library/jest-dom'
 import { render } from '@testing-library/react'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
-import Plan from '@components/plan'
+import Poll from '@components/poll'
 import PrivacyLink from '@components/privacy-link'
 
 jest.mock('@components/app-bar')
 jest.mock('@components/privacy-link')
-jest.mock('@components/plan')
+jest.mock('@components/poll')
 
-describe('Plan page', () => {
+describe('Poll page', () => {
   beforeAll(() => {
     jest.mocked(AppBar).mockReturnValue(<>AppBar</>)
     jest.mocked(PrivacyLink).mockReturnValue(<></>)
-    jest.mocked(Plan).mockReturnValue(<></>)
+    jest.mocked(Poll).mockReturnValue(<></>)
   })
 
   function setup(pathname: string): void {
@@ -24,26 +24,26 @@ describe('Plan page', () => {
 
   it('should render AppBar', () => {
     setup('/p/amber-harbor/')
-    render(<PlanPage />)
+    render(<PollPage />)
     expect(AppBar).toHaveBeenCalled()
   })
 
   it('should render PrivacyLink', () => {
     setup('/p/amber-harbor/')
-    render(<PlanPage />)
+    render(<PollPage />)
     expect(PrivacyLink).toHaveBeenCalled()
   })
 
-  it('should render Plan with sessionId from pathname', () => {
+  it('should render Poll with sessionId from pathname', () => {
     setup('/p/amber-harbor/')
-    render(<PlanPage />)
-    expect(Plan).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'amber-harbor' }), undefined)
+    render(<PollPage />)
+    expect(Poll).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'amber-harbor' }), undefined)
   })
 
-  it('should not render Plan when pathname has no sessionId', () => {
+  it('should not render Poll when pathname has no sessionId', () => {
     setup('/')
-    render(<PlanPage />)
-    expect(Plan).not.toHaveBeenCalled()
+    render(<PollPage />)
+    expect(Poll).not.toHaveBeenCalled()
   })
 
   it('should return blocking fallback with empty paths in development', () => {

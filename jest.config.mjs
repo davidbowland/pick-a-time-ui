@@ -37,12 +37,13 @@ const config = {
     '^@types$': '<rootDir>/src/types',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
   },
+  modulePathIgnorePatterns: ['<rootDir>/\\.claude'],
   setupFiles: ['<rootDir>/jest.polyfills.js', '<rootDir>/jest.setup-test-env.js'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     customExportConditions: [''],
   },
-  testPathIgnorePatterns: ['node_modules', '\\.cache', '<rootDir>.*/out'],
+  testPathIgnorePatterns: ['node_modules', '\\.cache', '<rootDir>.*/out', '<rootDir>/\\.claude'],
 }
 
 // next/jest prepends its own transformIgnorePatterns that block all node_modules.

@@ -1,8 +1,8 @@
 @import '@heroui/styles';
 
 :root {
-  --font-display: 'Bebas Neue', 'Impact', cursive;
-  --font-body: 'Outfit Variable', 'Helvetica', sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans Variable', 'Helvetica', sans-serif;
 }
 
 html {
@@ -18,98 +18,96 @@ body {
   letter-spacing: 0.12em;
 }
 
-/* ---- Arena dark theme overrides ----
-   HeroUI v3 with Tailwind v4 registers theme colors as --color-* CSS variables.
-   We override both the short form (--background) and the prefixed form
-   (--color-background) so the overrides work regardless of HeroUI's
-   internal naming convention.
-*/
 html.dark {
+  --ink: #17171a;
+  --bone: #f2f1ee;
+  --accent: #3fae8a;
+  --accent-soft: #7ecdb3;
+  --accent-text: #1f6b52;
+  --slate: #9494a3;
+  --slate-on-light: #5c5c6b;
+  --hair: rgba(148, 148, 163, 0.22);
+  --heat-0: #287156;
+  --heat-1: #38a07a;
+  --heat-2: #55c39b;
+  --heat-3: #84d4b7;
+  --heat-4: #b4e4d3;
+
+  /* Form fields (radio, checkbox, text input controls). HeroUI's own defaults put an
+     unselected control's background within a hair of --ink with a transparent border, so
+     e.g. an unchecked radio dot is effectively invisible against our page background. */
+  --field-background: var(--surface);
+  --field-border: var(--hair);
+  --field-foreground: var(--bone);
+
   /* Backgrounds */
-  --background: #0a0a0b;
-  --color-background: #0a0a0b;
-  --surface: #0d0d0e;
-  --color-surface: #0d0d0e;
+  --background: var(--ink);
+  --color-background: var(--ink);
+  --surface: #1a1a26;
+  --color-surface: #1a1a26;
 
   /* Foreground */
-  --foreground: #f5f5f5;
-  --color-foreground: #f5f5f5;
+  --foreground: var(--bone);
+  --color-foreground: var(--bone);
 
-  /* Primary → Amber */
-  --primary: #f59e0b;
-  --color-primary: #f59e0b;
-  --primary-foreground: #0a0a0b;
-  --color-primary-foreground: #0a0a0b;
+  /* Primary -> emerald accent */
+  --primary: var(--accent);
+  --color-primary: var(--accent);
+  --primary-foreground: var(--ink);
+  --color-primary-foreground: var(--ink);
 
-  /* Default neutral scale — dark greys */
-  --default-50: #0d0d0e;
-  --color-default-50: #0d0d0e;
-  --default-100: #111113;
-  --color-default-100: #111113;
-  --default-200: #1a1a1c;
-  --color-default-200: #1a1a1c;
-  --default-300: #27272a;
-  --color-default-300: #27272a;
-  --default-400: #374151;
-  --color-default-400: #374151;
-  --default-500: #4b5563;
-  --color-default-500: #4b5563;
-  --default-600: #6b7280;
-  --color-default-600: #6b7280;
-  --default-700: #9ca3af;
-  --color-default-700: #9ca3af;
-  --default-800: #d1d5db;
-  --color-default-800: #d1d5db;
-  --default-900: #f9fafb;
-  --color-default-900: #f9fafb;
+  /* Default neutral scale, tinted toward ink rather than pure grey */
+  --default-50: #1a1a26;
+  --color-default-50: #1a1a26;
+  --default-100: #20202e;
+  --color-default-100: #20202e;
+  --default-200: #292938;
+  --color-default-200: #292938;
+  --default-300: #35354a;
+  --color-default-300: #35354a;
+  --default-400: #4a4a63;
+  --color-default-400: #4a4a63;
+  --default-500: var(--slate);
+  --color-default-500: var(--slate);
+  --default-600: #b1b1bd;
+  --color-default-600: #b1b1bd;
+  --default-700: #c8c8d1;
+  --color-default-700: #c8c8d1;
+  --default-800: #dedee4;
+  --color-default-800: #dedee4;
+  --default-900: var(--bone);
+  --color-default-900: var(--bone);
 
-  /* Divider / border */
-  --divider: rgba(255, 255, 255, 0.07);
-  --color-divider: rgba(255, 255, 255, 0.07);
+  --divider: var(--hair);
+  --color-divider: var(--hair);
 
-  /* Warning stays amber (used for Trophy icon) */
-  --warning: #f59e0b;
-  --color-warning: #f59e0b;
-  --warning-foreground: #0a0a0b;
-  --color-warning-foreground: #0a0a0b;
-}
-
-/* ---- Arena CSS utilities ---- */
-
-/* Double-bezel glass card pattern */
-.arena-glass-outer {
-  padding: 3px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 26px;
-}
-
-.arena-glass-inner {
-  background: rgba(12, 12, 13, 0.97);
-  border-radius: 23px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-/* Amber eyebrow pill tag */
-.arena-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  width: fit-content;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.18);
-  border-radius: 100px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #f59e0b;
+  --warning: var(--accent);
+  --color-warning: var(--accent);
+  --warning-foreground: var(--ink);
+  --color-warning-foreground: var(--ink);
 }
 
 /* Hide reCAPTCHA floating badge — branding text is shown inline in the form */
 .grecaptcha-badge {
   visibility: hidden !important;
+}
+
+@keyframes pat-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-breathe {
+    animation: pat-breathe 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
 }
 
 /* Drawer override — keep right-side width */

@@ -5,10 +5,12 @@ import { apiName, apiNameUnauthenticated } from '@config/amplify'
 import {
   AvailabilityPatchRequest,
   AvailabilityRecord,
+  ConfigData,
   ErrorCode,
-  NewPlanRequest,
+  NewPollRequest,
   PatchOperation,
-  PlanData,
+  PollData,
+  Slot,
   User,
 } from '@types'
 
@@ -70,10 +72,15 @@ async function apiPatch<T>(path: string, authenticated: boolean, reqBody?: AnyBo
 
 // --- Public API ---
 
-export const createPlan = (plan: NewPlanRequest, token: string): Promise<{ sessionId: string }> =>
-  apiPost('/sessions', false, plan, { 'x-recaptcha-token': token })
+export const fetchConfig = (): Promise<ConfigData> => apiGet('/config')
 
-export const fetchPlan = (sessionId: string): Promise<PlanData> => apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
+export const createPoll = (poll: NewPollRequest, token: string): Promise<{ sessionId: string }> =>
+  apiPost('/sessions', false, poll, { 'x-recaptcha-token': token })
+
+export const createPollAuthed = (poll: NewPollRequest): Promise<{ sessionId: string }> =>
+  apiPost('/sessions/authed', true, poll)
+
+export const fetchPoll = (sessionId: string): Promise<PollData> => apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
 
 export const fetchUsers = (sessionId: string): Promise<User[]> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users`)
@@ -88,11 +95,9 @@ export const createUser = async (sessionId: string, authenticated: boolean): Pro
   } catch (err) {
     if (err instanceof ApiError && err.response) {
       if (err.response.statusCode === 401) {
-        // Token may be expired — force refresh and retry once
         try {
           await fetchAuthSession({ forceRefresh: true })
         } catch {
-          // Refresh failed — fall back to unauthenticated
           return apiPost(`/sessions/${encodedId}/users`, false, {})
         }
         try {
@@ -134,32 +139,27 @@ export const patchAvailability = (
 ): Promise<AvailabilityRecord> =>
   apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`, false, body)
 
-export interface OverlapCell {
-  hourIndex: number
-  dayIndex: number
+export interface OverlapCell extends Slot {
+  dateIndex: number
   freeCount: number
   freeUserIds: string[]
 }
 
+export interface RecommendedMeeting extends Slot {
+  dateIndex: number
+  date: string
+  freeCount: number
+  freeUserIds: string[]
+  excludedByCalendar: string[]
+}
+
 export interface OverlapResponse {
-  mode: 'pattern' | 'week'
-  weekIndex: number | null
-  grid: { cells: OverlapCell[][]; bestSlot: { hourIndex: number; dayIndex: number; freeCount: number } }
-  exceptions: { weekIndex: number; hourIndex: number; dayIndex: number; description: string }[]
+  grid: { cells: OverlapCell[][]; bestSlot: { dateIndex: number; slotIndex: number; freeCount: number } }
+  recommendedMeetings: RecommendedMeeting[]
 }
 
-export const fetchOverlap = (sessionId: string, week: 'pattern' | number): Promise<OverlapResponse> =>
-  apiGet(`/sessions/${encodeURIComponent(sessionId)}/overlap`, { week: String(week) })
-
-export interface ShareResult {
-  userId: string
-}
-
-export const shareSession = (sessionId: string, userId: string, phone: string): Promise<ShareResult> =>
-  apiPost(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/share`, true, {
-    phone,
-    type: 'text',
-  })
+export const fetchOverlap = (sessionId: string): Promise<OverlapResponse> =>
+  apiGet(`/sessions/${encodeURIComponent(sessionId)}/overlap`)
 
 export function parseApiMessage(body: string | undefined, fallback: string): string {
   return parseBodyField(body, 'message') ?? fallback

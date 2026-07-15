@@ -1,6 +1,6 @@
 {
   "name": "pick-a-time-ui",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "UI for Pick a Time",
   "author": "David Bowland",
   "engines": {
@@ -29,8 +29,8 @@
     "update": "npx update-browserslist-db@latest && ncu --doctor --target minor --upgrade && npm audit fix --audit-level=none && npm run test && npm dedupe"
   },
   "dependencies": {
-    "@fontsource-variable/outfit": "^5.2.8",
-    "@fontsource/bebas-neue": "^5.2.7",
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
     "@heroui/react": "^3.2.2",
     "@tanstack/react-query": "^5.101.2",
     "@types/grecaptcha": "^3.0.9",
@@ -41,7 +41,7 @@
     "framer-motion": "^12.42.2",
     "husky": "^9.1.7",
     "js-cookie": "^3.0.8",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.24.0",
     "next": "^15.5.20",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
@@ -58,7 +58,7 @@
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
     "@types/jest": "^29.5.14",
     "@types/js-cookie": "^3.0.6",
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -73,7 +73,7 @@
     "lint-staged": "^15.5.2",
     "next-export-optimize-images": "^4.7.0",
     "next-sitemap": "^4.2.3",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.5",
     "react-test-renderer": "^19.2.7",
     "ts-node": "^10.9.2",
     "undici": "^6.27.0"

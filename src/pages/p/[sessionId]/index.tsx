@@ -3,7 +3,7 @@ import Head from 'next/head'
 import React, { useEffect, useState } from 'react'
 
 import AppBar from '@components/app-bar'
-import Plan from '@components/plan'
+import Poll from '@components/poll'
 import PrivacyLink from '@components/privacy-link'
 
 function useSessionIdFromPath(): string | undefined {
@@ -15,7 +15,7 @@ function useSessionIdFromPath(): string | undefined {
   return sessionId
 }
 
-const PlanPage = (): React.ReactNode => {
+const PollPage = (): React.ReactNode => {
   const sessionId = useSessionIdFromPath()
 
   return (
@@ -23,9 +23,9 @@ const PlanPage = (): React.ReactNode => {
       <Head>
         <title>Pick a Time</title>
       </Head>
-      <AppBar />
+      <AppBar sessionId={sessionId} />
       <main className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col px-4 py-6">
-        <div className="flex-1">{sessionId ? <Plan sessionId={sessionId} /> : null}</div>
+        <div className="flex-1">{sessionId ? <Poll sessionId={sessionId} /> : null}</div>
         <PrivacyLink />
       </main>
     </>
@@ -41,4 +41,4 @@ export const getStaticPaths: GetStaticPaths = () => {
 
 export const getStaticProps: GetStaticProps = () => ({ props: {} })
 
-export default PlanPage
+export default PollPage

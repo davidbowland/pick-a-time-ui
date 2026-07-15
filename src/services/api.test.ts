@@ -2,15 +2,17 @@ import { ApiError, get, patch, post } from 'aws-amplify/api'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
 import {
-  createPlan,
+  createPoll,
+  createPollAuthed,
   createUser,
   fetchAvailability,
-  fetchPlan,
+  fetchConfig,
+  fetchOverlap,
+  fetchPoll,
   fetchUsers,
   parseApiMessage,
   patchAvailability,
   patchUser,
-  shareSession,
 } from './api'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -49,40 +51,102 @@ beforeAll(() => {
 })
 
 describe('API service', () => {
-  describe('createPlan', () => {
-    it('should POST to /sessions with the plan body and recaptcha header', async () => {
-      jest.mocked(post).mockReturnValue({
-        response: Promise.resolve({ body: { json: async () => ({ sessionId: 'amber-harbor' }) } }),
-      } as any)
+  describe('fetchConfig', () => {
+    it('should GET /config', async () => {
+      const config = {
+        maxPollDates: 90,
+        pollNameMaxLength: 100,
+        participantNameMaxLength: 50,
+        allowedSlotMinutes: [15, 30, 60, 90, 120],
+        defaultSlotMinutes: 60,
+        startEndMinuteStep: 15,
+        maxPollDateRangeDays: 365,
+        maxUsersPerSession: 20,
+        sessionExpireHours: 336,
+      }
+      mockGet.mockReturnValue(mockResponse(config))
 
-      const plan = {
-        name: 'Fall rec soccer practice',
-        weekdays: [4, 5, 6],
-        startDate: '2025-09-04',
-        weekCount: 6,
-        startHour: 16,
-        endHour: 20,
+      const result = await fetchConfig()
+
+      expect(get).toHaveBeenCalledWith(expect.objectContaining({ path: '/config' }))
+      expect(result).toEqual(config)
+    })
+  })
+
+  describe('createPoll', () => {
+    it('should POST to /sessions with the poll body and recaptcha header', async () => {
+      mockPost.mockReturnValue(mockResponse({ sessionId: 'amber-harbor' }))
+
+      const poll = {
+        name: 'Lunch with friends',
+        dates: ['2025-09-04', '2025-09-05', '2025-09-06'],
+        usesTimes: true as const,
+        startMinute: 960,
+        endMinute: 1080,
+        slotMinutes: 60 as const,
         timezone: 'America/Chicago',
       }
-      const result = await createPlan(plan, 'recaptcha-token')
+      const result = await createPoll(poll, 'recaptcha-token')
 
       expect(result).toEqual({ sessionId: 'amber-harbor' })
       expect(post).toHaveBeenCalledWith(
         expect.objectContaining({
           path: '/sessions',
-          options: expect.objectContaining({ headers: { 'x-recaptcha-token': 'recaptcha-token' }, body: plan }),
+          options: expect.objectContaining({ headers: { 'x-recaptcha-token': 'recaptcha-token' }, body: poll }),
+        }),
+      )
+    })
+
+    it('should POST a dates-only poll body (no startMinute/endMinute/slotMinutes)', async () => {
+      mockPost.mockReturnValue(mockResponse({ sessionId: 'amber-harbor' }))
+
+      const poll = {
+        name: 'Weekend clean-up',
+        dates: ['2025-09-06', '2025-09-13'],
+        usesTimes: false as const,
+        timezone: 'America/Chicago',
+      }
+      const result = await createPoll(poll, 'recaptcha-token')
+
+      expect(result).toEqual({ sessionId: 'amber-harbor' })
+      expect(post).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/sessions',
+          options: expect.objectContaining({ headers: { 'x-recaptcha-token': 'recaptcha-token' }, body: poll }),
         }),
       )
     })
   })
 
-  describe('fetchPlan', () => {
-    it('should GET /sessions/{id}', async () => {
-      jest.mocked(get).mockReturnValue({
-        response: Promise.resolve({ body: { json: async () => ({ sessionId: 'amber-harbor' }) } }),
-      } as any)
+  describe('createPollAuthed', () => {
+    it('should POST to /sessions/authed with auth headers and no recaptcha header', async () => {
+      mockPost.mockReturnValue(mockResponse({ sessionId: 'amber-harbor' }))
 
-      await fetchPlan('amber-harbor')
+      const poll = {
+        name: 'Lunch with friends',
+        dates: ['2025-09-04', '2025-09-05', '2025-09-06'],
+        usesTimes: true as const,
+        startMinute: 960,
+        endMinute: 1080,
+        slotMinutes: 60 as const,
+        timezone: 'America/Chicago',
+      }
+      const result = await createPollAuthed(poll)
+
+      expect(result).toEqual({ sessionId: 'amber-harbor' })
+      expect(post).toHaveBeenCalledWith({
+        apiName: 'PickATimeAPI',
+        path: '/sessions/authed',
+        options: { headers: { Authorization: 'Bearer mock-jwt-token' }, body: poll },
+      })
+    })
+  })
+
+  describe('fetchPoll', () => {
+    it('should GET /sessions/{id}', async () => {
+      mockGet.mockReturnValue(mockResponse({ sessionId: 'amber-harbor' }))
+
+      await fetchPoll('amber-harbor')
 
       expect(get).toHaveBeenCalledWith(expect.objectContaining({ path: '/sessions/amber-harbor' }))
     })
@@ -90,7 +154,7 @@ describe('API service', () => {
 
   describe('fetchUsers', () => {
     it('should fetch users for session', async () => {
-      const users = [{ userId, name: null, phone: null, textsSent: 0 }]
+      const users = [{ userId, name: null, calendarStatus: 'not_connected' as const }]
       mockGet.mockReturnValue(mockResponse(users))
       const result = await fetchUsers(sessionId)
       expect(result).toEqual(users)
@@ -98,7 +162,7 @@ describe('API service', () => {
   })
 
   describe('createUser', () => {
-    const newUser = { userId: 'clever-fox', name: null, phone: null, textsSent: 0 }
+    const newUser = { userId: 'clever-fox', name: null, calendarStatus: 'not_connected' as const }
 
     it('should hit /users/authed with auth headers when authenticated', async () => {
       mockPost.mockReturnValue(mockResponse(newUser))
@@ -128,10 +192,6 @@ describe('API service', () => {
       })
       Object.setPrototypeOf(error, ApiError.prototype)
 
-      // First call: /users/authed fails 401
-      // fetchAuthSession called again with forceRefresh
-      // Second call: retry /users/authed also fails 401
-      // Third call: fallback to /users succeeds
       mockPost
         .mockReturnValueOnce(mockRejection(error))
         .mockReturnValueOnce(mockRejection(error))
@@ -139,21 +199,16 @@ describe('API service', () => {
 
       const result = await createUser(sessionId, true)
 
-      // authHeaders() for initial call + forceRefresh + authHeaders() for retry
       expect(mockFetchAuthSession).toHaveBeenCalledTimes(3)
       expect(mockFetchAuthSession).toHaveBeenNthCalledWith(2, { forceRefresh: true })
       expect(mockPost).toHaveBeenCalledTimes(3)
       expect(mockPost).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({
-          path: `/sessions/${encodeURIComponent(sessionId)}/users/authed`,
-        }),
+        expect.objectContaining({ path: `/sessions/${encodeURIComponent(sessionId)}/users/authed` }),
       )
       expect(mockPost).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({
-          path: `/sessions/${encodeURIComponent(sessionId)}/users/authed`,
-        }),
+        expect.objectContaining({ path: `/sessions/${encodeURIComponent(sessionId)}/users/authed` }),
       )
       expect(mockPost).toHaveBeenNthCalledWith(
         3,
@@ -171,22 +226,16 @@ describe('API service', () => {
       })
       Object.setPrototypeOf(error, ApiError.prototype)
 
-      // First call: /users/authed fails 401
-      // Token refresh succeeds
-      // Second call: retry /users/authed succeeds
       mockPost.mockReturnValueOnce(mockRejection(error)).mockReturnValueOnce(mockResponse(newUser))
 
       const result = await createUser(sessionId, true)
 
-      // authHeaders() for initial call + forceRefresh + authHeaders() for retry
       expect(mockFetchAuthSession).toHaveBeenCalledTimes(3)
       expect(mockFetchAuthSession).toHaveBeenNthCalledWith(2, { forceRefresh: true })
       expect(mockPost).toHaveBeenCalledTimes(2)
       expect(mockPost).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({
-          path: `/sessions/${encodeURIComponent(sessionId)}/users/authed`,
-        }),
+        expect.objectContaining({ path: `/sessions/${encodeURIComponent(sessionId)}/users/authed` }),
       )
       expect(result).toEqual(newUser)
     })
@@ -200,7 +249,6 @@ describe('API service', () => {
       mockPost.mockReturnValueOnce(mockRejection(error)).mockReturnValueOnce(mockResponse(newUser))
 
       const result = await createUser(sessionId, true)
-      // 403 should not attempt token refresh, just fall back directly
       expect(mockFetchAuthSession).toHaveBeenCalledTimes(1)
       expect(mockPost).toHaveBeenCalledTimes(2)
       expect(result).toEqual(newUser)
@@ -229,7 +277,6 @@ describe('API service', () => {
       })
       Object.setPrototypeOf(capacityError, ApiError.prototype)
 
-      // First call: 401 triggers refresh+retry, retry returns 400
       mockPost.mockReturnValueOnce(mockRejection(authError)).mockReturnValueOnce(mockRejection(capacityError))
 
       await expect(createUser(sessionId, true)).rejects.toThrow('Bad Request')
@@ -266,9 +313,7 @@ describe('API service', () => {
 
   describe('fetchAvailability', () => {
     it('should GET /sessions/{id}/users/{userId}/availability', async () => {
-      jest.mocked(get).mockReturnValue({
-        response: Promise.resolve({ body: { json: async () => ({ userId: 'quiet-falcon' }) } }),
-      } as any)
+      mockGet.mockReturnValue(mockResponse({ userId: 'quiet-falcon' }))
 
       await fetchAvailability('amber-harbor', 'quiet-falcon')
 
@@ -280,11 +325,9 @@ describe('API service', () => {
 
   describe('patchAvailability', () => {
     it('should PATCH the availability body as-is (not JSON Patch)', async () => {
-      jest.mocked(patch).mockReturnValue({
-        response: Promise.resolve({ body: { json: async () => ({ userId: 'quiet-falcon' }) } }),
-      } as any)
+      mockPatch.mockReturnValue(mockResponse({ userId: 'quiet-falcon' }))
 
-      const body = { weekIndex: null, cells: [{ hourIndex: 0, dayIndex: 0, value: true }], resetToPattern: false }
+      const body = { cells: [{ dateIndex: 0, slotIndex: 0, value: true }] }
       await patchAvailability('amber-harbor', 'quiet-falcon', body)
 
       expect(patch).toHaveBeenCalledWith(
@@ -296,17 +339,23 @@ describe('API service', () => {
     })
   })
 
-  describe('shareSession', () => {
-    it('should post share with phone and type (always authenticated)', async () => {
-      const response = { userId: 'clever-fox' }
-      mockPost.mockReturnValue(mockResponse(response))
-      const result = await shareSession(sessionId, userId, '+15559876543')
-      expect(mockPost).toHaveBeenCalledWith({
-        apiName: 'PickATimeAPI',
-        path: `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/share`,
-        options: { headers: { Authorization: 'Bearer mock-jwt-token' }, body: { phone: '+15559876543', type: 'text' } },
-      })
-      expect(result).toEqual(response)
+  describe('fetchOverlap', () => {
+    it('should GET /sessions/{id}/overlap with no query params', async () => {
+      mockGet.mockReturnValue(
+        mockResponse({
+          grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+          recommendedMeetings: [],
+        }),
+      )
+
+      await fetchOverlap('amber-harbor')
+
+      expect(get).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/sessions/amber-harbor/overlap',
+          options: expect.objectContaining({ queryParams: undefined }),
+        }),
+      )
     })
   })
 

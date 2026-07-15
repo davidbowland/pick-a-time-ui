@@ -46,7 +46,7 @@ describe('usePaintGesture', () => {
     expect(result.current.isOn(1, 0)).toBe(true)
   })
 
-  it('should commit only the cells that actually changed on release', () => {
+  it('should commit only the cells that actually changed on release, keyed by dateIndex/slotIndex', () => {
     const onCommit = jest.fn()
     const { result } = renderHook(() => usePaintGesture(grid, onCommit))
 
@@ -57,8 +57,8 @@ describe('usePaintGesture', () => {
     })
 
     expect(onCommit).toHaveBeenCalledWith([
-      { hourIndex: 0, dayIndex: 0, value: true },
-      { hourIndex: 0, dayIndex: 1, value: true },
+      { dateIndex: 0, slotIndex: 0, value: true },
+      { dateIndex: 0, slotIndex: 1, value: true },
     ])
   })
 

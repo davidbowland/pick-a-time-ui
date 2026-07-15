@@ -1,5 +1,5 @@
-import '@fontsource-variable/outfit'
-import '@fontsource/bebas-neue'
+import '@fontsource-variable/fraunces'
+import '@fontsource-variable/plus-jakarta-sans'
 import { ToastProvider } from '@heroui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AppProps } from 'next/app'
@@ -29,29 +29,10 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="relative min-h-[100dvh] bg-[#0A0A0B] text-foreground">
-          {/* Fixed ambient gradient orbs — Arena background */}
-          <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-            <div
-              className="absolute rounded-full"
-              style={{
-                top: '-220px',
-                left: '-80px',
-                width: '560px',
-                height: '560px',
-                background: 'radial-gradient(circle, rgba(245,158,11,0.13) 0%, transparent 70%)',
-              }}
-            />
-            <div
-              className="absolute rounded-full"
-              style={{
-                bottom: '-80px',
-                right: '-160px',
-                width: '480px',
-                height: '480px',
-                background: 'radial-gradient(circle, rgba(234,88,12,0.09) 0%, transparent 70%)',
-              }}
-            />
+        <div className="relative min-h-[100dvh] bg-[var(--ink)] text-foreground">
+          <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+            <div className="absolute -top-40 right-[-12%] h-[38rem] w-[38rem] rounded-full bg-[var(--accent)]/[0.09] blur-[140px]" />
+            <div className="absolute bottom-[-18%] left-[-12%] h-[32rem] w-[32rem] rounded-full bg-[var(--accent-soft)]/[0.06] blur-[140px]" />
           </div>
           <div className="relative z-10">
             <Component {...pageProps} />

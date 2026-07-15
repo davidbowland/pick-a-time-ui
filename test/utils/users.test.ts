@@ -4,8 +4,7 @@ import { displayName } from '@utils/users'
 const makeUser = (overrides: Partial<User> = {}): User => ({
   userId: 'abc-123-def',
   name: null,
-  phone: null,
-  textsSent: 0,
+  calendarStatus: 'not_connected',
   ...overrides,
 })
 

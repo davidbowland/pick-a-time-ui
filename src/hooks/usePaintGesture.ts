@@ -3,9 +3,9 @@ import { useCallback, useRef, useState } from 'react'
 import { AvailabilityCell } from '@types'
 
 export interface PaintGesture {
-  isOn: (hourIndex: number, dayIndex: number) => boolean
-  startPaint: (hourIndex: number, dayIndex: number) => void
-  continuePaint: (hourIndex: number, dayIndex: number) => void
+  isOn: (dateIndex: number, slotIndex: number) => boolean
+  startPaint: (dateIndex: number, slotIndex: number) => void
+  continuePaint: (dateIndex: number, slotIndex: number) => void
   endPaint: () => void
 }
 
@@ -18,36 +18,36 @@ export function usePaintGesture(baseGrid: boolean[][], onCommit: (cells: Availab
   const paintValueRef = useRef(true)
   const paintingRef = useRef(false)
 
-  const key = (h: number, d: number): string => `${h}:${d}`
+  const key = (dateIndex: number, slotIndex: number): string => `${dateIndex}:${slotIndex}`
 
   const isOn = useCallback(
-    (hourIndex: number, dayIndex: number): boolean => {
-      const k = key(hourIndex, dayIndex)
-      return overlay.has(k) ? (overlay.get(k) as boolean) : baseGrid[hourIndex][dayIndex]
+    (dateIndex: number, slotIndex: number): boolean => {
+      const k = key(dateIndex, slotIndex)
+      return overlay.has(k) ? (overlay.get(k) as boolean) : baseGrid[dateIndex][slotIndex]
     },
     [overlay, baseGrid],
   )
 
-  const paintCell = useCallback((hourIndex: number, dayIndex: number, value: boolean) => {
+  const paintCell = useCallback((dateIndex: number, slotIndex: number, value: boolean) => {
     const next = new Map(overlayRef.current)
-    next.set(key(hourIndex, dayIndex), value)
+    next.set(key(dateIndex, slotIndex), value)
     overlayRef.current = next
     setOverlay(next)
   }, [])
 
   const startPaint = useCallback(
-    (hourIndex: number, dayIndex: number) => {
+    (dateIndex: number, slotIndex: number) => {
       paintingRef.current = true
-      paintValueRef.current = !baseGrid[hourIndex][dayIndex]
-      paintCell(hourIndex, dayIndex, paintValueRef.current)
+      paintValueRef.current = !baseGrid[dateIndex][slotIndex]
+      paintCell(dateIndex, slotIndex, paintValueRef.current)
     },
     [baseGrid, paintCell],
   )
 
   const continuePaint = useCallback(
-    (hourIndex: number, dayIndex: number) => {
+    (dateIndex: number, slotIndex: number) => {
       if (!paintingRef.current) return
-      paintCell(hourIndex, dayIndex, paintValueRef.current)
+      paintCell(dateIndex, slotIndex, paintValueRef.current)
     },
     [paintCell],
   )
@@ -57,8 +57,8 @@ export function usePaintGesture(baseGrid: boolean[][], onCommit: (cells: Availab
     const finalOverlay = overlayRef.current
     if (finalOverlay.size === 0) return
     const cells: AvailabilityCell[] = Array.from(finalOverlay.entries()).map(([k, value]) => {
-      const [hourIndex, dayIndex] = k.split(':').map(Number)
-      return { hourIndex, dayIndex, value }
+      const [dateIndex, slotIndex] = k.split(':').map(Number)
+      return { dateIndex, slotIndex, value }
     })
     onCommit(cells)
     overlayRef.current = new Map()
