@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import Poll from './index'
+import { useAuthContext } from '@components/auth-context'
 import { useSessionCookie } from '@hooks/useSessionCookie'
 import { createUser, fetchAvailability, fetchConfig, fetchOverlap, fetchPoll, fetchUsers } from '@services/api'
 import { PollData, User } from '@types'
@@ -13,7 +14,7 @@ import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 jest.mock('@services/api')
 jest.mock('@hooks/useSessionCookie')
 jest.mock('@utils/detectViewerTimezone')
-jest.mock('@components/auth-context', () => ({ useAuthContext: () => ({ isSignedIn: false, isLoading: false }) }))
+jest.mock('@components/auth-context')
 
 describe('Poll', () => {
   const poll: PollData = {
@@ -29,11 +30,22 @@ describe('Poll', () => {
     participantCount: 1,
     // Two slots (not one) — a single-slot timed poll collapses to the same no-header-row
     // rendering as a dates-only poll (see painting/grid.tsx's `showSlotHeader`/results/index.tsx's
-    // `slotLabels`, both keyed off `slots.length > 1`), which would make this smoke-test fixture
-    // exercise the wrong grid shape for a poll that's supposed to be genuinely timed.
+    // `slotLabels`, both keyed off the union column count via `buildUnionColumns(poll.slots)`),
+    // which would make this smoke-test fixture exercise the wrong grid shape for a poll that's
+    // supposed to be genuinely timed.
     slots: [
-      { slotIndex: 0, startMinute: 1080, endMinute: 1140 }, // 6:00-7:00 PM
-      { slotIndex: 1, startMinute: 1140, endMinute: 1200 }, // 7:00-8:00 PM
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 }, // 6:00-7:00 PM
+        { slotIndex: 1, startMinute: 1140, endMinute: 1200 }, // 7:00-8:00 PM
+      ],
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1140, endMinute: 1200 },
+      ],
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1140, endMinute: 1200 },
+      ],
     ],
   }
   const existingUser: User = { userId: 'quiet-falcon', name: 'Quiet Falcon', calendarStatus: 'not_connected' }
@@ -45,6 +57,7 @@ describe('Poll', () => {
     defaultSlotMinutes: 60,
     startEndMinuteStep: 15,
     maxPollDateRangeDays: 365,
+    maxPollOverrideGroups: 10,
     maxUsersPerSession: 20,
     sessionExpireHours: 336,
   }
@@ -60,6 +73,13 @@ describe('Poll', () => {
     window.localStorage.setItem('pat_onboarded_amber_harbor', 'true')
     jest.mocked(detectViewerTimezone).mockReturnValue('America/Chicago')
     jest.mocked(fetchConfig).mockResolvedValue(config)
+    jest.mocked(useAuthContext).mockReturnValue({
+      isSignedIn: false,
+      user: null,
+      isLoading: false,
+      handleSignIn: jest.fn(),
+      handleSignOut: jest.fn(),
+    })
   })
 
   function renderWithClient(ui: React.ReactElement) {

@@ -18,6 +18,7 @@ const config = {
   defaultSlotMinutes: 60,
   startEndMinuteStep: 15,
   maxPollDateRangeDays: 365,
+  maxPollOverrideGroups: 10,
   maxUsersPerSession: 20,
   sessionExpireHours: 336,
 }

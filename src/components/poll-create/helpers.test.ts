@@ -1,5 +1,7 @@
 import {
+  computeWeekendOverride,
   formatDaysTimesSummary,
+  formatTimeLabel,
   formatWeekdaysSummary,
   generateWeekdayDates,
   reconcilePatternDates,
@@ -135,6 +137,50 @@ describe('updateExcludedDates', () => {
   })
 })
 
+describe('formatTimeLabel', () => {
+  it('returns "Dates only" when times are not used', () => {
+    expect(
+      formatTimeLabel({
+        usesTimes: false,
+        startMinute: 540,
+        endMinute: 1260,
+        slotMinutes: 60,
+        weekendsDiffer: false,
+        weekendStartMinute: 660,
+        weekendEndMinute: 720,
+      }),
+    ).toBe('Dates only')
+  })
+
+  it('returns the single window and duration when weekends do not differ', () => {
+    expect(
+      formatTimeLabel({
+        usesTimes: true,
+        startMinute: 690,
+        endMinute: 810,
+        slotMinutes: 60,
+        weekendsDiffer: false,
+        weekendStartMinute: 660,
+        weekendEndMinute: 720,
+      }),
+    ).toBe('11:30 AM–1:30 PM · 1 hr')
+  })
+
+  it('returns both windows, weekdays then weekends, when weekends differ', () => {
+    expect(
+      formatTimeLabel({
+        usesTimes: true,
+        startMinute: 540,
+        endMinute: 1020,
+        slotMinutes: 60,
+        weekendsDiffer: true,
+        weekendStartMinute: 660,
+        weekendEndMinute: 840,
+      }),
+    ).toBe('9:00 AM–5:00 PM weekdays, 11:00 AM–2:00 PM weekends · 1 hr')
+  })
+})
+
 describe('formatDaysTimesSummary', () => {
   it('summarizes a dates-only selection', () => {
     expect(
@@ -145,6 +191,9 @@ describe('formatDaysTimesSummary', () => {
         startMinute: 540,
         endMinute: 1260,
         slotMinutes: 60,
+        weekendsDiffer: false,
+        weekendStartMinute: 660,
+        weekendEndMinute: 720,
       }),
     ).toBe('3 dates · Mon–Fri · Dates only')
   })
@@ -158,6 +207,9 @@ describe('formatDaysTimesSummary', () => {
         startMinute: 690,
         endMinute: 810,
         slotMinutes: 60,
+        weekendsDiffer: false,
+        weekendStartMinute: 660,
+        weekendEndMinute: 720,
       }),
     ).toBe('1 date · Mon · 11:30 AM–1:30 PM · 1 hr')
   })
@@ -171,7 +223,50 @@ describe('formatDaysTimesSummary', () => {
         startMinute: 540,
         endMinute: 1260,
         slotMinutes: 60,
+        weekendsDiffer: false,
+        weekendStartMinute: 660,
+        weekendEndMinute: 720,
       }),
     ).toBe('0 dates · Not set yet · Dates only')
+  })
+
+  it('includes both windows when weekends differ', () => {
+    expect(
+      formatDaysTimesSummary({
+        dateCount: 7,
+        daysLabel: 'Mon–Sun',
+        usesTimes: true,
+        startMinute: 540,
+        endMinute: 1020,
+        slotMinutes: 60,
+        weekendsDiffer: true,
+        weekendStartMinute: 660,
+        weekendEndMinute: 840,
+      }),
+    ).toBe('7 dates · Mon–Sun · 9:00 AM–5:00 PM weekdays, 11:00 AM–2:00 PM weekends · 1 hr')
+  })
+})
+
+describe('computeWeekendOverride', () => {
+  it('returns undefined when none of the dates are weekend dates', () => {
+    // 2026-07-16/17 are Thu/Fri.
+    expect(computeWeekendOverride(['2026-07-16', '2026-07-17'], 'America/Chicago', 660, 720)).toBeUndefined()
+  })
+
+  it('covers only the weekend dates when the poll has a mix of weekday and weekend dates', () => {
+    // 2026-07-16 Thu, 2026-07-18 Sat, 2026-07-19 Sun.
+    expect(computeWeekendOverride(['2026-07-16', '2026-07-18', '2026-07-19'], 'America/Chicago', 660, 720)).toEqual({
+      dates: ['2026-07-18', '2026-07-19'],
+      startMinute: 660,
+      endMinute: 720,
+    })
+  })
+
+  it('covers every date when they are all weekend dates', () => {
+    expect(computeWeekendOverride(['2026-07-18', '2026-07-19'], 'America/Chicago', 660, 720)).toEqual({
+      dates: ['2026-07-18', '2026-07-19'],
+      startMinute: 660,
+      endMinute: 720,
+    })
   })
 })

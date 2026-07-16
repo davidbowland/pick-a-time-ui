@@ -13,8 +13,21 @@ jest.mock('@services/api')
 jest.mock('@utils/detectViewerTimezone')
 
 describe('PaintingPhase', () => {
+  // PaintingPhase debounces its PATCH by 1250ms (PATCH_DEBOUNCE_MS in index.tsx) so a burst of
+  // quick individual picks coalesces into one request. Fake timers make that deterministic;
+  // `waitFor`/`findBy*` detect Jest's fake timers and advance them automatically, but their
+  // default 1000ms timeout is shorter than the debounce, so assertions that wait on a PATCH pass
+  // an explicit longer timeout via DEBOUNCE_WAIT.
+  const PATCH_DEBOUNCE_MS = 1250
+  const DEBOUNCE_WAIT = { timeout: 2000 }
+
   beforeAll(() => {
+    jest.useFakeTimers()
     jest.mocked(detectViewerTimezone).mockReturnValue('America/Chicago')
+  })
+
+  afterAll(() => {
+    jest.useRealTimers()
   })
 
   // Two dates x three 60-minute slots sliding across a 6-9pm window — same total cell count
@@ -32,9 +45,16 @@ describe('PaintingPhase', () => {
     expiration: 1725453600,
     participantCount: 1,
     slots: [
-      { slotIndex: 0, startMinute: 1080, endMinute: 1140 }, // 6:00-7:00 PM
-      { slotIndex: 1, startMinute: 1140, endMinute: 1200 }, // 7:00-8:00 PM
-      { slotIndex: 2, startMinute: 1200, endMinute: 1260 }, // 8:00-9:00 PM
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 }, // 6:00-7:00 PM
+        { slotIndex: 1, startMinute: 1140, endMinute: 1200 }, // 7:00-8:00 PM
+        { slotIndex: 2, startMinute: 1200, endMinute: 1260 }, // 8:00-9:00 PM
+      ],
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1140, endMinute: 1200 },
+        { slotIndex: 2, startMinute: 1200, endMinute: 1260 },
+      ],
     ],
   }
 
@@ -52,7 +72,10 @@ describe('PaintingPhase', () => {
     timezone: 'America/Chicago',
     expiration: 1725453600,
     participantCount: 1,
-    slots: [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }], // 6:00-7:00 PM
+    slots: [
+      [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+      [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+    ], // 6:00-7:00 PM
   }
 
   const datesOnlyPoll: PollData = {
@@ -63,12 +86,12 @@ describe('PaintingPhase', () => {
     timezone: 'America/Chicago',
     expiration: 1725453600,
     participantCount: 1,
-    slots: [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }],
+    slots: [[{ slotIndex: 0, startMinute: 0, endMinute: 1440 }], [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }]],
   }
 
-  function renderWithClient(ui: React.ReactElement): ReturnType<typeof render> {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  function renderWithClient(ui: React.ReactElement): { queryClient: QueryClient } & ReturnType<typeof render> {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return { queryClient, ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>) }
   }
 
   function mockEmptyAvailability(): void {
@@ -117,10 +140,12 @@ describe('PaintingPhase', () => {
       cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     })
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+        }),
+      DEBOUNCE_WAIT,
     )
   })
 
@@ -138,12 +163,51 @@ describe('PaintingPhase', () => {
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
-    await userEvent.click(cells[0])
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.click(cells[0])
 
-    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1), DEBOUNCE_WAIT)
     expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
       cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
     })
+  })
+
+  it('should coalesce several quick individual clicks into a single PATCH instead of one per click', async () => {
+    mockEmptyAvailability()
+    jest.mocked(patchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [
+        [true, true, false],
+        [false, false, false],
+      ],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    // Two separate click gestures, close enough together to both land inside one debounce window.
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+    act(() => {
+      jest.advanceTimersByTime(500)
+      cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [
+            { dateIndex: 0, slotIndex: 0, value: true },
+            { dateIndex: 0, slotIndex: 1, value: true },
+          ],
+        }),
+      DEBOUNCE_WAIT,
+    )
+    expect(patchAvailability).toHaveBeenCalledTimes(1)
   })
 
   it('should toggle a cell from the keyboard, so painting does not require a pointer', async () => {
@@ -162,12 +226,15 @@ describe('PaintingPhase', () => {
     cells[0].focus()
 
     expect(cells[0]).toHaveFocus()
-    await userEvent.keyboard('{Enter}')
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.keyboard('{Enter}')
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+        }),
+      DEBOUNCE_WAIT,
     )
     expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
   })
@@ -184,19 +251,22 @@ describe('PaintingPhase', () => {
     })
 
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Select all' }))
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Select all' }))
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [
-          { dateIndex: 0, slotIndex: 0, value: true },
-          { dateIndex: 0, slotIndex: 1, value: true },
-          { dateIndex: 0, slotIndex: 2, value: true },
-          { dateIndex: 1, slotIndex: 0, value: true },
-          { dateIndex: 1, slotIndex: 1, value: true },
-          { dateIndex: 1, slotIndex: 2, value: true },
-        ],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [
+            { dateIndex: 0, slotIndex: 0, value: true },
+            { dateIndex: 0, slotIndex: 1, value: true },
+            { dateIndex: 0, slotIndex: 2, value: true },
+            { dateIndex: 1, slotIndex: 0, value: true },
+            { dateIndex: 1, slotIndex: 1, value: true },
+            { dateIndex: 1, slotIndex: 2, value: true },
+          ],
+        }),
+      DEBOUNCE_WAIT,
     )
   })
 
@@ -219,12 +289,15 @@ describe('PaintingPhase', () => {
     })
 
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Clear all' }))
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Clear all' }))
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: expect.arrayContaining([{ dateIndex: 0, slotIndex: 0, value: false }]),
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: expect.arrayContaining([{ dateIndex: 0, slotIndex: 0, value: false }]),
+        }),
+      DEBOUNCE_WAIT,
     )
   })
 
@@ -269,14 +342,16 @@ describe('PaintingPhase', () => {
 
     document.elementFromPoint = originalElementFromPoint
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [
-          { dateIndex: 0, slotIndex: 0, value: true },
-          { dateIndex: 0, slotIndex: 1, value: true },
-          { dateIndex: 0, slotIndex: 2, value: true },
-        ],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [
+            { dateIndex: 0, slotIndex: 0, value: true },
+            { dateIndex: 0, slotIndex: 1, value: true },
+            { dateIndex: 0, slotIndex: 2, value: true },
+          ],
+        }),
+      DEBOUNCE_WAIT,
     )
     expect(patchAvailability).toHaveBeenCalledTimes(1)
   })
@@ -308,10 +383,12 @@ describe('PaintingPhase', () => {
       cells[0].dispatchEvent(new MouseEvent('pointercancel', { bubbles: true }))
     })
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenNthCalledWith(1, 'amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenNthCalledWith(1, 'amber-harbor', 'quiet-falcon', {
+          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+        }),
+      DEBOUNCE_WAIT,
     )
 
     act(() => {
@@ -319,10 +396,12 @@ describe('PaintingPhase', () => {
       cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     })
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenNthCalledWith(2, 'amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 1, value: true }],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenNthCalledWith(2, 'amber-harbor', 'quiet-falcon', {
+          cells: [{ dateIndex: 0, slotIndex: 1, value: true }],
+        }),
+      DEBOUNCE_WAIT,
     )
     expect(patchAvailability).toHaveBeenCalledTimes(2)
   })
@@ -345,7 +424,12 @@ describe('PaintingPhase', () => {
       cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     })
 
+    // The cell shows on right away from the optimistic update, before the debounced PATCH even fires.
     await waitFor(() => expect(cells[0]).toHaveAttribute('aria-pressed', 'true'))
+
+    // Advance past the debounce so the PATCH actually goes out (still unresolved at this point).
+    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1), DEBOUNCE_WAIT)
+    expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
 
     resolvePatch({
       userId: 'quiet-falcon',
@@ -355,7 +439,7 @@ describe('PaintingPhase', () => {
       ],
       expiration: 1725453600,
     })
-    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(cells[0]).toHaveAttribute('aria-pressed', 'true'))
   })
 
   it('should roll back the cell and show an error message when the PATCH fails', async () => {
@@ -370,7 +454,28 @@ describe('PaintingPhase', () => {
       cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     })
 
-    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't save your availability")
+    expect(await screen.findByRole('alert', {}, DEBOUNCE_WAIT)).toHaveTextContent("Couldn't save your availability")
+    expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
+  })
+
+  it('should roll back every cell from a coalesced batch, not just the last one, when the merged PATCH fails', async () => {
+    mockEmptyAvailability()
+    jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+    act(() => {
+      jest.advanceTimersByTime(500)
+      cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    expect(await screen.findByRole('alert', {}, DEBOUNCE_WAIT)).toHaveTextContent("Couldn't save your availability")
     expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
   })
 
@@ -379,9 +484,10 @@ describe('PaintingPhase', () => {
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
 
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Select all' }))
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Select all' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't save your availability")
+    expect(await screen.findByRole('alert', {}, DEBOUNCE_WAIT)).toHaveTextContent("Couldn't save your availability")
     expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
   })
 
@@ -411,10 +517,12 @@ describe('PaintingPhase', () => {
       cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     })
 
-    await waitFor(() =>
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-      }),
+    await waitFor(
+      () =>
+        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+        }),
+      DEBOUNCE_WAIT,
     )
   })
 
@@ -466,5 +574,37 @@ describe('PaintingPhase', () => {
     renderWithClient(<PaintingPhase poll={singleSlotTimedPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findByText('Meeting time: 8:00–9:00 AM (next day for you)')).toBeInTheDocument()
+  })
+
+  it('renders a disabled, non-tappable placeholder for a date whose own window does not include a shared column', async () => {
+    const overridePoll: PollData = {
+      sessionId: 'amber-harbor',
+      name: 'Lunch with friends',
+      dates: ['2025-09-04', '2025-09-06'], // Thu (default window), Sat (override)
+      usesTimes: true,
+      startMinute: 540,
+      endMinute: 600,
+      slotMinutes: 60,
+      overrides: [{ dates: ['2025-09-06'], startMinute: 660, endMinute: 720 }],
+      timezone: 'America/Chicago',
+      expiration: 1725453600,
+      participantCount: 1,
+      slots: [
+        [{ slotIndex: 0, startMinute: 540, endMinute: 600 }], // Thu: 9:00-10:00 AM
+        [{ slotIndex: 0, startMinute: 660, endMinute: 720 }], // Sat: 11:00 AM-12:00 PM
+      ],
+    }
+    jest.mocked(fetchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [[false], [false]],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={overridePoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    // Union of the two dates' windows is two columns (9-10am, 11am-12pm). Each date only has a
+    // real slot for one of them, so there are exactly 2 tappable buttons, not 4.
+    const cells = await screen.findAllByRole('button', { pressed: false })
+    expect(cells).toHaveLength(2)
   })
 })

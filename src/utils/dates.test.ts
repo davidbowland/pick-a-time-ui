@@ -1,4 +1,4 @@
-import { addDays, formatExpiration, formatShortDate, toIsoDate } from './dates'
+import { addDays, formatExpiration, formatShortDate, isWeekendDate, toIsoDate } from './dates'
 
 describe('toIsoDate', () => {
   it('formats a local Date as YYYY-MM-DD, zero-padded', () => {
@@ -31,5 +31,24 @@ describe('formatExpiration', () => {
   it('renders a different clock time and date for a different zone from the same instant', () => {
     const expirationSeconds = Date.UTC(2026, 7, 24, 17, 30) / 1000 // 2026-08-24T17:30:00Z
     expect(formatExpiration(expirationSeconds, 'Asia/Tokyo')).toBe('Closes Aug 25, 2026 at 2:30 AM')
+  })
+})
+
+describe('isWeekendDate', () => {
+  it('returns true for a Saturday in the given timezone', () => {
+    expect(isWeekendDate('2026-07-18', 'America/Chicago')).toBe(true)
+  })
+
+  it('returns true for a Sunday in the given timezone', () => {
+    expect(isWeekendDate('2026-07-19', 'America/Chicago')).toBe(true)
+  })
+
+  it('returns false for a weekday in the given timezone', () => {
+    expect(isWeekendDate('2026-07-16', 'America/Chicago')).toBe(false)
+  })
+
+  it('resolves the weekday in the given timezone, not implicitly in whatever zone the runtime defaults to', () => {
+    expect(isWeekendDate('2026-07-18', 'Asia/Tokyo')).toBe(true) // still Saturday in Tokyo
+    expect(isWeekendDate('2026-07-20', 'Asia/Tokyo')).toBe(false) // Monday in Tokyo
   })
 })

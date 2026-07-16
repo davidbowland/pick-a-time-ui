@@ -33,7 +33,7 @@ export const CreateCard = ({ children }: { children: React.ReactNode }): React.R
 
 export const CreateCardHeader = (): React.ReactNode => (
   <div className="flex flex-col gap-2">
-    <EyebrowTag>New poll</EyebrowTag>
+    <EyebrowTag fixedAccent>New poll</EyebrowTag>
     <h2 className="text-2xl text-[var(--bone)]" style={{ fontFamily: 'var(--font-display)' }}>
       Set it up
     </h2>
@@ -58,7 +58,7 @@ export const PollNameField = React.forwardRef<HTMLInputElement, PollNameFieldPro
         className="border border-[var(--slate)]/70 bg-[var(--bone)]/[0.04] text-[var(--bone)] placeholder:text-[var(--slate)]"
         maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Lunch with friends"
+        placeholder="e.g. Lunch with friends"
         ref={ref}
         value={value}
       />

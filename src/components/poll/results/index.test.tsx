@@ -29,9 +29,21 @@ describe('ResultsPhase', () => {
     expiration: 1234567890,
     participantCount: 3,
     slots: [
-      { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
-      { slotIndex: 1, startMinute: 1110, endMinute: 1170 },
-      { slotIndex: 2, startMinute: 1140, endMinute: 1200 },
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1110, endMinute: 1170 },
+        { slotIndex: 2, startMinute: 1140, endMinute: 1200 },
+      ],
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1110, endMinute: 1170 },
+        { slotIndex: 2, startMinute: 1140, endMinute: 1200 },
+      ],
+      [
+        { slotIndex: 0, startMinute: 1080, endMinute: 1140 },
+        { slotIndex: 1, startMinute: 1110, endMinute: 1170 },
+        { slotIndex: 2, startMinute: 1140, endMinute: 1200 },
+      ],
     ],
   }
 
@@ -49,7 +61,11 @@ describe('ResultsPhase', () => {
     timezone: 'America/Chicago',
     expiration: 1234567890,
     participantCount: 3,
-    slots: [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+    slots: [
+      [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+      [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+      [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+    ],
   }
 
   const datesOnlyPoll: PollData = {
@@ -60,7 +76,11 @@ describe('ResultsPhase', () => {
     timezone: 'America/Chicago',
     expiration: 1234567890,
     participantCount: 3,
-    slots: [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }],
+    slots: [
+      [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }],
+      [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }],
+      [{ slotIndex: 0, startMinute: 0, endMinute: 1440 }],
+    ],
   }
 
   const overlapResponse: OverlapResponse = {
@@ -388,5 +408,34 @@ describe('ResultsPhase', () => {
     const section = await screen.findByRole('region', { name: /suggested times/i })
     expect(within(section).getByText(/thu, sep 4/i)).toBeInTheDocument()
     expect(within(section).getByText(/8:00.*9:00 am/i)).toBeInTheDocument()
+  })
+
+  it('shows a union of slot labels spanning both windows when the poll has a per-date override', async () => {
+    const overridePoll: PollData = {
+      ...poll,
+      dates: ['2025-09-04', '2025-09-06'],
+      startMinute: 540,
+      endMinute: 600,
+      overrides: [{ dates: ['2025-09-06'], startMinute: 660, endMinute: 720 }],
+      slots: [
+        [{ slotIndex: 0, startMinute: 540, endMinute: 600 }],
+        [{ slotIndex: 0, startMinute: 660, endMinute: 720 }],
+      ],
+    }
+    jest.mocked(fetchOverlap).mockResolvedValueOnce({
+      grid: {
+        cells: [
+          [{ dateIndex: 0, slotIndex: 0, startMinute: 540, endMinute: 600, freeCount: 0, freeUserIds: [] }],
+          [{ dateIndex: 1, slotIndex: 0, startMinute: 660, endMinute: 720, freeCount: 0, freeUserIds: [] }],
+        ],
+        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 },
+      },
+      recommendedMeetings: [],
+    })
+
+    renderWithClient(<ResultsPhase poll={overridePoll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText('9:00–10:00 AM')).toBeInTheDocument()
+    expect(screen.getByText('11:00 AM–12:00 PM')).toBeInTheDocument()
   })
 })

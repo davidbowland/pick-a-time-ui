@@ -8,7 +8,9 @@ import { ChecklistSection } from './checklist-section'
 import { DatePickerCalendar } from './date-picker'
 import { CreateCard, CreateCardHeader, PollNameField, WeekCountStepper, WeekdayPicker } from './elements'
 import {
+  computeWeekendOverride,
   formatDaysTimesSummary,
+  formatTimeLabel,
   formatWeekdaysSummary,
   generateWeekdayDates,
   reconcilePatternDates,
@@ -16,7 +18,7 @@ import {
 } from './helpers'
 import { ScenarioPreset, ScenarioPresets } from './scenario-presets'
 import { SummaryDisclosure } from './summary-disclosure'
-import { SlotDurationPicker, TimeRangeSlider, TimesToggle, formatSlotMinutesLabel } from './time-fields'
+import { SlotDurationPicker, TimeRangeSlider, TimesToggle, WeekendTimesToggle } from './time-fields'
 import { useAuthContext } from '@components/auth-context'
 import FeedbackMessage from '@components/feedback-message'
 import { PillButton } from '@components/ui/pill-button'
@@ -24,7 +26,7 @@ import { VoterNameField } from '@components/ui/voter-name-field'
 import { setSessionCookie } from '@hooks/useSessionCookie'
 import { createPoll, createPollAuthed, createUser, fetchConfig, parseApiMessage, patchUser } from '@services/api'
 import { NewPollRequest } from '@types'
-import { formatSlotRange } from '@utils/time'
+import { isWeekendDate } from '@utils/dates'
 
 const RECAPTCHA_SCRIPT_ID = 'recaptcha-v3-script'
 const RECAPTCHA_TIMEOUT_MS = 10_000
@@ -72,6 +74,10 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const [endMinute, setEndMinute] = useState(DEFAULT_END_MINUTE)
   const [slotMinutes, setSlotMinutes] = useState(60)
   const [timesError, setTimesError] = useState<string | undefined>()
+  const [weekendsDiffer, setWeekendsDiffer] = useState(false)
+  const [weekendStartMinute, setWeekendStartMinute] = useState(DEFAULT_START_MINUTE)
+  const [weekendEndMinute, setWeekendEndMinute] = useState(DEFAULT_END_MINUTE)
+  const [weekendTimesError, setWeekendTimesError] = useState<string | undefined>()
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
   const [isNavigating, setIsNavigating] = useState(false)
 
@@ -82,6 +88,11 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const datesRef = useRef<string[]>([])
   const lastPatternDatesRef = useRef<string[]>([])
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const nameSectionRef = useRef<HTMLDivElement>(null)
+  const daysTimesSectionRef = useRef<HTMLDivElement>(null)
+  const reviewSectionRef = useRef<HTMLDivElement>(null)
+  const isFirstOpenSectionRenderRef = useRef(true)
+  const calendarRef = useRef<HTMLDivElement>(null)
   const { isSignedIn } = useAuthContext()
   const isSignedInRef = useRef(isSignedIn)
   isSignedInRef.current = isSignedIn
@@ -91,6 +102,13 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const daysPanelId = useId()
   const timePanelId = useId()
 
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const hasWeekdayDate = dates.some((d) => !isWeekendDate(d, timezone))
+  const hasWeekendDate = dates.some((d) => isWeekendDate(d, timezone))
+  const canSplitWeekendTimes =
+    hasWeekdayDate && hasWeekendDate && config !== undefined && config.maxPollOverrideGroups >= 1
+  const effectiveWeekendsDiffer = weekendsDiffer && canSplitWeekendTimes
+
   useEffect(() => {
     if (config) setSlotMinutes(config.defaultSlotMinutes)
   }, [config])
@@ -98,6 +116,25 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   useEffect(() => {
     if (nameError) nameInputRef.current?.focus()
   }, [nameError])
+
+  // Opening the next section can grow or shrink the page height above/around the current scroll
+  // position by hundreds of pixels (e.g. the Days & times editor expanding from a one-line
+  // summary, or collapsing back to one). scrollTop doesn't move when that happens, so the content
+  // that reflows into view at that same offset can land well above or below the section that was
+  // just opened. Scrolling the whole (multi-section) card with `block: 'nearest'` only fixes the
+  // shrinking case — when the newly-open section is the tall one, the card is taller than the
+  // viewport and already partly onscreen, so 'nearest' has nothing to do. Scrolling the
+  // newly-opened section itself to the top of the viewport works in both directions. Skipped on
+  // the very first render, since 'name' is already in view then.
+  useEffect(() => {
+    if (isFirstOpenSectionRenderRef.current) {
+      isFirstOpenSectionRenderRef.current = false
+      return
+    }
+    const sectionRef = { name: nameSectionRef, daysTimes: daysTimesSectionRef, review: reviewSectionRef }[openSection]
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    sectionRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+  }, [openSection])
 
   useEffect(() => {
     if (!document.getElementById(RECAPTCHA_SCRIPT_ID)) {
@@ -224,6 +261,14 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
     setExcludedDates([])
   }
 
+  const handleWeekendsDifferChange = (next: boolean): void => {
+    if (next && !weekendsDiffer) {
+      setWeekendStartMinute(startMinute)
+      setWeekendEndMinute(endMinute)
+    }
+    setWeekendsDiffer(next)
+  }
+
   const handleApplyScenarioPreset = (preset: ScenarioPreset): void => {
     setWeekdays([...preset.weekdays])
     setDaysAreCustom(false)
@@ -235,6 +280,10 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       setSlotMinutes(preset.slotMinutes)
     }
     setShowDaysEditor(false)
+    // The quick-fill buttons sit above the calendar, so applying one can leave the (now-updated)
+    // calendar off-screen below the fold — scroll it into view so the result is actually visible.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    calendarRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' })
   }
 
   const handleSubmit = (): void => {
@@ -255,14 +304,25 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       return
     }
     setDatesError(undefined)
+    // Clear both time-window errors up front, before either check runs — otherwise fixing the
+    // weekend window but breaking the weekday one (or vice versa) would leave the other field's
+    // stale error on screen even though its own condition is now satisfied.
+    setTimesError(undefined)
+    setWeekendTimesError(undefined)
     if (usesTimes && endMinute - startMinute < slotMinutes) {
       setTimesError('Pick a longer time window, or a shorter meeting length.')
       setOpenSection('daysTimes')
       return
     }
-    setTimesError(undefined)
+    if (usesTimes && effectiveWeekendsDiffer && weekendEndMinute - weekendStartMinute < slotMinutes) {
+      setWeekendTimesError('Pick a longer time window, or a shorter meeting length.')
+      setOpenSection('daysTimes')
+      return
+    }
 
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const override = effectiveWeekendsDiffer
+      ? computeWeekendOverride(dates, timezone, weekendStartMinute, weekendEndMinute)
+      : undefined
     const poll: NewPollRequest = usesTimes
       ? {
         name: name.trim(),
@@ -272,6 +332,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
         endMinute,
         slotMinutes: slotMinutes as 15 | 30 | 60 | 90 | 120,
         timezone,
+        ...(override ? { overrides: [override] } : {}),
       }
       : { name: name.trim(), dates, usesTimes: false, timezone }
 
@@ -287,6 +348,9 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
     startMinute,
     endMinute,
     slotMinutes,
+    weekendsDiffer: effectiveWeekendsDiffer,
+    weekendStartMinute,
+    weekendEndMinute,
   })
 
   return (
@@ -294,128 +358,156 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       <CreateCard>
         <CreateCardHeader />
 
-        <ChecklistSection
-          isDone={furthestIndex > 0}
-          isOpen={openSection === 'name'}
-          onEdit={() => setOpenSection('name')}
-          stepNumber={1}
-          summary={name.trim() || 'No name yet'}
-          title="Name"
-        >
-          <PollNameField
-            error={nameError}
-            maxLength={config?.pollNameMaxLength}
-            onChange={setName}
-            ref={nameInputRef}
-            value={name}
-          />
-          {!isSignedIn && (
-            <VoterNameField
-              label="Your name"
-              maxLength={config?.participantNameMaxLength}
-              onChange={setVoterName}
-              value={voterName}
+        <div ref={nameSectionRef}>
+          <ChecklistSection
+            isDone={furthestIndex > 0}
+            isOpen={openSection === 'name'}
+            onEdit={() => setOpenSection('name')}
+            stepNumber={1}
+            summary={name.trim() || 'No name yet'}
+            title="Name"
+          >
+            <PollNameField
+              error={nameError}
+              maxLength={config?.pollNameMaxLength}
+              onChange={setName}
+              ref={nameInputRef}
+              value={name}
             />
-          )}
-          <PillButton label="Continue" onPress={goToNextSection} />
-        </ChecklistSection>
+            {!isSignedIn && (
+              <VoterNameField
+                label="Your name"
+                maxLength={config?.participantNameMaxLength}
+                onChange={setVoterName}
+                value={voterName}
+              />
+            )}
+            <PillButton label="Continue" onPress={goToNextSection} />
+          </ChecklistSection>
+        </div>
 
-        <ChecklistSection
-          isDone={furthestIndex > 1}
-          isOpen={openSection === 'daysTimes'}
-          onEdit={() => setOpenSection('daysTimes')}
-          stepNumber={2}
-          summary={daysTimesSummary}
-          title="Days & times"
-        >
-          {config ? (
-            <>
-              <ScenarioPresets onApply={handleApplyScenarioPreset} />
-              <WeekCountStepper onChange={setWeekCount} value={weekCount} />
-              <DatePickerCalendar
-                dates={dates}
-                maxDates={config.maxPollDates}
-                maxRangeDays={config.maxPollDateRangeDays}
-                now={now}
-                onChange={handleDatesChange}
-              />
-              {datesError && (
-                <span className="text-xs text-red-400" role="alert">
-                  {datesError}
-                </span>
-              )}
-              <SummaryDisclosure
-                expanded={showDaysEditor}
-                label="Which days"
-                onToggle={() => setShowDaysEditor((prev) => !prev)}
-                panelId={daysPanelId}
-                value={daysLabel}
-              />
-              {showDaysEditor && (
-                <div id={daysPanelId}>
-                  <WeekdayPicker onChange={handleWeekdaysChange} selected={weekdays} />
+        <div ref={daysTimesSectionRef}>
+          <ChecklistSection
+            isDone={furthestIndex > 1}
+            isOpen={openSection === 'daysTimes'}
+            onEdit={() => setOpenSection('daysTimes')}
+            stepNumber={2}
+            summary={daysTimesSummary}
+            title="Days & times"
+          >
+            {config ? (
+              <>
+                <ScenarioPresets onApply={handleApplyScenarioPreset} />
+                <div className="flex flex-col gap-[18px]" ref={calendarRef}>
+                  <WeekCountStepper onChange={setWeekCount} value={weekCount} />
+                  <DatePickerCalendar
+                    dates={dates}
+                    maxDates={config.maxPollDates}
+                    maxRangeDays={config.maxPollDateRangeDays}
+                    now={now}
+                    onChange={handleDatesChange}
+                  />
                 </div>
-              )}
-              <SummaryDisclosure
-                expanded={showTimeEditor}
-                label="When"
-                onToggle={() => setShowTimeEditor((prev) => !prev)}
-                panelId={timePanelId}
-                value={
-                  usesTimes
-                    ? `${formatSlotRange(startMinute, endMinute)} · ${formatSlotMinutesLabel(slotMinutes)}`
-                    : 'Dates only'
-                }
-              />
-              {showTimeEditor && (
-                <div className="flex flex-col gap-[18px]" id={timePanelId}>
-                  <TimesToggle onChange={setUsesTimes} usesTimes={usesTimes} />
-                  {usesTimes && (
-                    <>
-                      <TimeRangeSlider
-                        endMinute={endMinute}
-                        error={timesError}
-                        onChangeEnd={setEndMinute}
-                        onChangeStart={setStartMinute}
-                        startMinute={startMinute}
-                        step={config.startEndMinuteStep}
-                      />
-                      <SlotDurationPicker
-                        allowedSlotMinutes={config.allowedSlotMinutes}
-                        onChange={setSlotMinutes}
-                        value={slotMinutes}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-              <PillButton isDisabled={dates.length === 0} label="Continue" onPress={goToNextSection} />
-            </>
-          ) : (
-            <p className="text-sm text-[var(--slate)]" role="status">
-              Loading…
-            </p>
-          )}
-        </ChecklistSection>
+                {datesError && (
+                  <span className="text-xs text-red-400" role="alert">
+                    {datesError}
+                  </span>
+                )}
+                <SummaryDisclosure
+                  expanded={showDaysEditor}
+                  label="Which days"
+                  onToggle={() => setShowDaysEditor((prev) => !prev)}
+                  panelId={daysPanelId}
+                  value={daysLabel}
+                />
+                {showDaysEditor && (
+                  <div id={daysPanelId}>
+                    <WeekdayPicker onChange={handleWeekdaysChange} selected={weekdays} />
+                  </div>
+                )}
+                <SummaryDisclosure
+                  expanded={showTimeEditor}
+                  label="When"
+                  onToggle={() => setShowTimeEditor((prev) => !prev)}
+                  panelId={timePanelId}
+                  value={formatTimeLabel({
+                    usesTimes,
+                    startMinute,
+                    endMinute,
+                    slotMinutes,
+                    weekendsDiffer: effectiveWeekendsDiffer,
+                    weekendStartMinute,
+                    weekendEndMinute,
+                  })}
+                />
+                {showTimeEditor && (
+                  <div className="flex flex-col gap-[18px]" id={timePanelId}>
+                    <TimesToggle onChange={setUsesTimes} usesTimes={usesTimes} />
+                    {usesTimes && (
+                      <>
+                        {canSplitWeekendTimes && (
+                          <WeekendTimesToggle onChange={handleWeekendsDifferChange} weekendsDiffer={weekendsDiffer} />
+                        )}
+                        <TimeRangeSlider
+                          endMinute={endMinute}
+                          error={timesError}
+                          label={effectiveWeekendsDiffer ? 'Weekdays' : undefined}
+                          onChangeEnd={setEndMinute}
+                          onChangeStart={setStartMinute}
+                          startMinute={startMinute}
+                          step={config.startEndMinuteStep}
+                        />
+                        {effectiveWeekendsDiffer && (
+                          <TimeRangeSlider
+                            endMinute={weekendEndMinute}
+                            error={weekendTimesError}
+                            label="Weekends"
+                            onChangeEnd={setWeekendEndMinute}
+                            onChangeStart={setWeekendStartMinute}
+                            startMinute={weekendStartMinute}
+                            step={config.startEndMinuteStep}
+                          />
+                        )}
+                        <SlotDurationPicker
+                          allowedSlotMinutes={config.allowedSlotMinutes}
+                          onChange={setSlotMinutes}
+                          value={slotMinutes}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+                <PillButton isDisabled={dates.length === 0} label="Continue" onPress={goToNextSection} />
+              </>
+            ) : (
+              <p className="text-sm text-[var(--slate)]" role="status">
+                Loading…
+              </p>
+            )}
+          </ChecklistSection>
+        </div>
 
-        <ChecklistSection
-          isDone={furthestIndex > 2}
-          isOpen={openSection === 'review'}
-          stepNumber={3}
-          title="Review & create"
-        >
-          <div className="rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.04] px-4 py-3">
-            <p className="text-sm font-bold text-[var(--bone)]">{name.trim() || 'No name yet'}</p>
-            <p className="text-xs text-[var(--slate)]">{daysTimesSummary}</p>
-          </div>
-          <PillButton
-            isDisabled={!config}
-            isLoading={isLoading}
-            label="Create poll"
-            loadingLabel="Starting..."
-            onPress={handleSubmit}
-          />
-        </ChecklistSection>
+        <div ref={reviewSectionRef}>
+          <ChecklistSection
+            isDone={furthestIndex > 2}
+            isOpen={openSection === 'review'}
+            stepNumber={3}
+            title="Review & create"
+          >
+            <div className="rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.04] px-4 py-3">
+              <p className="text-sm font-bold text-[var(--bone)]">{name.trim() || 'No name yet'}</p>
+              <p className="text-xs text-[var(--slate)]">{daysTimesSummary}</p>
+            </div>
+            <PillButton
+              isDisabled={!config}
+              isLoading={isLoading}
+              label="Create poll"
+              loadingLabel="Starting..."
+              onPress={handleSubmit}
+            />
+            <p className="text-xs text-[var(--slate)]">This site is protected by reCAPTCHA.</p>
+          </ChecklistSection>
+        </div>
       </CreateCard>
       <FeedbackMessage
         autoHideDuration={15_000}

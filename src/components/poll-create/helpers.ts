@@ -1,5 +1,6 @@
 import { formatSlotMinutesLabel } from './time-fields'
-import { addDays } from '@utils/dates'
+import { TimeOverride } from '@types'
+import { addDays, isWeekendDate } from '@utils/dates'
 import { formatSlotRange } from '@utils/time'
 
 function isoWeekday(iso: string): number {
@@ -46,6 +47,23 @@ export function formatWeekdaysSummary(weekdays: number[]): string {
   return sorted.map((d) => WEEKDAY_SHORT[d]).join(', ')
 }
 
+export function formatTimeLabel(params: {
+  usesTimes: boolean
+  startMinute: number
+  endMinute: number
+  slotMinutes: number
+  weekendsDiffer: boolean
+  weekendStartMinute: number
+  weekendEndMinute: number
+}): string {
+  if (!params.usesTimes) return 'Dates only'
+  const weekdayRange = formatSlotRange(params.startMinute, params.endMinute)
+  const durationLabel = formatSlotMinutesLabel(params.slotMinutes)
+  if (!params.weekendsDiffer) return `${weekdayRange} · ${durationLabel}`
+  const weekendRange = formatSlotRange(params.weekendStartMinute, params.weekendEndMinute)
+  return `${weekdayRange} weekdays, ${weekendRange} weekends · ${durationLabel}`
+}
+
 export function formatDaysTimesSummary(params: {
   dateCount: number
   daysLabel: string
@@ -53,12 +71,12 @@ export function formatDaysTimesSummary(params: {
   startMinute: number
   endMinute: number
   slotMinutes: number
+  weekendsDiffer: boolean
+  weekendStartMinute: number
+  weekendEndMinute: number
 }): string {
   const dateLabel = params.dateCount === 1 ? '1 date' : `${params.dateCount} dates`
-  const timeLabel = params.usesTimes
-    ? `${formatSlotRange(params.startMinute, params.endMinute)} · ${formatSlotMinutesLabel(params.slotMinutes)}`
-    : 'Dates only'
-  return `${dateLabel} · ${params.daysLabel} · ${timeLabel}`
+  return `${dateLabel} · ${params.daysLabel} · ${formatTimeLabel(params)}`
 }
 
 export function reconcilePatternDates(params: {
@@ -86,4 +104,15 @@ export function updateExcludedDates(params: {
   const previousSet = new Set(params.previousDates)
   const reincludedSet = new Set(params.nextDates.filter((d) => !previousSet.has(d)))
   return [...new Set([...params.excludedDates.filter((d) => !reincludedSet.has(d)), ...newlyExcluded])]
+}
+
+export function computeWeekendOverride(
+  dates: string[],
+  timezone: string,
+  startMinute: number,
+  endMinute: number,
+): TimeOverride | undefined {
+  const weekendDates = dates.filter((d) => isWeekendDate(d, timezone))
+  if (weekendDates.length === 0) return undefined
+  return { dates: weekendDates, startMinute, endMinute }
 }

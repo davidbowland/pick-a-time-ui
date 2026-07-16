@@ -1,14 +1,17 @@
 import { Check } from 'lucide-react'
-import React, { useRef } from 'react'
+import React, { useMemo, useRef } from 'react'
 
+import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn } from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
+import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
 import { usePaintGesture } from '@hooks/usePaintGesture'
 import { AvailabilityCell, Slot } from '@types'
 import { formatShortDate } from '@utils/dates'
 
 export interface PaintGridProps {
   dates: string[]
-  slots: Slot[]
+  slots: Slot[][]
+  columns: TimeWindow[]
   slotLabels: string[]
   grid: boolean[][]
   onCommit: (cells: AvailabilityCell[]) => void
@@ -46,18 +49,33 @@ function cellLabel(dateLabel: string, slotLabel: string | undefined, showSlotLab
   return `${dateLabel}, ${slotLabel}`
 }
 
-const PaintGrid = ({ dates, slots, slotLabels, grid, onCommit }: PaintGridProps): React.ReactNode => {
+const PaintGrid = ({ dates, slots, columns, slotLabels, grid, onCommit }: PaintGridProps): React.ReactNode => {
   const gesture = usePaintGesture(grid, onCommit)
   const activePointerId = useRef<number | null>(null)
   const lastCellKey = useRef<string | null>(null)
   // A dates-only poll (`poll.usesTimes === false`) always has exactly one implicit all-day slot
   // (see `Slot`/`PollData` in types.ts) — there's nothing meaningful to put in a header column
   // for it, so the grid collapses to a plain per-date toggle list with no header row at all.
-  // This is a presentational branch only; the cell grid itself is always `dates × slots`,
-  // dates-only or not. The caller populates `slotLabels` with one entry per slot exactly when
-  // `slots.length > 1`, and `[]` otherwise, so this check is equivalent to the old
-  // `slots.length > 1` rule.
+  // This is a presentational branch only; the cell grid itself is always `dates × columns`,
+  // dates-only or not. The caller populates `slotLabels` with one entry per union column exactly
+  // when `columns.length > 1`, and `[]` otherwise, so this check is equivalent to that rule.
   const showSlotHeader = slotLabels.length > 0
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  // A column's score is how many dates have an actionable (non-disabled) cell for it — not how
+  // many are checked. The scroll should land on the window with the most real buttons to act on,
+  // not the window that happens to already be painted.
+  const scores = useMemo(
+    () =>
+      columns.map((column) =>
+        dates.reduce((count, _date, dateIndex) => {
+          const slot = findCellForColumn(slots[dateIndex] ?? [], column)
+          return slot ? count + 1 : count
+        }, 0),
+      ),
+    [columns, dates, slots],
+  )
+  useInitialColumnScroll(containerRef, columns.length, scores)
 
   const stopGesture = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (activePointerId.current === null || activePointerId.current !== event.pointerId) return
@@ -96,6 +114,15 @@ const PaintGrid = ({ dates, slots, slotLabels, grid, onCommit }: PaintGridProps)
     // real scrollport, which both the horizontal slot-column scroll and the sticky pinning
     // legitimately need — the trade-off is a capped-height panel with its own scrollbar once a
     // poll has enough dates to exceed it, rather than the whole page scrolling arbitrarily far.
+    //
+    // This is a real <table>, not a `display: grid` of divs, because `position: sticky` applied
+    // directly to a grid item loses its stuck position once horizontal scroll nears the end of
+    // the scrollable range — reproduced in a real browser against this exact
+    // column/gap/sticky/overflow-auto combination. Sticky `<th>` cells in a table don't have that
+    // failure mode; it's the standard pattern for frozen table headers/columns. The drag-paint
+    // gesture below is untouched by this — it hit-tests via `elementFromPoint` and reads
+    // `data-date-index`/`data-slot-index` off whichever button is under the pointer, neither of
+    // which cares what the button's ancestor markup is.
     <div
       className="max-h-[32rem] overflow-auto"
       onPointerCancel={stopGesture}
@@ -103,60 +130,79 @@ const PaintGrid = ({ dates, slots, slotLabels, grid, onCommit }: PaintGridProps)
       onPointerLeave={stopGesture}
       onPointerMove={handlePointerMove}
       onPointerUp={stopGesture}
+      ref={containerRef}
       // Without this, dragging a finger across the grid is interpreted as a page pan/scroll —
       // the browser fires `pointercancel` mid-gesture instead of delivering `pointermove`.
       style={{ touchAction: 'none' }}
     >
-      <div className="grid gap-1" style={{ gridTemplateColumns: `6rem repeat(${slots.length}, minmax(3.5rem, 1fr))` }}>
+      <table className="w-full border-separate border-spacing-1">
         {showSlotHeader && (
-          <>
-            <div className="sticky left-0 top-0 z-10 bg-[var(--ink)]" />
-            {slots.map((slot, index) => (
-              <div className="sticky top-0 z-10 bg-[var(--ink)] text-center text-xs font-semibold" key={slot.slotIndex}>
-                {slotLabels[index]}
-              </div>
-            ))}
-          </>
+          <thead>
+            <tr>
+              <th className="sticky left-0 top-0 z-10 min-w-24 bg-[var(--ink)]" data-scroll-label />
+              {columns.map((column, index) => (
+                <th
+                  className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] p-0 text-center text-xs font-semibold"
+                  data-scroll-column
+                  key={`${column.startMinute}-${column.endMinute}`}
+                  scope="col"
+                >
+                  {slotLabels[index]}
+                </th>
+              ))}
+            </tr>
+          </thead>
         )}
-        {dates.map((date, dateIndex) => {
-          const dateLabel = formatShortDate(date)
-          return (
-            <React.Fragment key={date}>
-              <div className="sticky left-0 z-10 bg-[var(--ink)] text-right text-xs text-[var(--slate)]">
-                {dateLabel}
-              </div>
-              {slots.map((slot, index) => {
-                const on = gesture.isOn(dateIndex, slot.slotIndex)
-                return (
-                  <button
-                    aria-label={cellLabel(dateLabel, slotLabels[index], showSlotHeader)}
-                    aria-pressed={on}
-                    className={`flex h-8 items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${
-                      on ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
-                    }`}
-                    data-date-index={dateIndex}
-                    data-slot-index={slot.slotIndex}
-                    key={slot.slotIndex}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter' && e.key !== ' ') return
-                      // Prevent the browser's native synthesized click for Enter/Space so it can't
-                      // fire a second, redundant toggle on top of the one below.
-                      e.preventDefault()
-                      gesture.startPaint(dateIndex, slot.slotIndex)
-                      gesture.endPaint()
-                    }}
-                    type="button"
-                  >
-                    {/* aria-pressed already covers screen readers; this icon gives sighted
-                        low-vision/colorblind users a non-color cue for the "on" state too. */}
-                    {on && <Check aria-hidden="true" className="h-4 w-4 text-[var(--ink)]/70" />}
-                  </button>
-                )
-              })}
-            </React.Fragment>
-          )
-        })}
-      </div>
+        <tbody>
+          {dates.map((date, dateIndex) => {
+            const dateLabel = formatShortDate(date)
+            const dateSlots = slots[dateIndex] ?? []
+            return (
+              <tr key={date}>
+                <th
+                  className="sticky left-0 z-10 min-w-24 bg-[var(--ink)] py-0 pr-3 pl-0 text-right text-xs font-normal text-[var(--slate)]"
+                  scope="row"
+                >
+                  {dateLabel}
+                </th>
+                {columns.map((column, index) => {
+                  const slot = findCellForColumn(dateSlots, column)
+                  if (!slot) {
+                    return (
+                      <td className="p-0" key={`${column.startMinute}-${column.endMinute}`}>
+                        <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                      </td>
+                    )
+                  }
+                  const on = gesture.isOn(dateIndex, slot.slotIndex)
+                  return (
+                    <td className="p-0" key={slot.slotIndex}>
+                      <button
+                        aria-label={cellLabel(dateLabel, slotLabels[index], showSlotHeader)}
+                        aria-pressed={on}
+                        className={`flex h-8 w-full items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${
+                          on ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
+                        }`}
+                        data-date-index={dateIndex}
+                        data-slot-index={slot.slotIndex}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return
+                          e.preventDefault()
+                          gesture.startPaint(dateIndex, slot.slotIndex)
+                          gesture.endPaint()
+                        }}
+                        type="button"
+                      >
+                        {on && <Check aria-hidden="true" className="h-4 w-4 text-[var(--ink)]/70" />}
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

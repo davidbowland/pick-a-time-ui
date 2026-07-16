@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 
+import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn } from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
+import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
 import { OverlapCell } from '@services/api'
 import { User } from '@types'
 import { pickAccessibleTextColor } from '@utils/contrast'
@@ -53,12 +55,14 @@ export function heatColorFor(freeCount: number, participantCount: number): strin
 
 export const HeatGrid = ({
   cells,
+  columns,
   dateLabels,
   slotLabels,
   participantCount,
   users,
 }: {
   cells: OverlapCell[][]
+  columns: TimeWindow[]
   dateLabels: string[]
   slotLabels: string[]
   participantCount: number
@@ -66,7 +70,24 @@ export const HeatGrid = ({
 }): React.ReactNode => {
   const [selected, setSelected] = useState<OverlapCell | null>(null)
   const isDatesOnly = slotLabels.length === 0
-  const columnCount = isDatesOnly ? 1 : slotLabels.length
+  const columnCount = isDatesOnly ? 1 : columns.length
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Unlike PaintGrid's actionable-cell scoring, this grid is read-only overlap data — its score
+  // is simply how many people are free, so the busiest window is the one with the most overlap.
+  const scores = useMemo(
+    () =>
+      isDatesOnly
+        ? []
+        : columns.map((column) =>
+          dateLabels.reduce(
+            (sum, _label, dateIndex) => sum + (findCellForColumn(cells[dateIndex] ?? [], column)?.freeCount ?? 0),
+            0,
+          ),
+        ),
+    [cells, columns, dateLabels, isDatesOnly],
+  )
+  useInitialColumnScroll(containerRef, columnCount, scores)
 
   return (
     <div className="flex flex-col gap-3">
@@ -74,48 +95,74 @@ export const HeatGrid = ({
           exactly — `position: sticky` below only pins against an actual scrollport, which a
           plain `overflow-x-auto` div with no height bound never becomes (see painting/grid.tsx
           for the full explanation). Same many-columns scenario applies here (a wide time window
-          + 15-minute slots), so the same scroll affordance and sticky headers apply. */}
-      <div className="max-h-[32rem] overflow-auto">
-        <div className="grid gap-1" style={{ gridTemplateColumns: `8rem repeat(${columnCount}, minmax(3.5rem, 1fr))` }}>
+          + 15-minute slots), so the same scroll affordance and sticky headers apply.
+
+          This is a real <table>, not a `display: grid` of divs, because `position: sticky`
+          applied directly to a grid item loses its stuck position once horizontal scroll nears
+          the end of the scrollable range — reproduced in a real browser against this exact
+          column/gap/sticky/overflow-auto combination. Sticky `<th>` cells in a table don't have
+          that failure mode; it's the standard pattern for frozen table headers/columns, and it
+          gives screen readers real row/column header associations as a side benefit. */}
+      <div className="max-h-[32rem] overflow-auto" ref={containerRef}>
+        <table className="w-full border-separate border-spacing-1">
           {!isDatesOnly && (
-            <>
-              <div className="sticky left-0 top-0 z-10 bg-[var(--ink)]" />
-              {slotLabels.map((label) => (
-                <div
-                  className="sticky top-0 z-10 bg-[var(--ink)] text-center text-xs font-semibold text-[var(--bone)]"
-                  key={label}
-                >
-                  {label}
-                </div>
-              ))}
-            </>
-          )}
-          {dateLabels.map((dateLabel, dateIndex) => (
-            <React.Fragment key={dateLabel}>
-              <div className="sticky left-0 z-10 bg-[var(--ink)] text-right text-xs text-[var(--slate)]">
-                {dateLabel}
-              </div>
-              {Array.from({ length: columnCount }, (_, slotIndex) => {
-                const cell = cells[dateIndex]?.[slotIndex]
-                const freeCount = cell?.freeCount ?? 0
-                const color = heatColorFor(freeCount, participantCount)
-                const slotLabel = isDatesOnly ? undefined : slotLabels[slotIndex]
-                return (
-                  <button
-                    aria-label={`${dateLabel}${slotLabel ? `, ${slotLabel}` : ''}, ${freeCount} of ${participantCount} free`}
-                    className={`flex h-8 items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
-                    key={slotIndex}
-                    onClick={() => cell && setSelected(cell)}
-                    style={{ background: color, color: pickAccessibleTextColor(color) }}
-                    type="button"
+            <thead>
+              <tr>
+                <th className="sticky left-0 top-0 z-10 min-w-32 bg-[var(--ink)]" data-scroll-label />
+                {columns.map((column, index) => (
+                  <th
+                    className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] p-0 text-center text-xs font-semibold text-[var(--bone)]"
+                    data-scroll-column
+                    key={`${column.startMinute}-${column.endMinute}`}
+                    scope="col"
                   >
-                    {freeCount}
-                  </button>
-                )
-              })}
-            </React.Fragment>
-          ))}
-        </div>
+                    {slotLabels[index]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {dateLabels.map((dateLabel, dateIndex) => (
+              <tr key={dateLabel}>
+                <th
+                  className="sticky left-0 z-10 min-w-32 bg-[var(--ink)] py-0 pr-3 pl-0 text-right text-xs font-normal text-[var(--slate)]"
+                  scope="row"
+                >
+                  {dateLabel}
+                </th>
+                {Array.from({ length: columnCount }, (_, index) => {
+                  const cell = isDatesOnly
+                    ? cells[dateIndex]?.[0]
+                    : findCellForColumn(cells[dateIndex] ?? [], columns[index])
+                  if (!isDatesOnly && !cell) {
+                    return (
+                      <td className="p-0" key={`${columns[index].startMinute}-${columns[index].endMinute}`}>
+                        <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                      </td>
+                    )
+                  }
+                  const freeCount = cell?.freeCount ?? 0
+                  const color = heatColorFor(freeCount, participantCount)
+                  const slotLabel = isDatesOnly ? undefined : slotLabels[index]
+                  return (
+                    <td className="p-0" key={index}>
+                      <button
+                        aria-label={`${dateLabel}${slotLabel ? `, ${slotLabel}` : ''}, ${freeCount} of ${participantCount} free`}
+                        className={`flex h-8 w-full items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
+                        onClick={() => cell && setSelected(cell)}
+                        style={{ background: color, color: pickAccessibleTextColor(color) }}
+                        type="button"
+                      >
+                        {freeCount}
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <div className="flex items-center gap-1 text-[10px] text-[var(--slate)]">
         <span>0 free</span>

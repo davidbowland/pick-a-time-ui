@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import React, { useMemo } from 'react'
 
+import { buildUnionColumns } from '../slot-columns'
 import { BestSlotBanner, EmptyBestSlot, ErrorState, formatMeetingLabel, LoadingState, SuggestedTimes } from './elements'
 import { HeatGrid } from './heat-grid'
 import { fetchOverlap, OverlapResponse } from '@services/api'
@@ -35,22 +36,23 @@ const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.Reac
     : ''
 
   const dateLabels = poll.dates.map((date) => formatShortDate(date))
-  // Mirrors painting/grid.tsx's `showSlotHeader` rule exactly (`slots.length > 1`, not
+  const columns = buildUnionColumns(poll.slots)
+  // Mirrors painting/grid.tsx's `showSlotHeader` rule exactly (`columns.length > 1`, not
   // `poll.usesTimes`) — a timed poll whose window resolves to exactly one slot (a valid,
   // already-exercised shape: a 60-minute window with a 60-minute meeting length) has one
   // implicit column just like a dates-only poll, and both grids must agree on that or the same
   // poll renders a time label in one and not the other.
   const slotLabels =
-    poll.slots.length > 1
-      ? poll.slots.map((slot) =>
-        formatViewerSlotLabel(poll.dates[0], slot.startMinute, slot.endMinute, poll.timezone, viewerTimezone),
+    columns.length > 1
+      ? columns.map((column) =>
+        formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
       )
       : []
   // That same collapse means `BestSlotBanner`/`SuggestedTimes` are the only place a single-slot
   // timed poll's meeting time would show — and neither renders at all before anyone's overlap
   // exists (the `EmptyBestSlot` state, which is also the very first state anyone sees on a
   // freshly-created poll). State it here too, same as the painting grid does.
-  const singleSlotWindow = poll.usesTimes && poll.slots.length === 1 ? poll.slots[0] : undefined
+  const singleSlotWindow = poll.usesTimes && columns.length === 1 ? columns[0] : undefined
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,6 +75,7 @@ const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.Reac
       )}
       <HeatGrid
         cells={data.grid?.cells ?? []}
+        columns={columns}
         dateLabels={dateLabels}
         participantCount={poll.participantCount}
         slotLabels={slotLabels}

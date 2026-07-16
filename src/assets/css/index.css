@@ -87,9 +87,18 @@ html.dark {
   --color-warning-foreground: var(--ink);
 }
 
-/* Hide reCAPTCHA floating badge — branding text is shown inline in the form */
-.grecaptcha-badge {
+/* Hide reCAPTCHA's floating badge and any of its related elements — branding text is shown
+   inline in the form instead, which Google's terms allow in place of the visible badge. The
+   badge's own script sometimes sizes/positions itself against something other than this page's
+   actual viewport, which can push it (and the document's scrollable area with it) far past the
+   right edge — collapse it to a zero-size, clipped, absolutely-positioned box so none of that can
+   ever affect this page's layout, regardless of what the badge's own script tries to do. */
+[class^='grecaptcha-'] {
   visibility: hidden !important;
+  position: absolute !important;
+  overflow: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @keyframes pat-breathe {

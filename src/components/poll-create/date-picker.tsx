@@ -56,7 +56,7 @@ export const DatePickerCalendar = ({
     <div className="flex flex-col gap-2">
       <Calendar<CalendarDate, 'multiple'>
         aria-label="Candidate dates"
-        className="w-full max-w-none"
+        className="w-full! max-w-none!"
         isDateUnavailable={isUnavailable}
         maxValue={max}
         minValue={min}

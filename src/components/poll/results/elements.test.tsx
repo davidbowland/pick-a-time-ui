@@ -40,7 +40,7 @@ describe('SuggestedTimes attendance tag', () => {
     timezone: 'America/Chicago',
     expiration: 1725453600,
     participantCount: 3,
-    slots: [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+    slots: [[{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }]],
   }
   const meeting: RecommendedMeeting = {
     dateIndex: 0,
@@ -83,7 +83,7 @@ describe('formatMeetingLabel', () => {
     timezone: 'America/Chicago',
     expiration: 1725453600,
     participantCount: 3,
-    slots: [{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }],
+    slots: [[{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }]],
   }
   const datesOnlyPoll: PollData = { ...timedPoll, usesTimes: false }
 

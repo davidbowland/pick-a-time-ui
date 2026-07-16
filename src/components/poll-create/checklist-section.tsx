@@ -20,7 +20,7 @@ export const ChecklistSection = ({
   children: React.ReactNode
 }): React.ReactNode => (
   <div className="rounded-2xl border border-[var(--hair)]">
-    <div className="flex items-center gap-2 border-b border-[var(--hair)] px-4 py-3">
+    <div className={`flex items-center gap-2 px-4 py-3 ${isOpen || !isDone ? 'border-b border-[var(--hair)]' : ''}`}>
       <span
         aria-hidden="true"
         className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
@@ -29,10 +29,10 @@ export const ChecklistSection = ({
       >
         {isDone ? '✓' : stepNumber}
       </span>
-      <span className="flex-1 text-sm font-bold text-[var(--bone)]">{title}</span>
+      <span className="shrink-0 text-sm font-bold whitespace-nowrap text-[var(--bone)]">{title}</span>
       {isDone && (
         <>
-          <span className="truncate text-xs text-[var(--slate)]">{summary}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-[var(--slate)]">{summary}</span>
           {onEdit && (
             <button
               aria-label={`Edit ${title.toLowerCase()}`}

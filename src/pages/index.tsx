@@ -8,6 +8,8 @@ import { CreateScene } from '@components/story/create-scene'
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from '@components/story/scenes'
 import { SkyBackground } from '@components/story/sky-background'
 
+const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
+
 const Index = (): React.ReactNode => {
   const createSceneRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
@@ -24,22 +26,22 @@ const Index = (): React.ReactNode => {
       </Head>
       <SkyBackground />
       <main className="relative z-10">
-        <section className="flex min-h-[100dvh] items-center py-28">
+        <section className={SCENE_CLASS}>
           <HeroScene />
         </section>
-        <section className="flex min-h-[100dvh] items-center py-28" ref={createSceneRef}>
+        <section className={SCENE_CLASS} ref={createSceneRef}>
           <CreateScene />
         </section>
-        <section className="flex min-h-[100dvh] items-center py-28">
+        <section className={SCENE_CLASS}>
           <IdentityScene />
         </section>
-        <section className="flex min-h-[100dvh] items-center py-28">
+        <section className={SCENE_CLASS}>
           <PaintingScene />
         </section>
-        <section className="flex min-h-[100dvh] items-center py-28">
+        <section className={SCENE_CLASS}>
           <ResultsScene />
         </section>
-        <section className="flex min-h-[100dvh] items-center py-28">
+        <section className={SCENE_CLASS}>
           <ShareScene />
         </section>
         <div ref={footerRef}>

@@ -34,6 +34,7 @@ const config = {
   defaultSlotMinutes: 60,
   startEndMinuteStep: 15,
   maxPollDateRangeDays: 365,
+  maxPollOverrideGroups: 10,
   maxUsersPerSession: 20,
   sessionExpireHours: 336,
 }
@@ -103,6 +104,48 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: /^edit name$/i }))
 
     expect(screen.getByLabelText(/poll name/i)).toHaveValue('Lunch with friends')
+  })
+
+  it('scrolls the newly-opened section to the top of the viewport when advancing, but not on initial render', async () => {
+    setup()
+    renderWithClient()
+
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+
+    await userEvent.click(continueButton())
+
+    // `block: 'start'` (rather than 'nearest' on the whole multi-section card) is what actually
+    // fixes this: Name -> Days & times *grows* the card well past the viewport, so a 'nearest'
+    // scroll of the whole card can find its top edge already onscreen and do nothing, stranding
+    // the view mid-scroll in the newly-revealed section instead of at its top.
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }))
+  })
+
+  it('scrolls the calendar into view when a quick-fill preset is applied, so the result is visible', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+
+    // Advancing to this section already triggers one scrollIntoView call (see the section-scroll
+    // test above) — assert the preset tap causes an *additional* call, rather than asserting from
+    // zero, and without manually clearing the shared jsdom scrollIntoView mock mid-test.
+    const callsBeforePreset = jest.mocked(Element.prototype.scrollIntoView).mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: 'Weekdays Lunch' }))
+
+    expect(jest.mocked(Element.prototype.scrollIntoView).mock.calls.length).toBeGreaterThan(callsBeforePreset)
+  })
+
+  it('shows the required reCAPTCHA attribution once Review & create is reached', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16'))
+    await userEvent.click(continueButton())
+
+    expect(screen.getByText(/protected by reCAPTCHA/i)).toBeInTheDocument()
   })
 
   it('should show a loading state before config has loaded', async () => {
@@ -462,6 +505,108 @@ describe('PollCreate', () => {
 
     expect(await screen.findByText(/pick a longer time window/i)).toBeInTheDocument()
     expect(createPoll).not.toHaveBeenCalled()
+  })
+
+  it('does not show the weekday/weekend toggle when every selected date is a weekday', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+
+    expect(screen.queryByText('Same hours every day?')).not.toBeInTheDocument()
+  })
+
+  it('shows the weekday/weekend toggle once both a weekday and a weekend date are selected, and submits an override for just the weekend dates', async () => {
+    setup()
+    jest.mocked(createPoll).mockResolvedValueOnce({ sessionId: 'amber-harbor' })
+
+    renderWithClient()
+    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
+    await userEvent.click(screen.getByTestId('date-2026-07-18')) // Saturday
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+
+    expect(screen.getByText('Same hours every day?')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
+    expect(screen.getAllByRole('group', { name: /time window|weekdays|weekends/i }).length).toBeGreaterThanOrEqual(1)
+
+    await userEvent.click(continueButton())
+    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
+
+    expect(createPoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dates: ['2026-07-16', '2026-07-18'],
+        usesTimes: true,
+        overrides: [{ dates: ['2026-07-18'], startMinute: 540, endMinute: 1260 }],
+      }),
+      'token',
+    )
+  })
+
+  it('hides the toggle again and omits overrides when the only weekend date is removed after enabling it', async () => {
+    setup()
+    jest.mocked(createPoll).mockResolvedValueOnce({ sessionId: 'amber-harbor' })
+
+    renderWithClient()
+    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
+    await userEvent.click(screen.getByTestId('date-2026-07-18')) // Saturday
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
+    // Remove the only weekend date.
+    await userEvent.click(screen.getByTestId('date-2026-07-18'))
+
+    expect(screen.queryByText('Same hours every day?')).not.toBeInTheDocument()
+
+    await userEvent.click(continueButton())
+    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
+
+    expect(createPoll).toHaveBeenCalledWith(expect.not.objectContaining({ overrides: expect.anything() }), 'token')
+  })
+
+  it('shows a separate inline error under the weekend window when it is shorter than the meeting length', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
+    await userEvent.click(screen.getByTestId('date-2026-07-18')) // Saturday
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
+    await userEvent.click(screen.getByRole('button', { name: '2 hr' }))
+    // Pull the weekend end thumb to 15 minutes after its (seeded-from-weekday) 9:00 AM start.
+    const toThumbs = screen.getAllByLabelText(/to \(time\)/i)
+    fireEvent.change(toThumbs[toThumbs.length - 1], { target: { value: '555' } })
+    await userEvent.click(continueButton())
+    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
+
+    expect(await screen.findByText(/pick a longer time window/i)).toBeInTheDocument()
+    expect(createPoll).not.toHaveBeenCalled()
+  })
+
+  it('reflects the split window in the "When" summary once weekends differ', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
+    await userEvent.click(screen.getByTestId('date-2026-07-18')) // Saturday
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
+
+    expect(screen.getByText('9:00 AM–9:00 PM weekdays, 9:00 AM–9:00 PM weekends · 1 hr')).toBeInTheDocument()
   })
 
   it('should surface the api message when poll creation fails with a 400', async () => {

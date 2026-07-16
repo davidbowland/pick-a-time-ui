@@ -89,6 +89,6 @@ export const GoogleSignInButton = ({ onPress }: { onPress: () => void }): React.
 
 export const SignInBenefitNote = (): React.ReactNode => (
   <p className="text-center text-xs text-[var(--slate)]">
-    Sign in to keep the same name if you come back on another device.
+    Signing in keeps your name the same if you come back on another device.
   </p>
 )

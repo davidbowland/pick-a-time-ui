@@ -29,3 +29,15 @@ export function formatExpiration(expirationSeconds: number, timeZone: string): s
   const [year, month, day] = date.split('-').map(Number)
   return `Closes ${MONTH_NAMES[month - 1]} ${day}, ${year} at ${formatMinuteOfDay(minuteOfDay)}`
 }
+
+export function isWeekendDate(iso: string, timezone: string): boolean {
+  const [y, m, d] = iso.split('-').map(Number)
+  // Date.UTC, not `new Date(y, m-1, d, 12)` — the latter interprets "noon" in the *host
+  // machine's* local timezone, not UTC, so the ±12h safety margin this anchor is supposed to
+  // provide would actually be measured against the wrong reference point whenever `timezone`
+  // differs from the runtime's own zone (exactly the common case for this function). Anchoring
+  // to UTC matches the same pattern src/utils/timezone.ts's zonedToUtcMs already uses.
+  const noon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  const weekday = new Intl.DateTimeFormat(undefined, { timeZone: timezone, weekday: 'short' }).format(noon)
+  return weekday === 'Sat' || weekday === 'Sun'
+}

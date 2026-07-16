@@ -38,6 +38,7 @@ describe('IdentityPhase', () => {
     defaultSlotMinutes: 60,
     startEndMinuteStep: 15,
     maxPollDateRangeDays: 365,
+    maxPollOverrideGroups: 10,
     maxUsersPerSession: 20,
     sessionExpireHours: 336,
   }
@@ -308,5 +309,14 @@ describe('IdentityPhase', () => {
       ),
     )
     expect(onUserSelected).toHaveBeenCalledWith('bright-heron')
+  })
+
+  it('explains that signing in keeps the name the same across devices', () => {
+    setup()
+    renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
+
+    expect(
+      screen.getByText('Signing in keeps your name the same if you come back on another device.'),
+    ).toBeInTheDocument()
   })
 })

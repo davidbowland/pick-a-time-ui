@@ -32,6 +32,31 @@ export const TimesToggle = ({
   )
 }
 
+export const WeekendTimesToggle = ({
+  weekendsDiffer,
+  onChange,
+}: {
+  weekendsDiffer: boolean
+  onChange: (weekendsDiffer: boolean) => void
+}): React.ReactNode => {
+  const labelId = useId()
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-[var(--slate)]" id={labelId}>
+        Same hours every day?
+      </span>
+      <div aria-labelledby={labelId} className="flex gap-1.5" role="group">
+        <Chip onPress={() => onChange(false)} selected={!weekendsDiffer}>
+          Same time
+        </Chip>
+        <Chip onPress={() => onChange(true)} selected={weekendsDiffer}>
+          Weekends differ
+        </Chip>
+      </div>
+    </div>
+  )
+}
+
 export const TimeRangeSlider = ({
   startMinute,
   endMinute,
@@ -39,6 +64,7 @@ export const TimeRangeSlider = ({
   onChangeStart,
   onChangeEnd,
   error,
+  label = 'Time window',
 }: {
   startMinute: number
   endMinute: number
@@ -46,12 +72,13 @@ export const TimeRangeSlider = ({
   onChangeStart: (minute: number) => void
   onChangeEnd: (minute: number) => void
   error?: string
+  label?: string
 }): React.ReactNode => {
   const labelId = useId()
   return (
     <div className="flex flex-col gap-3">
       <span className="text-sm font-medium text-[var(--slate)]" id={labelId}>
-        Time window
+        {label}
       </span>
       <Slider
         aria-labelledby={labelId}
@@ -76,13 +103,13 @@ export const TimeRangeSlider = ({
               it, a screen-reader/keyboard user dragging these thumbs hears the bare integer
               ("540") instead of the clock time sighted users see below the track. */}
           <Slider.Thumb
-            aria-label="From (time)"
+            aria-label={`From (time), ${label}`}
             aria-valuetext={formatMinuteOfDay(startMinute)}
             className={SLIDER_THUMB_CLASS}
             index={0}
           />
           <Slider.Thumb
-            aria-label="To (time)"
+            aria-label={`To (time), ${label}`}
             aria-valuetext={formatMinuteOfDay(endMinute)}
             className={SLIDER_THUMB_CLASS}
             index={1}

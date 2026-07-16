@@ -10,6 +10,12 @@ export interface Slot {
   endMinute: number
 }
 
+export interface TimeOverride {
+  dates: string[]
+  startMinute: number
+  endMinute: number
+}
+
 export interface DatesOnlyPoll {
   usesTimes: false
 }
@@ -19,6 +25,7 @@ export interface TimedPoll {
   startMinute: number
   endMinute: number
   slotMinutes: 15 | 30 | 60 | 90 | 120
+  overrides?: TimeOverride[]
 }
 
 export type PollData = (DatesOnlyPoll | TimedPoll) & {
@@ -28,7 +35,7 @@ export type PollData = (DatesOnlyPoll | TimedPoll) & {
   timezone: string
   expiration: number
   participantCount: number
-  slots: Slot[] // server-computed; always a single 0-1440 slot when usesTimes is false
+  slots: Slot[][] // server-computed, one array per date (same order as `dates`); always a single 0-1440 slot when usesTimes is false
 }
 
 export type NewPollRequest = (DatesOnlyPoll | TimedPoll) & {
@@ -45,6 +52,7 @@ export interface ConfigData {
   defaultSlotMinutes: number
   startEndMinuteStep: number
   maxPollDateRangeDays: number
+  maxPollOverrideGroups: number
   maxUsersPerSession: number
   sessionExpireHours: number
 }

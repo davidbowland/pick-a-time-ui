@@ -5,7 +5,10 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import React from 'react'
 
+import { TimeWindow } from '../slot-columns'
+import { mockColumnLayout } from '../test-column-layout-mock'
 import { HeatGrid, heatColorFor } from './heat-grid'
+import { OverlapCell } from '@services/api'
 import { User } from '@types'
 import { contrastRatio } from '@utils/contrast'
 
@@ -103,6 +106,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={['6:00–7:00 PM']}
@@ -116,6 +120,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={['6:00–7:00 PM']}
@@ -129,6 +134,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={['6:00–7:00 PM']}
@@ -144,6 +150,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={['6:00–7:00 PM']}
@@ -161,6 +168,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={emptyCells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={['6:00–7:00 PM']}
@@ -177,6 +185,7 @@ describe('HeatGrid', () => {
     render(
       <HeatGrid
         cells={datesOnlyCells}
+        columns={[]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
         slotLabels={[]}
@@ -185,5 +194,154 @@ describe('HeatGrid', () => {
     )
 
     expect(screen.getByRole('button', { name: /thu, sep 4, 2 of 2 free/i })).toBeInTheDocument()
+  })
+
+  it('renders a disabled, non-interactive cell for a date/column combination the date does not offer', () => {
+    const mixedCells = [
+      [{ dateIndex: 0, slotIndex: 0, startMinute: 540, endMinute: 600, freeCount: 2, freeUserIds: ['a', 'b'] }],
+      [{ dateIndex: 1, slotIndex: 0, startMinute: 660, endMinute: 720, freeCount: 1, freeUserIds: ['a'] }],
+    ]
+    render(
+      <HeatGrid
+        cells={mixedCells}
+        columns={[
+          { startMinute: 540, endMinute: 600 },
+          { startMinute: 660, endMinute: 720 },
+        ]}
+        dateLabels={['Thu, Sep 4', 'Sat, Sep 6']}
+        participantCount={2}
+        slotLabels={['9:00–10:00 AM', '11:00 AM–12:00 PM']}
+        users={users}
+      />,
+    )
+
+    // Two dates x two columns = 4 grid positions, but each date only has a real slot for one of
+    // them — exactly 2 tappable buttons, not 4.
+    expect(screen.getAllByRole('button')).toHaveLength(2)
+  })
+})
+
+describe('HeatGrid initial scroll', () => {
+  function windowFor(startMinute: number): TimeWindow {
+    return { endMinute: startMinute + 30, startMinute }
+  }
+
+  function cellFor(startMinute: number, freeCount: number): OverlapCell {
+    return { ...windowFor(startMinute), dateIndex: 0, freeCount, freeUserIds: [], slotIndex: 0 }
+  }
+
+  it('renders the scroll-measurement attributes the hook relies on', () => {
+    const columns = [0, 30, 60].map(windowFor)
+    const { container } = render(
+      <HeatGrid
+        cells={[columns.map((c) => cellFor(c.startMinute, 1))]}
+        columns={columns}
+        dateLabels={['Wed, Jul 15']}
+        participantCount={2}
+        slotLabels={columns.map((c) => `${c.startMinute}`)}
+        users={[]}
+      />,
+    )
+    expect(container.querySelector('[data-scroll-label]')).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-scroll-column]')).toHaveLength(3)
+  })
+
+  it('scrolls to the window with the highest combined freeCount', () => {
+    const restore = mockColumnLayout(56, 4, 128, 2)
+    try {
+      const columns = [0, 30, 60, 90].map(windowFor)
+
+      const { container } = render(
+        <HeatGrid
+          cells={[[cellFor(0, 0), cellFor(30, 1), cellFor(60, 4), cellFor(90, 3)]]}
+          columns={columns}
+          dateLabels={['Wed, Jul 15']}
+          participantCount={4}
+          slotLabels={columns.map((c) => `${c.startMinute}`)}
+          users={[]}
+        />,
+      )
+
+      // scores: [0,1,4,3]; 2 visible columns -> best window is [2,3] (sum 7), start 2 -> scrollLeft = 2*60 = 120
+      const scrollport = container.querySelector('.overflow-auto') as HTMLElement
+      expect(scrollport.scrollLeft).toBe(120)
+    } finally {
+      restore()
+    }
+
+    // Regression check: restore() must remove the patched own-property so HTMLElement.prototype
+    // falls back to inheriting Element.prototype's real clientWidth getter again, rather than
+    // leaving every element in later tests permanently stuck reporting the fixed mocked width.
+    expect(Object.prototype.hasOwnProperty.call(HTMLElement.prototype, 'clientWidth')).toBe(false)
+    expect(document.createElement('div').clientWidth).not.toBe(128 + 2 * (56 + 4))
+  })
+
+  it('does not scroll a dates-only grid (single implicit column)', () => {
+    const { container } = render(
+      <HeatGrid
+        cells={[[{ dateIndex: 0, endMinute: 1440, freeCount: 2, freeUserIds: [], slotIndex: 0, startMinute: 0 }]]}
+        columns={[]}
+        dateLabels={['Wed, Jul 15']}
+        participantCount={2}
+        slotLabels={[]}
+        users={[]}
+      />,
+    )
+    const scrollport = container.querySelector('.overflow-auto') as HTMLElement
+    expect(scrollport.scrollLeft).toBe(0)
+  })
+})
+
+describe('HeatGrid semantic table markup', () => {
+  const users: User[] = []
+  const cells = [[{ dateIndex: 0, slotIndex: 0, startMinute: 1080, endMinute: 1140, freeCount: 2, freeUserIds: [] }]]
+
+  // A `position: sticky` element that is itself a raw CSS Grid item loses its stuck position
+  // once horizontal scroll nears the end of the scrollable range — reproduced against this
+  // exact grid-template-columns/gap/sticky/overflow-auto combination in a real headless browser.
+  // jsdom has no layout engine, so it can't see the visual bug directly; rendering as a real
+  // <table> with sticky <th> cells sidesteps that class of bug entirely (the standard,
+  // battle-tested pattern for frozen table headers/columns), and also gives screen readers real
+  // row/column header associations, which the previous plain-div grid never had.
+  it('associates each date label with its row via a real table row header', () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('rowheader', { name: /thu, sep 4/i })).toBeInTheDocument()
+  })
+
+  it('associates each time slot with its column via a real table column header', () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('columnheader', { name: '6:00–7:00 PM' })).toBeInTheDocument()
+  })
+
+  it('renders the grid as a real table', () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('table')).toBeInTheDocument()
   })
 })

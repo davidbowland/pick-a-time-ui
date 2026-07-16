@@ -34,7 +34,10 @@ const PrivacyPolicy = (): React.ReactNode => {
           If you sign in with Google, we store your name so we can recognize you the next time you sign in. We
           don&apos;t store your email address.
         </p>
-        <p>When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot.</p>
+        <p>
+          When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot. Google processes
+          that check on our behalf, under our instructions — it doesn&apos;t use the data for its own purposes.
+        </p>
       </Section>
 
       <Section title="Why We Collect It">
@@ -61,9 +64,13 @@ const PrivacyPolicy = (): React.ReactNode => {
 
       <Section title="When We Share Your Data">
         <p>
-          Signing in with Google and creating a poll both send small pieces of data to Google, since we use Google to
-          verify who you are and to screen out bots. Google&apos;s privacy policy governs what Google does with its
-          share; we share data beyond that only when the law requires it — for example, a valid court order.
+          Signing in with Google sends a small piece of data to Google, which verifies who you are as its own
+          independent service. Google&apos;s privacy policy governs what Google does with that data.
+        </p>
+        <p>
+          Creating a poll sends data to Google&apos;s reCAPTCHA to screen out bots. Google acts as our processor for
+          that check, bound by our instructions, not as an independent user of the data. We share data beyond this only
+          when the law requires it — for example, a valid court order.
         </p>
       </Section>
 

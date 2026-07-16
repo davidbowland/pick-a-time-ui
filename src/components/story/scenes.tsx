@@ -101,9 +101,9 @@ export const HeroScene = (): React.ReactNode => (
             </div>
             <p className="mt-3 text-xs text-[var(--slate)]">5 of 5 responded · 18 dates</p>
             <div className="mt-3">
-              <Chip as="span" selected>
+              <span className="rounded-xl border border-[var(--accent)]/25 bg-[var(--accent)]/10 px-3 py-1.5 text-xs font-bold text-[var(--accent-text)]">
                 Fri 6–7 PM works best
-              </Chip>
+              </span>
             </div>
           </PhoneCard>
         </div>
