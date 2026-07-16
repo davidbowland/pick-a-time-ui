@@ -10,6 +10,12 @@ import { SkyBackground } from '@components/story/sky-background'
 
 const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
 
+const TITLE = "Pick a Time — find the minute everyone's actually free"
+const DESCRIPTION =
+  'Start a poll, send one link, and see the times everyone can actually make. No accounts, no reply-all threads.'
+const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`
+const PAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/`
+
 const Index = (): React.ReactNode => {
   const createSceneRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
@@ -22,7 +28,26 @@ const Index = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>Pick a Time — find the minute everyone&apos;s actually free</title>
+        <title>{TITLE}</title>
+        <meta content={DESCRIPTION} name="description" />
+        <link href={PAGE_URL} rel="canonical" />
+
+        <meta content="website" property="og:type" />
+        <meta content={PAGE_URL} property="og:url" />
+        <meta content="Pick a Time" property="og:site_name" />
+        <meta content={TITLE} property="og:title" />
+        <meta content={DESCRIPTION} property="og:description" />
+        <meta content={OG_IMAGE_URL} property="og:image" />
+        <meta content="image/png" property="og:image:type" />
+        <meta content="1200" property="og:image:width" />
+        <meta content="630" property="og:image:height" />
+        <meta content={TITLE} property="og:image:alt" />
+        <meta content="en_US" property="og:locale" />
+
+        <meta content="summary_large_image" name="twitter:card" />
+        <meta content={TITLE} name="twitter:title" />
+        <meta content={DESCRIPTION} name="twitter:description" />
+        <meta content={OG_IMAGE_URL} name="twitter:image" />
       </Head>
       <SkyBackground />
       <main className="relative z-10">

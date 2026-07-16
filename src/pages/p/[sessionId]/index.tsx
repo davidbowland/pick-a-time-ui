@@ -6,6 +6,10 @@ import AppBar from '@components/app-bar'
 import Poll from '@components/poll'
 import PrivacyLink from '@components/privacy-link'
 
+const TITLE = "You're invited — Pick a Time"
+const DESCRIPTION = 'Mark the times that work for you and see where everyone overlaps. No account needed.'
+const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`
+
 function useSessionIdFromPath(): string | undefined {
   const [sessionId, setSessionId] = useState<string | undefined>()
   useEffect(() => {
@@ -21,7 +25,25 @@ const PollPage = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>Pick a Time</title>
+        <title>{TITLE}</title>
+        <meta content={DESCRIPTION} name="description" />
+        <meta content="noindex, nofollow" name="robots" />
+
+        <meta content="website" property="og:type" />
+        <meta content="Pick a Time" property="og:site_name" />
+        <meta content={TITLE} property="og:title" />
+        <meta content={DESCRIPTION} property="og:description" />
+        <meta content={OG_IMAGE_URL} property="og:image" />
+        <meta content="image/png" property="og:image:type" />
+        <meta content="1200" property="og:image:width" />
+        <meta content="630" property="og:image:height" />
+        <meta content={TITLE} property="og:image:alt" />
+        <meta content="en_US" property="og:locale" />
+
+        <meta content="summary_large_image" name="twitter:card" />
+        <meta content={TITLE} name="twitter:title" />
+        <meta content={DESCRIPTION} name="twitter:description" />
+        <meta content={OG_IMAGE_URL} name="twitter:image" />
       </Head>
       <AppBar sessionId={sessionId} />
       <main className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col px-4 py-6">

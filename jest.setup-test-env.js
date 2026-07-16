@@ -4,6 +4,7 @@ process.env.NEXT_PUBLIC_COGNITO_APP_CLIENT_ID = 'somereallylongvalue1111'
 process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID = 'us-east_clientId'
 process.env.NEXT_PUBLIC_DELAY_BETWEEN_REFRESH_MS = '500'
 process.env.NEXT_PUBLIC_IDENTITY_POOL_ID = 'us-east-2:iujhgvd56yhjm98uygt'
+process.env.NEXT_PUBLIC_ORIGIN = 'http://localhost'
 process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY = 'oiuytfghjmnbvcdsdrty'
 
 window.URL.createObjectURL = jest.fn()
