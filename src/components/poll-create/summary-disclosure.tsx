@@ -23,7 +23,7 @@ export const SummaryDisclosure = ({
       </span>
       <div
         aria-labelledby={labelId}
-        className="flex items-center justify-between rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.04] px-3 py-2"
+        className="flex items-start justify-between gap-3 rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.04] px-4 py-3"
         role="group"
       >
         <span className="text-sm text-[var(--bone)]">{value}</span>
@@ -31,7 +31,7 @@ export const SummaryDisclosure = ({
           aria-controls={expanded ? panelId : undefined}
           aria-expanded={expanded}
           aria-label={`${expanded ? 'Done editing' : 'Edit'} ${label.toLowerCase()}`}
-          className={`text-xs font-bold text-[var(--accent)] ${FOCUS_RING}`}
+          className={`shrink-0 text-xs font-bold text-[var(--accent)] ${FOCUS_RING}`}
           onClick={onToggle}
           type="button"
         >

@@ -1,4 +1,5 @@
 import {
+  computeStartEndMinuteStep,
   computeWeekendOverride,
   formatDaysTimesSummary,
   formatTimeLabel,
@@ -178,6 +179,34 @@ describe('formatTimeLabel', () => {
         weekendEndMinute: 840,
       }),
     ).toBe('9:00 AM–5:00 PM weekdays, 11:00 AM–2:00 PM weekends · 1 hr')
+  })
+
+  it('collapses to a single window when weekends differ is set but the windows match', () => {
+    expect(
+      formatTimeLabel({
+        usesTimes: true,
+        startMinute: 690,
+        endMinute: 810,
+        slotMinutes: 60,
+        weekendsDiffer: true,
+        weekendStartMinute: 690,
+        weekendEndMinute: 810,
+      }),
+    ).toBe('11:30 AM–1:30 PM · 1 hr')
+  })
+})
+
+describe('computeStartEndMinuteStep', () => {
+  it('uses the fine step when the meeting length matches it', () => {
+    expect(computeStartEndMinuteStep(15, 15)).toBe(15)
+  })
+
+  it('doubles the fine step for meeting lengths longer than the fine step', () => {
+    expect(computeStartEndMinuteStep(60, 15)).toBe(30)
+  })
+
+  it('doubles the fine step for a 30-minute meeting', () => {
+    expect(computeStartEndMinuteStep(30, 15)).toBe(30)
   })
 })
 

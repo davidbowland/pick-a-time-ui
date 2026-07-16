@@ -8,6 +8,7 @@ import { ChecklistSection } from './checklist-section'
 import { DatePickerCalendar } from './date-picker'
 import { CreateCard, CreateCardHeader, PollNameField, WeekCountStepper, WeekdayPicker } from './elements'
 import {
+  computeStartEndMinuteStep,
   computeWeekendOverride,
   formatDaysTimesSummary,
   formatTimeLabel,
@@ -455,7 +456,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                           onChangeEnd={setEndMinute}
                           onChangeStart={setStartMinute}
                           startMinute={startMinute}
-                          step={config.startEndMinuteStep}
+                          step={computeStartEndMinuteStep(slotMinutes, config.startEndMinuteStep)}
                         />
                         {effectiveWeekendsDiffer && (
                           <TimeRangeSlider
@@ -465,7 +466,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                             onChangeEnd={setWeekendEndMinute}
                             onChangeStart={setWeekendStartMinute}
                             startMinute={weekendStartMinute}
-                            step={config.startEndMinuteStep}
+                            step={computeStartEndMinuteStep(slotMinutes, config.startEndMinuteStep)}
                           />
                         )}
                         <SlotDurationPicker

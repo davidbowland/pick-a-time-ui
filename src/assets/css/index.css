@@ -92,13 +92,26 @@ html.dark {
    badge's own script sometimes sizes/positions itself against something other than this page's
    actual viewport, which can push it (and the document's scrollable area with it) far past the
    right edge — collapse it to a zero-size, clipped, absolutely-positioned box so none of that can
-   ever affect this page's layout, regardless of what the badge's own script tries to do. */
-[class^='grecaptcha-'] {
+   ever affect this page's layout, regardless of what the badge's own script tries to do.
+   Crucially this also targets every descendant, not just elements with a `grecaptcha-*` class:
+   the badge's inner `<iframe>` carries no class of its own, and Google positions it with
+   `position: fixed` — which escapes a `grecaptcha-badge`/`grecaptcha-logo` ancestor's
+   `overflow: hidden` entirely, since that only clips descendants that share its containing
+   block. Left unhandled, that fixed iframe (still 256x60 from its own width/height HTML
+   attributes) can sit positioned off past the right edge of a narrow viewport, which mobile
+   Chromium factors into the page's scrollable width, widening the whole layout and shifting
+   everything else left. */
+[class^='grecaptcha-'],
+[class^='grecaptcha-'] * {
   visibility: hidden !important;
   position: absolute !important;
   overflow: hidden !important;
   width: 0 !important;
   height: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
 }
 
 @keyframes pat-breathe {

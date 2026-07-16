@@ -59,9 +59,16 @@ export function formatTimeLabel(params: {
   if (!params.usesTimes) return 'Dates only'
   const weekdayRange = formatSlotRange(params.startMinute, params.endMinute)
   const durationLabel = formatSlotMinutesLabel(params.slotMinutes)
-  if (!params.weekendsDiffer) return `${weekdayRange} · ${durationLabel}`
   const weekendRange = formatSlotRange(params.weekendStartMinute, params.weekendEndMinute)
+  if (!params.weekendsDiffer || weekendRange === weekdayRange) return `${weekdayRange} · ${durationLabel}`
   return `${weekdayRange} weekdays, ${weekendRange} weekends · ${durationLabel}`
+}
+
+// react-aria's Slider only ever snaps to `step`, so a 15-minute meeting can start on any
+// quarter-hour, but every other allowed length (30/60/90/120) should only start on the hour
+// or half hour — otherwise, e.g., a 1-hour meeting could be dragged to start at 6:15.
+export function computeStartEndMinuteStep(slotMinutes: number, fineStep: number): number {
+  return slotMinutes <= fineStep ? fineStep : fineStep * 2
 }
 
 export function formatDaysTimesSummary(params: {

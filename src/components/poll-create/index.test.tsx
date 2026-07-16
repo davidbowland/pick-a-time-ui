@@ -605,8 +605,11 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
     await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
+    // Pull the weekend end thumb in an hour so the two windows actually differ.
+    const toThumbs = screen.getAllByLabelText(/to \(time\)/i)
+    fireEvent.change(toThumbs[toThumbs.length - 1], { target: { value: '1200' } })
 
-    expect(screen.getByText('9:00 AM–9:00 PM weekdays, 9:00 AM–9:00 PM weekends · 1 hr')).toBeInTheDocument()
+    expect(screen.getByText('9:00 AM–9:00 PM weekdays, 9:00 AM–8:00 PM weekends · 1 hr')).toBeInTheDocument()
   })
 
   it('should surface the api message when poll creation fails with a 400', async () => {
