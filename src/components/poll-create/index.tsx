@@ -15,6 +15,7 @@ import {
   formatWeekdaysSummary,
   generateWeekdayDates,
   reconcilePatternDates,
+  timeWindowError,
   updateExcludedDates,
 } from './helpers'
 import { ScenarioPreset, ScenarioPresets } from './scenario-presets'
@@ -75,11 +76,9 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const [startMinute, setStartMinute] = useState(DEFAULT_START_MINUTE)
   const [endMinute, setEndMinute] = useState(DEFAULT_END_MINUTE)
   const [slotMinutes, setSlotMinutes] = useState(60)
-  const [timesError, setTimesError] = useState<string | undefined>()
   const [weekendsDiffer, setWeekendsDiffer] = useState(false)
   const [weekendStartMinute, setWeekendStartMinute] = useState(DEFAULT_START_MINUTE)
   const [weekendEndMinute, setWeekendEndMinute] = useState(DEFAULT_END_MINUTE)
-  const [weekendTimesError, setWeekendTimesError] = useState<string | undefined>()
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
   const [isNavigating, setIsNavigating] = useState(false)
 
@@ -110,6 +109,12 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const canSplitWeekendTimes =
     hasWeekdayDate && hasWeekendDate && config !== undefined && config.maxPollOverrideGroups >= 1
   const effectiveWeekendsDiffer = weekendsDiffer && canSplitWeekendTimes
+  const timesError = usesTimes ? timeWindowError(startMinute, endMinute, slotMinutes) : undefined
+  const weekendTimesError =
+    usesTimes && effectiveWeekendsDiffer
+      ? timeWindowError(weekendStartMinute, weekendEndMinute, slotMinutes)
+      : undefined
+  const hasTimeWindowError = timesError !== undefined || weekendTimesError !== undefined
 
   useEffect(() => {
     if (config) setSlotMinutes(config.defaultSlotMinutes)
@@ -306,18 +311,9 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       return
     }
     setDatesError(undefined)
-    // Clear both time-window errors up front, before either check runs — otherwise fixing the
-    // weekend window but breaking the weekday one (or vice versa) would leave the other field's
-    // stale error on screen even though its own condition is now satisfied.
-    setTimesError(undefined)
-    setWeekendTimesError(undefined)
-    if (usesTimes && endMinute - startMinute < slotMinutes) {
-      setTimesError('Pick a longer time window, or a shorter meeting length.')
-      setOpenSection('daysTimes')
-      return
-    }
-    if (usesTimes && effectiveWeekendsDiffer && weekendEndMinute - weekendStartMinute < slotMinutes) {
-      setWeekendTimesError('Pick a longer time window, or a shorter meeting length.')
+    // Unreachable through the UI (Continue is gated on the same derived errors), kept so an
+    // invalid window can never reach the API if section navigation changes.
+    if (hasTimeWindowError) {
       setOpenSection('daysTimes')
       return
     }
@@ -479,7 +475,16 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                     )}
                   </div>
                 )}
-                <PillButton isDisabled={dates.length === 0} label="Continue" onPress={goToNextSection} />
+                {hasTimeWindowError && !showTimeEditor && (
+                  <span className="text-xs text-red-400" role="alert">
+                    Fix the time window to continue.
+                  </span>
+                )}
+                <PillButton
+                  isDisabled={dates.length === 0 || hasTimeWindowError}
+                  label="Continue"
+                  onPress={goToNextSection}
+                />
               </>
             ) : (
               <p className="text-sm text-[var(--slate)]" role="status">

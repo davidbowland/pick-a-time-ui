@@ -485,10 +485,9 @@ describe('PollCreate', () => {
     expect(await screen.findByText('1 of 1 selected')).toBeInTheDocument()
   })
 
-  it('should show an inline error and not submit when the time window is shorter than the meeting length', async () => {
+  it('shows the longer-window error immediately and disables Continue when the window is shorter than the meeting length', async () => {
     setup()
     renderWithClient()
-    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
     await userEvent.click(continueButton())
     await screen.findByTestId('date-2026-07-16')
     await userEvent.click(screen.getByTestId('date-2026-07-16'))
@@ -496,15 +495,66 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
     await userEvent.click(screen.getByRole('button', { name: '2 hr' }))
     // Pull the end time to 9:30 AM, 30 minutes after the 9:00 AM default start — shorter than
-    // the 2-hour (120 min) meeting length just selected.
+    // the 2-hour (120 min) meeting length just selected. No submit: the error is live.
     await userEvent.click(screen.getByRole('button', { name: /end time.*9:00 pm/i }))
     await userEvent.selectOptions(screen.getByLabelText('Minute'), '30')
     await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
-    await userEvent.click(continueButton())
-    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
     expect(await screen.findByText(/pick a longer time window/i)).toBeInTheDocument()
+    expect(continueButton()).toBeDisabled()
     expect(createPoll).not.toHaveBeenCalled()
+  })
+
+  it('shows the end-after-start error immediately, ahead of the too-short message, and disables Continue', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16'))
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    // Flip the default 9:00 PM end to 9:00 AM — equal to the 9:00 AM start, i.e. inverted.
+    await userEvent.click(screen.getByRole('button', { name: /end time.*9:00 pm/i }))
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
+
+    expect(await screen.findByText('Pick an end time after 9:00 AM.')).toBeInTheDocument()
+    expect(screen.queryByText(/pick a longer time window/i)).not.toBeInTheDocument()
+    expect(continueButton()).toBeDisabled()
+  })
+
+  it('clears the error and re-enables Continue once the window is fixed', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16'))
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    await userEvent.click(screen.getByRole('button', { name: /end time.*9:00 pm/i }))
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'PM')
+
+    expect(screen.queryByText(/pick an end time after/i)).not.toBeInTheDocument()
+    expect(continueButton()).toBeEnabled()
+  })
+
+  it('shows a fix-the-time-window notice next to Continue when the invalid window is collapsed out of view', async () => {
+    setup()
+    renderWithClient()
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByTestId('date-2026-07-16'))
+    await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
+    await userEvent.click(screen.getByRole('button', { name: /end time.*9:00 pm/i }))
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
+    // Close the time editor, then collapse the "When" panel so the field-level error is hidden.
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: /done editing when/i }))
+
+    expect(screen.getByText('Fix the time window to continue.')).toBeInTheDocument()
+    expect(screen.queryByText('Pick an end time after 9:00 AM.')).not.toBeInTheDocument()
+    expect(continueButton()).toBeDisabled()
   })
 
   it('does not show the weekday/weekend toggle when every selected date is a weekday', async () => {
@@ -573,10 +623,9 @@ describe('PollCreate', () => {
     expect(createPoll).toHaveBeenCalledWith(expect.not.objectContaining({ overrides: expect.anything() }), 'token')
   })
 
-  it('shows a separate inline error under the weekend window when it is shorter than the meeting length', async () => {
+  it('shows a separate inline error under the weekend window immediately and disables Continue', async () => {
     setup()
     renderWithClient()
-    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
     await userEvent.click(continueButton())
     await screen.findByTestId('date-2026-07-16')
     await userEvent.click(screen.getByTestId('date-2026-07-16')) // Thursday
@@ -586,14 +635,13 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
     await userEvent.click(screen.getByRole('button', { name: '2 hr' }))
     // Pull the weekend end time to 30 minutes after its (seeded-from-weekday) 9:00 AM start —
-    // shorter than the 2-hour (120 min) meeting length just selected.
+    // shorter than the 2-hour (120 min) meeting length just selected. Weekday window stays valid.
     await userEvent.click(screen.getByRole('button', { name: /end time, weekends/i }))
     await userEvent.selectOptions(screen.getByLabelText('Minute'), '30')
     await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
-    await userEvent.click(continueButton())
-    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
     expect(await screen.findByText(/pick a longer time window/i)).toBeInTheDocument()
+    expect(continueButton()).toBeDisabled()
     expect(createPoll).not.toHaveBeenCalled()
   })
 
