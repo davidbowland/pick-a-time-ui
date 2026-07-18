@@ -1,6 +1,6 @@
 # pick-a-time-ui
 
-Next.js and Amplify implementation of pick-a-time-api and pick-a-time-infrastructure. Example: <https://pick-a-time.com/>
+Next.js and Amplify front end for pick-a-time, backed by the pick-a-time-api and pick-a-time-infrastructure repos. Example: <https://pick-a-time.com/>
 
 ## Static Site
 
@@ -27,7 +27,7 @@ Then view the server at <http://localhost:3000/>
 
 ### Unit Tests
 
-[Jest](https://jestjs.io/) tests are run automatically on commit and push. If the test coverage threshold is not met, the push will fail. See `jest.config.ts` for coverage threshold.
+[Jest](https://jestjs.io/) tests are run automatically on commit and push. If the test coverage threshold is not met, the push will fail. See `jest.config.mjs` for coverage threshold.
 
 Manually run tests with:
 
