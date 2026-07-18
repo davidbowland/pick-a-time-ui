@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install AWS SAM
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -103,7 +103,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install AWS SAM
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
       - name: Assume the production pipeline user role
         uses: aws-actions/configure-aws-credentials@v6
         with:
