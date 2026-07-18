@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 
@@ -100,5 +100,80 @@ describe('TimeWheelColumn', () => {
     await userEvent.keyboard('{ArrowDown}')
 
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  describe('scroll selection', () => {
+    const ROW_HEIGHT_PX = 32
+
+    beforeAll(() => {
+      jest.useFakeTimers()
+    })
+
+    afterAll(() => {
+      jest.useRealTimers()
+    })
+
+    it('selects the option resting in the center after scrolling settles', () => {
+      const onChange = jest.fn()
+      render(<TimeWheelColumn aria-label="Hour" onChange={onChange} options={OPTIONS} value="1" />)
+
+      const listbox = screen.getByRole('listbox')
+      listbox.scrollTop = 2 * ROW_HEIGHT_PX
+      fireEvent.scroll(listbox)
+      act(() => jest.advanceTimersByTime(200))
+
+      expect(onChange).toHaveBeenCalledWith('3')
+    })
+
+    it('waits for scrolling to settle before selecting', () => {
+      const onChange = jest.fn()
+      render(<TimeWheelColumn aria-label="Hour" onChange={onChange} options={OPTIONS} value="1" />)
+
+      const listbox = screen.getByRole('listbox')
+      listbox.scrollTop = ROW_HEIGHT_PX
+      fireEvent.scroll(listbox)
+      act(() => jest.advanceTimersByTime(100))
+      listbox.scrollTop = 2 * ROW_HEIGHT_PX
+      fireEvent.scroll(listbox)
+      act(() => jest.advanceTimersByTime(200))
+
+      expect(onChange).toHaveBeenCalledTimes(1)
+      expect(onChange).toHaveBeenCalledWith('3')
+    })
+
+    it('does not call onChange when scrolling settles on the already-selected option', () => {
+      const onChange = jest.fn()
+      render(<TimeWheelColumn aria-label="Hour" onChange={onChange} options={OPTIONS} value="1" />)
+
+      const listbox = screen.getByRole('listbox')
+      listbox.scrollTop = 0
+      fireEvent.scroll(listbox)
+      act(() => jest.advanceTimersByTime(200))
+
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('clamps a scroll past the last option to the last option', () => {
+      const onChange = jest.fn()
+      render(<TimeWheelColumn aria-label="Hour" onChange={onChange} options={OPTIONS} value="1" />)
+
+      const listbox = screen.getByRole('listbox')
+      listbox.scrollTop = 50 * ROW_HEIGHT_PX
+      fireEvent.scroll(listbox)
+      act(() => jest.advanceTimersByTime(200))
+
+      expect(onChange).toHaveBeenCalledWith('3')
+    })
+
+    it('does not select after unmounting mid-scroll', () => {
+      const onChange = jest.fn()
+      const { unmount } = render(<TimeWheelColumn aria-label="Hour" onChange={onChange} options={OPTIONS} value="1" />)
+
+      fireEvent.scroll(screen.getByRole('listbox'))
+      unmount()
+      act(() => jest.advanceTimersByTime(200))
+
+      expect(onChange).not.toHaveBeenCalled()
+    })
   })
 })
