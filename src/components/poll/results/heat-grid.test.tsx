@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { readFileSync } from 'fs'
 import { join } from 'path'
@@ -7,8 +7,8 @@ import React from 'react'
 
 import { TimeWindow } from '../slot-columns'
 import { mockColumnLayout } from '../test-column-layout-mock'
-import { HeatGrid, heatColorFor } from './heat-grid'
-import { OverlapCell } from '@services/api'
+import { HeatGrid, heatColorFor, isBestSlotCell, isRecommendedCell } from './heat-grid'
+import { OverlapCell, RecommendedMeeting } from '@services/api'
 import { User } from '@types'
 import { contrastRatio } from '@utils/contrast'
 
@@ -92,6 +92,49 @@ describe('heatColorFor', () => {
   )
 })
 
+describe('isRecommendedCell', () => {
+  const recommendedMeetings: RecommendedMeeting[] = [
+    {
+      dateIndex: 0,
+      slotIndex: 1,
+      date: '2025-09-04',
+      startMinute: 1110,
+      endMinute: 1170,
+      freeCount: 2,
+      freeUserIds: [],
+      excludedByCalendar: [],
+    },
+  ]
+
+  it('matches a cell whose dateIndex/slotIndex is in the recommended list', () => {
+    expect(isRecommendedCell({ dateIndex: 0, slotIndex: 1 }, recommendedMeetings)).toBe(true)
+  })
+
+  it('does not match a cell outside the recommended list', () => {
+    expect(isRecommendedCell({ dateIndex: 0, slotIndex: 0 }, recommendedMeetings)).toBe(false)
+  })
+
+  it('does not match anything against an empty recommended list', () => {
+    expect(isRecommendedCell({ dateIndex: 0, slotIndex: 1 }, [])).toBe(false)
+  })
+})
+
+describe('isBestSlotCell', () => {
+  const bestSlot = { dateIndex: 1, slotIndex: 2 }
+
+  it('matches the cell at the best-slot position', () => {
+    expect(isBestSlotCell({ dateIndex: 1, slotIndex: 2 }, bestSlot)).toBe(true)
+  })
+
+  it('does not match a different cell', () => {
+    expect(isBestSlotCell({ dateIndex: 1, slotIndex: 0 }, bestSlot)).toBe(false)
+  })
+
+  it('does not match anything when there is no best slot', () => {
+    expect(isBestSlotCell({ dateIndex: 1, slotIndex: 2 }, undefined)).toBe(false)
+  })
+})
+
 describe('HeatGrid', () => {
   const users: User[] = [
     { userId: 'a', name: 'Amber Harbor', calendarStatus: 'not_connected' },
@@ -109,6 +152,7 @@ describe('HeatGrid', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -123,11 +167,81 @@ describe('HeatGrid', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
     )
     expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('adds a "recommended" suffix to a cell matched in recommendedMeetings', () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[
+          {
+            dateIndex: 0,
+            slotIndex: 0,
+            date: '2025-09-04',
+            startMinute: 1080,
+            endMinute: 1140,
+            freeCount: 2,
+            freeUserIds: [],
+            excludedByCalendar: [],
+          },
+        ]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('button')).toHaveAccessibleName(/recommended/i)
+    expect(screen.getByRole('button')).not.toHaveAccessibleName(/best time/i)
+  })
+
+  it('adds a "recommended, best time" suffix when the cell also matches bestSlot', () => {
+    render(
+      <HeatGrid
+        bestSlot={{ dateIndex: 0, slotIndex: 0 }}
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[
+          {
+            dateIndex: 0,
+            slotIndex: 0,
+            date: '2025-09-04',
+            startMinute: 1080,
+            endMinute: 1140,
+            freeCount: 2,
+            freeUserIds: [],
+            excludedByCalendar: [],
+          },
+        ]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('button')).toHaveAccessibleName(/recommended, best time/i)
+  })
+
+  it('adds no suffix to a cell that is not recommended', () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByRole('button')).not.toHaveAccessibleName(/recommended/i)
   })
 
   it('reveals who is free, by display name, when a cell is activated', async () => {
@@ -137,6 +251,7 @@ describe('HeatGrid', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -146,6 +261,194 @@ describe('HeatGrid', () => {
     expect(await screen.findByText(/^b$/i)).toBeInTheDocument()
   })
 
+  it('shows the viewer as "You", listed first, when they are among the free users', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+        viewerUserId="b"
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /thu, sep 4/i }))
+    const items = await screen.findAllByRole('listitem')
+    expect(items[0]).toHaveTextContent(/^You$/)
+    expect(items[1]).toHaveTextContent(/amber harbor/i)
+  })
+
+  it('closes the popover when the same cell is clicked again', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    const cellButton = screen.getByRole('button', { name: /thu, sep 4/i })
+    await userEvent.click(cellButton)
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    await userEvent.click(cellButton)
+    await waitFor(() => expect(screen.queryByText(/amber harbor/i)).not.toBeInTheDocument())
+  })
+
+  it('closes when the star badge inside a best-slot cell is clicked to close it', async () => {
+    render(
+      <HeatGrid
+        bestSlot={{ dateIndex: 0, slotIndex: 0 }}
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[
+          {
+            dateIndex: 0,
+            slotIndex: 0,
+            date: '2025-09-04',
+            startMinute: 1080,
+            endMinute: 1140,
+            freeCount: 2,
+            freeUserIds: [],
+            excludedByCalendar: [],
+          },
+        ]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    const cellButton = screen.getByRole('button', { name: /recommended, best time/i })
+    await userEvent.click(cellButton)
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    const starBadge = screen.getByTestId('best-slot-star')
+    await userEvent.click(starBadge)
+    await waitFor(() => expect(screen.queryByText(/amber harbor/i)).not.toBeInTheDocument())
+  })
+
+  it('moves the popover to a newly clicked cell and closes the previous one', async () => {
+    const twoCellRow = [
+      [
+        { dateIndex: 0, slotIndex: 0, startMinute: 1080, endMinute: 1140, freeCount: 2, freeUserIds: ['a', 'b'] },
+        { dateIndex: 0, slotIndex: 1, startMinute: 1140, endMinute: 1200, freeCount: 1, freeUserIds: ['a'] },
+      ],
+    ]
+    render(
+      <HeatGrid
+        cells={twoCellRow}
+        columns={[
+          { startMinute: 1080, endMinute: 1140 },
+          { startMinute: 1140, endMinute: 1200 },
+        ]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM', '7:00–8:00 PM']}
+        users={users}
+      />,
+    )
+    const [firstCell, secondCell] = screen.getAllByRole('button')
+    await userEvent.click(firstCell)
+    expect(await screen.findByText(/^b$/i)).toBeInTheDocument()
+    await userEvent.click(secondCell)
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^b$/i)).not.toBeInTheDocument()
+  })
+
+  it('reflects open state on the cell button via aria-expanded', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    const cellButton = screen.getByRole('button', { name: /thu, sep 4/i })
+    expect(cellButton).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(cellButton)
+    expect(cellButton).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('closes when Escape is pressed while open', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /thu, sep 4/i }))
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByText(/amber harbor/i)).not.toBeInTheDocument())
+  })
+
+  it('closes when clicking outside the popover', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /thu, sep 4/i }))
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    await userEvent.click(document.body)
+    await waitFor(() => expect(screen.queryByText(/amber harbor/i)).not.toBeInTheDocument())
+  })
+
+  it('closes an open popover when the grid is scrolled', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /thu, sep 4/i }))
+    expect(await screen.findByText(/amber harbor/i)).toBeInTheDocument()
+    fireEvent.scroll(screen.getByRole('button', { name: /thu, sep 4/i }).closest('table')!.parentElement!)
+    await waitFor(() => expect(screen.queryByText(/amber harbor/i)).not.toBeInTheDocument())
+  })
+
+  it('shows the hint both before and after a cell is selected', async () => {
+    render(
+      <HeatGrid
+        cells={cells}
+        columns={[{ startMinute: 1080, endMinute: 1140 }]}
+        dateLabels={['Thu, Sep 4']}
+        participantCount={2}
+        recommendedMeetings={[]}
+        slotLabels={['6:00–7:00 PM']}
+        users={users}
+      />,
+    )
+    expect(screen.getByText(/tap a square to see who.s free/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /thu, sep 4/i }))
+    expect(screen.getByText(/tap a square to see who.s free/i)).toBeInTheDocument()
+  })
+
   it('renders a legend spanning 0 free to all free', () => {
     render(
       <HeatGrid
@@ -153,6 +456,7 @@ describe('HeatGrid', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -171,6 +475,7 @@ describe('HeatGrid', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -188,6 +493,7 @@ describe('HeatGrid', () => {
         columns={[]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={[]}
         users={users}
       />,
@@ -210,6 +516,7 @@ describe('HeatGrid', () => {
         ]}
         dateLabels={['Thu, Sep 4', 'Sat, Sep 6']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['9:00–10:00 AM', '11:00 AM–12:00 PM']}
         users={users}
       />,
@@ -238,6 +545,7 @@ describe('HeatGrid initial scroll', () => {
         columns={columns}
         dateLabels={['Wed, Jul 15']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={columns.map((c) => `${c.startMinute}`)}
         users={[]}
       />,
@@ -257,6 +565,7 @@ describe('HeatGrid initial scroll', () => {
           columns={columns}
           dateLabels={['Wed, Jul 15']}
           participantCount={4}
+          recommendedMeetings={[]}
           slotLabels={columns.map((c) => `${c.startMinute}`)}
           users={[]}
         />,
@@ -283,6 +592,7 @@ describe('HeatGrid initial scroll', () => {
         columns={[]}
         dateLabels={['Wed, Jul 15']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={[]}
         users={[]}
       />,
@@ -310,6 +620,7 @@ describe('HeatGrid semantic table markup', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -324,6 +635,7 @@ describe('HeatGrid semantic table markup', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,
@@ -338,6 +650,7 @@ describe('HeatGrid semantic table markup', () => {
         columns={[{ startMinute: 1080, endMinute: 1140 }]}
         dateLabels={['Thu, Sep 4']}
         participantCount={2}
+        recommendedMeetings={[]}
         slotLabels={['6:00–7:00 PM']}
         users={users}
       />,

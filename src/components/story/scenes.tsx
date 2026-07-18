@@ -1,3 +1,4 @@
+import { QRCodeSVG } from 'qrcode.react'
 import React from 'react'
 
 import { PhoneMock } from '@components/story/phone-mock'
@@ -99,7 +100,7 @@ export const HeroScene = (): React.ReactNode => (
           <PhoneCard>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--slate)]">Poll</p>
             <p className="mt-1 text-lg font-medium text-[var(--ink)]" style={{ fontFamily: 'var(--font-display)' }}>
-              Lunch with friends
+              Game night
             </p>
             <div className="mt-3">
               <Avatars />
@@ -126,7 +127,7 @@ export const IdentityScene = (): React.ReactNode => (
     visual={
       <PhoneMock>
         <div className="flex flex-col items-center gap-4 px-6 pb-6 text-center">
-          <ScreenHeader eyebrow="Lunch with friends" title="You've joined as" />
+          <ScreenHeader eyebrow="Book club" title="You've joined as" />
           <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[var(--accent-soft)] to-[var(--ink)]" />
           <div className="flex flex-col items-center gap-1">
             <p className="text-lg font-medium text-[var(--ink)]">Quiet Falcon</p>
@@ -161,7 +162,7 @@ export const PaintingScene = (): React.ReactNode => (
     visual={
       <PhoneMock>
         <div className="flex flex-col gap-3 px-5 pb-6">
-          <ScreenHeader eyebrow="Lunch with friends" title="Mark your hours" />
+          <ScreenHeader eyebrow="Coffee catch-up" title="Mark your hours" />
           <div className="flex gap-2">
             <Chip as="span">All day</Chip>
             <Chip as="span">Clear</Chip>
@@ -205,7 +206,7 @@ export const ResultsScene = (): React.ReactNode => (
     visual={
       <PhoneMock>
         <div className="flex flex-col gap-3 px-5 pb-6">
-          <ScreenHeader eyebrow="Lunch with friends" title="The overlap" />
+          <ScreenHeader eyebrow="Band practice" title="The overlap" />
           <div className="rounded-2xl bg-[var(--ink)] p-4 text-[var(--bone)]">
             <p className="text-[10px] uppercase tracking-widest opacity-60">Best time</p>
             <p className="text-sm font-semibold">Fri 9/5, 6:00–7:00 PM</p>
@@ -244,18 +245,19 @@ export const ShareScene = (): React.ReactNode => (
     visual={
       <PhoneMock>
         <div className="flex flex-col items-center gap-4 px-6 pb-6 text-center">
-          <ScreenHeader eyebrow="Lunch with friends" title="Share this poll" />
+          <ScreenHeader eyebrow="Family reunion" title="Share this poll" />
           <div className="flex w-full items-center justify-between gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-left text-xs text-[var(--accent-text)]">
             <span className="truncate">pick-a-time.com/p/amber-harbor</span>
             <span className="rounded-full bg-black/5 px-3 py-1 text-[10px] font-bold text-[var(--ink)]">Copy</span>
           </div>
+          {/* Light-on-ink so the code blends into its tile; the p-3 frame doubles as the quiet zone. */}
           <div className="rounded-2xl bg-[var(--ink)] p-3">
-            <div
-              className="h-28 w-28 rounded-lg"
-              style={{
-                backgroundImage: 'repeating-conic-gradient(#17171a 0% 25%, #f2f1ee 0% 50%)',
-                backgroundSize: '14px 14px',
-              }}
+            <QRCodeSVG
+              bgColor="#17171a"
+              fgColor="#f2f1ee"
+              size={112}
+              title="QR code for pick-a-time.com"
+              value="https://pick-a-time.com/"
             />
           </div>
           <p className="text-xs text-[var(--slate)]">5 joined · 18 dates on the calendar</p>

@@ -113,7 +113,7 @@ describe('Poll', () => {
       expiration: 1725453600,
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -147,9 +147,12 @@ describe('Poll', () => {
     // `@services/api` and renders the real ResultsPhase (unlike a mocked-child assertion), so the
     // only way to observe the forwarded prop is behaviorally — a real display name appearing once
     // a heat-grid cell naming this user is activated.
+    // The free user is deliberately NOT the signed-in viewer: the viewer renders as "You"
+    // (covered in heat-grid.test.tsx), and this test is about real names being forwarded.
+    const otherUser: User = { userId: 'mellow-heron', name: 'Mellow Heron', calendarStatus: 'not_connected' }
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
-    jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+    jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser, otherUser])
     jest.mocked(fetchAvailability).mockResolvedValueOnce({
       userId: existingUser.userId,
       free: [
@@ -169,11 +172,11 @@ describe('Poll', () => {
               startMinute: 1080,
               endMinute: 1140,
               freeCount: 1,
-              freeUserIds: [existingUser.userId],
+              freeUserIds: [otherUser.userId],
             },
           ],
         ],
-        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 1 },
+        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 1, freeUserIds: [] },
       },
       recommendedMeetings: [],
     })
@@ -185,7 +188,7 @@ describe('Poll', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /thu, sep 4.*6:00.*1 of 1 free/i }))
 
-    expect(within(screen.getByRole('list')).getByText('Quiet Falcon')).toBeInTheDocument()
+    expect(within(screen.getByRole('list')).getByText('Mellow Heron')).toBeInTheDocument()
   })
 
   it('should show a loading indicator while the poll and users are still being fetched', async () => {
@@ -258,7 +261,7 @@ describe('Poll', () => {
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
       recommendedMeetings: [],
-      grid: { bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 }, cells: [] },
+      grid: { bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] }, cells: [] },
     })
 
     renderWithClient(<Poll sessionId="amber-harbor" />)
@@ -291,11 +294,10 @@ describe('Poll', () => {
     expect(screen.queryByText(/no account needed/i)).not.toBeInTheDocument()
   })
 
-  it('renders a persistent What is this? affordance once the poll has loaded, in every phase', async () => {
-    // Reaches the active phase the same way the earlier "should reach the active phase..." test
-    // does: identify an existing user via the ?id= query param read once on mount. Uses its own
-    // session id (distinct from the intro-dismissal test above) since this test doesn't depend
-    // on, or need to share, any onboarding storage state.
+  it('keeps the header free of a What is this? affordance in the active phase', async () => {
+    // The one-time intro card covers first-visit orientation and the overlap tab's
+    // participation status line covers the live-overlap mechanic, so the header carries no
+    // help toggle — its layout never shifts.
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
     jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
@@ -309,19 +311,15 @@ describe('Poll', () => {
       expiration: 1725453600,
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
     renderWithClient(<Poll sessionId="amber-harbor-onboarding-toggle" />)
 
-    await userEvent.click(await screen.findByRole('button', { name: /what is this/i }))
+    await screen.findByRole('tab', { name: 'Your hours' })
 
-    // Already joined by this point (identified via ?id=), so the "jump in / no account needed"
-    // framing meant for a brand-new visitor no longer applies.
-    expect(screen.queryByText(/no account/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/jump in/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/mark which of these/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /what is this/i })).not.toBeInTheDocument()
   })
 
   it('shows the poll expiration as a plain fact in the header', async () => {
@@ -348,7 +346,7 @@ describe('Poll', () => {
       expiration: 1725453600,
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -386,7 +384,7 @@ describe('Poll', () => {
       expiration: 1725453600,
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -403,6 +401,49 @@ describe('Poll', () => {
     // Focus lands on the matching "last used" radio option directly, not the heading, so picking
     // yourself back is one Enter/Space press away.
     await waitFor(() => expect(screen.getByRole('radio', { name: /quiet falcon/i })).toHaveFocus())
+  })
+
+  it('resets to the "Your hours" tab after switching to a different user', async () => {
+    // The tab state lives in the Poll component and survives the "This isn't me" -> identity ->
+    // re-join round trip, so without an explicit reset a switched user inherits the previous
+    // voter's "The overlap" tab instead of starting on their own hours.
+    window.history.replaceState(null, '', '/')
+    const otherUser: User = { userId: 'bold-otter', name: 'Bold Otter', calendarStatus: 'not_connected' }
+    // Unlike the closure-variable mocks above, this flow needs the cookie hook to be genuinely
+    // stateful: after "Continue" the refetched users list is structurally identical, so React
+    // Query triggers no re-render — only the hook's own state change (as in the real hook)
+    // makes the newly selected userId take effect.
+    jest.mocked(useSessionCookie).mockImplementation(() => {
+      const [userId, setUserId] = React.useState<string | undefined>(existingUser.userId)
+      return { clearUserId: () => setUserId(undefined), setUserId, userId }
+    })
+    jest.mocked(fetchPoll).mockResolvedValue(poll)
+    jest.mocked(fetchUsers).mockResolvedValue([existingUser, otherUser])
+    jest.mocked(fetchAvailability).mockResolvedValue({
+      userId: existingUser.userId,
+      free: [
+        [false, false],
+        [false, false],
+        [false, false],
+      ],
+      expiration: 1725453600,
+    })
+    jest.mocked(fetchOverlap).mockResolvedValue({
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
+      recommendedMeetings: [],
+    })
+
+    renderWithClient(<Poll sessionId="amber-harbor" />)
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'The overlap' }))
+    expect(screen.getByRole('tab', { name: 'The overlap' })).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: "This isn't me" }))
+    await userEvent.click(await screen.findByRole('radio', { name: /bold otter/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(await screen.findByRole('tab', { name: 'Your hours' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'The overlap' })).toHaveAttribute('aria-selected', 'false')
   })
 
   it('falls back to the identity phase when "This isn\'t me" is clicked after being identified via a ?id= link', async () => {
@@ -424,7 +465,7 @@ describe('Poll', () => {
       expiration: 1725453600,
     })
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 

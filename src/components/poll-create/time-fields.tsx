@@ -1,11 +1,10 @@
-import { Slider } from '@heroui/react'
-import React, { useId } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 
+import { TimeRangePreset, TIME_RANGE_PRESETS, matchingPresetLabel } from './helpers'
+import { useTimeEditorCoordinator } from './time-editor-coordinator'
+import { TimeRangeEditor } from './time-range-editor'
 import { Chip } from '@components/ui/chip'
-import { FOCUS_RING } from '@components/ui/focus-ring'
 import { formatMinuteOfDay } from '@utils/time'
-
-const SLIDER_THUMB_CLASS = `h-5 w-5 rounded-full border-2 border-[var(--ink)] bg-[var(--accent)] shadow-[0_2px_6px_rgba(0,0,0,0.35)] data-[dragging]:scale-110 transition-transform duration-150 ease-out ${FOCUS_RING}`
 
 export const TimesToggle = ({
   usesTimes,
@@ -57,7 +56,7 @@ export const WeekendTimesToggle = ({
   )
 }
 
-export const TimeRangeSlider = ({
+export const TimeRangeField = ({
   startMinute,
   endMinute,
   step,
@@ -75,55 +74,89 @@ export const TimeRangeSlider = ({
   label?: string
 }): React.ReactNode => {
   const labelId = useId()
+  const fieldKey = useId()
+  const { activeKey, setActiveKey } = useTimeEditorCoordinator()
+  const editingField: 'start' | 'end' | null =
+    activeKey === `${fieldKey}-start` ? 'start' : activeKey === `${fieldKey}-end` ? 'end' : null
+  const matchedPreset = matchingPresetLabel(startMinute, endMinute)
+  const chipsDisabled = activeKey !== null
+
+  const triggerRef = useRef<HTMLElement | null>(null)
+
+  const openEditor = (field: 'start' | 'end'): void => {
+    triggerRef.current = document.activeElement as HTMLElement | null
+    setActiveKey(`${fieldKey}-${field}`)
+  }
+  const closeEditor = (): void => setActiveKey(null)
+
+  // Restore focus to the trigger only after the re-render that re-enables it has
+  // committed to the DOM — calling .focus() synchronously in closeEditor would target
+  // a still-disabled button (setActiveKey is batched) and silently fail.
+  useEffect(() => {
+    if (editingField === null && triggerRef.current) {
+      triggerRef.current.focus()
+      triggerRef.current = null
+    }
+  }, [editingField])
+
+  const applyPreset = (preset: TimeRangePreset): void => {
+    onChangeStart(preset.startMinute)
+    onChangeEnd(preset.endMinute)
+  }
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="relative flex flex-col gap-3">
       <span className="text-sm font-medium text-[var(--slate)]" id={labelId}>
         {label}
       </span>
-      <Slider
-        aria-labelledby={labelId}
-        className="px-1"
-        maxValue={1440}
-        minValue={0}
-        onChange={(value) => {
-          const [start, end] = value as number[]
-          onChangeStart(start)
-          onChangeEnd(end)
-        }}
-        step={step}
-        value={[startMinute, endMinute]}
-      >
-        <Slider.Track className="relative h-1.5 rounded-full bg-[var(--bone)]/[0.12]">
-          <Slider.Fill className="absolute h-full rounded-full bg-[var(--accent)]" />
-          {/* react-aria's Slider only formats its aria-valuetext via Intl.NumberFormatOptions,
-              which can't render "9:00 AM" from a raw minute-of-day integer — an explicit
-              aria-valuetext is the correct ARIA attribute for a non-numeric value description
-              and takes priority over whatever the library would otherwise compute, the same way
-              the aria-label below already overrides the library's own generated label. Without
-              it, a screen-reader/keyboard user dragging these thumbs hears the bare integer
-              ("540") instead of the clock time sighted users see below the track. */}
-          <Slider.Thumb
-            aria-label={`From (time), ${label}`}
-            aria-valuetext={formatMinuteOfDay(startMinute)}
-            className={SLIDER_THUMB_CLASS}
-            index={0}
-          />
-          <Slider.Thumb
-            aria-label={`To (time), ${label}`}
-            aria-valuetext={formatMinuteOfDay(endMinute)}
-            className={SLIDER_THUMB_CLASS}
-            index={1}
-          />
-        </Slider.Track>
-      </Slider>
-      <div className="flex justify-between text-xs text-[var(--slate)]">
-        <span>{formatMinuteOfDay(startMinute)}</span>
-        <span>{formatMinuteOfDay(endMinute)}</span>
+      <div aria-labelledby={labelId} className="flex flex-wrap gap-1.5" role="group">
+        {TIME_RANGE_PRESETS.map((preset) => (
+          <Chip
+            disabled={chipsDisabled}
+            key={preset.label}
+            onPress={() => applyPreset(preset)}
+            selected={matchedPreset === preset.label}
+          >
+            {preset.label}
+          </Chip>
+        ))}
+        <Chip disabled={chipsDisabled} onPress={() => openEditor('start')} selected={matchedPreset === undefined}>
+          Custom
+        </Chip>
+      </div>
+      <div className="flex items-center gap-2 text-sm text-[var(--bone)]">
+        <Chip
+          aria-label={`Start time, ${label}, ${formatMinuteOfDay(startMinute)}`}
+          disabled={chipsDisabled}
+          onPress={() => openEditor('start')}
+        >
+          {formatMinuteOfDay(startMinute)}
+        </Chip>
+        <span className="text-xs text-[var(--slate)]">to</span>
+        <Chip
+          aria-label={`End time, ${label}, ${formatMinuteOfDay(endMinute)}`}
+          disabled={chipsDisabled}
+          onPress={() => openEditor('end')}
+        >
+          {formatMinuteOfDay(endMinute)}
+        </Chip>
       </div>
       {error && (
         <span className="text-xs text-red-400" role="alert">
           {error}
         </span>
+      )}
+      {editingField && (
+        <TimeRangeEditor
+          fieldLabel={editingField === 'start' ? `Start time, ${label}` : `End time, ${label}`}
+          key={editingField}
+          minute={editingField === 'start' ? startMinute : endMinute}
+          onCancel={closeEditor}
+          onCommit={(minute) => {
+            ;(editingField === 'start' ? onChangeStart : onChangeEnd)(minute)
+          }}
+          step={step}
+        />
       )}
     </div>
   )

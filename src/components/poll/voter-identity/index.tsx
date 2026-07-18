@@ -98,8 +98,10 @@ const VoterIdentityControl = ({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="max-w-[10rem] truncate text-sm font-semibold text-[var(--bone)]">{currentName}</span>
+    <div className="flex items-center gap-2 text-xs text-[var(--slate)]">
+      <span className="truncate">
+        Voting as <span className="max-w-[10rem] font-semibold text-[var(--bone)]">{currentName}</span>
+      </span>
       <EditNameButton onPress={handleEditClick} ref={editButtonRef} />
       {!isSignedIn && <NotYouButton onPress={onNotYou} />}
     </div>

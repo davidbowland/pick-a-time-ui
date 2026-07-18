@@ -24,6 +24,24 @@ describe('ScenarioPresets', () => {
     })
   })
 
+  it('applies the Weekday dinner preset values when pressed', async () => {
+    const onApply = jest.fn()
+    render(<ScenarioPresets onApply={onApply} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Weekdays Dinner' }))
+
+    expect(onApply).toHaveBeenCalledWith({
+      label: 'Weekday dinner',
+      short: 'Dinner',
+      group: 'weekday',
+      weekdays: [1, 2, 3, 4, 5],
+      usesTimes: true,
+      startMinute: 1050,
+      endMinute: 1200,
+      slotMinutes: 90,
+    })
+  })
+
   it('applies the Weekend dinner preset as Friday-Saturday evening', async () => {
     const onApply = jest.fn()
     render(<ScenarioPresets onApply={onApply} />)

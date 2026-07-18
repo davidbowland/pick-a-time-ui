@@ -61,8 +61,16 @@ export function usePaintGesture(baseGrid: boolean[][], onCommit: (cells: Availab
       return { dateIndex, slotIndex, value }
     })
     onCommit(cells)
-    overlayRef.current = new Map()
-    setOverlay(overlayRef.current)
+    // `onCommit` (PaintingPhase's handler) writes the committed cells into the query cache
+    // synchronously, but TanStack Query's notifyManager schedules the resulting re-render via
+    // `setTimeout(fn, 0)` internally — a real macrotask, not a microtask. Clearing the overlay
+    // synchronously, right here, would render (and could paint) a beat where the overlay's gone
+    // but the caller's underlying grid hasn't caught up yet, flashing the pre-drag state before
+    // snapping back. Deferring via the same style of task lets that scheduled update land first.
+    setTimeout(() => {
+      overlayRef.current = new Map()
+      setOverlay(overlayRef.current)
+    }, 0)
   }, [onCommit])
 
   return { isOn, startPaint, continuePaint, endPaint }

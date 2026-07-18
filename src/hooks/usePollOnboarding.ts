@@ -7,8 +7,6 @@ function storageKey(sessionId: string): string {
 export interface PollOnboarding {
   showIntro: boolean
   dismissIntro: () => void
-  isGuideOpen: boolean
-  toggleGuide: () => void
 }
 
 export function usePollOnboarding(
@@ -17,14 +15,11 @@ export function usePollOnboarding(
 ): PollOnboarding {
   const key = storageKey(sessionId)
   const [showIntro, setShowIntro] = useState(() => storage?.getItem(key) !== 'true')
-  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   const dismissIntro = (): void => {
     storage?.setItem(key, 'true')
     setShowIntro(false)
   }
 
-  const toggleGuide = (): void => setIsGuideOpen((open) => !open)
-
-  return { showIntro, dismissIntro, isGuideOpen, toggleGuide }
+  return { showIntro, dismissIntro }
 }

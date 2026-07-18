@@ -1,10 +1,12 @@
 import { Check } from 'lucide-react'
 import React, { useMemo, useRef } from 'react'
 
+import { ScrollEdgeIndicators } from '../scroll-edge-indicators'
 import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn } from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
 import { usePaintGesture } from '@hooks/usePaintGesture'
+import { useScrollEdges } from '@hooks/useScrollEdges'
 import { AvailabilityCell, Slot } from '@types'
 import { formatShortDate } from '@utils/dates'
 
@@ -76,6 +78,7 @@ const PaintGrid = ({ dates, slots, columns, slotLabels, grid, onCommit }: PaintG
     [columns, dates, slots],
   )
   useInitialColumnScroll(containerRef, columns.length, scores)
+  const scrollEdges = useScrollEdges(containerRef, columns.length + dates.length)
 
   const stopGesture = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (activePointerId.current === null || activePointerId.current !== event.pointerId) return
@@ -107,102 +110,109 @@ const PaintGrid = ({ dates, slots, columns, slotLabels, grid, onCommit }: PaintG
   }
 
   return (
-    // `position: sticky` only pins against the nearest *actual* scroll container — a plain
-    // `overflow-x-auto` div with no height bound never becomes one (its content just grows the
-    // box instead of overflowing it), so the sticky header/date-label cells below would silently
-    // do nothing. Bounding the height and scrolling both axes on this one element makes it a
-    // real scrollport, which both the horizontal slot-column scroll and the sticky pinning
-    // legitimately need — the trade-off is a capped-height panel with its own scrollbar once a
-    // poll has enough dates to exceed it, rather than the whole page scrolling arbitrarily far.
-    //
-    // This is a real <table>, not a `display: grid` of divs, because `position: sticky` applied
-    // directly to a grid item loses its stuck position once horizontal scroll nears the end of
-    // the scrollable range — reproduced in a real browser against this exact
-    // column/gap/sticky/overflow-auto combination. Sticky `<th>` cells in a table don't have that
-    // failure mode; it's the standard pattern for frozen table headers/columns. The drag-paint
-    // gesture below is untouched by this — it hit-tests via `elementFromPoint` and reads
-    // `data-date-index`/`data-slot-index` off whichever button is under the pointer, neither of
-    // which cares what the button's ancestor markup is.
-    <div
-      className="max-h-[32rem] overflow-auto"
-      onPointerCancel={stopGesture}
-      onPointerDown={handlePointerDown}
-      onPointerLeave={stopGesture}
-      onPointerMove={handlePointerMove}
-      onPointerUp={stopGesture}
-      ref={containerRef}
-      // Without this, dragging a finger across the grid is interpreted as a page pan/scroll —
-      // the browser fires `pointercancel` mid-gesture instead of delivering `pointermove`.
-      style={{ touchAction: 'none' }}
-    >
-      <table className="w-full border-separate border-spacing-1">
-        {showSlotHeader && (
-          <thead>
-            <tr>
-              <th className="sticky left-0 top-0 z-10 min-w-24 bg-[var(--ink)]" data-scroll-label />
-              {columns.map((column, index) => (
-                <th
-                  className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] p-0 text-center text-xs font-semibold"
-                  data-scroll-column
-                  key={`${column.startMinute}-${column.endMinute}`}
-                  scope="col"
-                >
-                  {slotLabels[index]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {dates.map((date, dateIndex) => {
-            const dateLabel = formatShortDate(date)
-            const dateSlots = slots[dateIndex] ?? []
-            return (
-              <tr key={date}>
-                <th
-                  className="sticky left-0 z-10 min-w-24 bg-[var(--ink)] py-0 pr-3 pl-0 text-right text-xs font-normal text-[var(--slate)]"
-                  scope="row"
-                >
-                  {dateLabel}
-                </th>
-                {columns.map((column, index) => {
-                  const slot = findCellForColumn(dateSlots, column)
-                  if (!slot) {
+    <div className="relative">
+      <ScrollEdgeIndicators edges={scrollEdges} />
+      {/* `position: sticky` only pins against the nearest *actual* scroll container — a plain
+      `overflow-x-auto` div with no height bound never becomes one (its content just grows the
+      box instead of overflowing it), so the sticky header/date-label cells below would silently
+      do nothing. Bounding the height and scrolling both axes on this one element makes it a
+      real scrollport, which both the horizontal slot-column scroll and the sticky pinning
+      legitimately need — the trade-off is a capped-height panel with its own scrollbar once a
+      poll has enough dates to exceed it, rather than the whole page scrolling arbitrarily far.
+
+      This is a real <table>, not a `display: grid` of divs, because `position: sticky` applied
+      directly to a grid item loses its stuck position once horizontal scroll nears the end of
+      the scrollable range — reproduced in a real browser against this exact
+      column/gap/sticky/overflow-auto combination. Sticky `<th>` cells in a table don't have that
+      failure mode; it's the standard pattern for frozen table headers/columns. The drag-paint
+      gesture below is untouched by this — it hit-tests via `elementFromPoint` and reads
+      `data-date-index`/`data-slot-index` off whichever button is under the pointer, neither of
+      which cares what the button's ancestor markup is. */}
+      <div
+        className="max-h-[32rem] overflow-auto"
+        onPointerCancel={stopGesture}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={stopGesture}
+        onPointerMove={handlePointerMove}
+        onPointerUp={stopGesture}
+        ref={containerRef}
+      >
+        <table className="w-full border-separate border-spacing-1">
+          {showSlotHeader && (
+            <thead>
+              <tr>
+                <th className="sticky left-0 top-0 z-10 w-0 min-w-16 bg-[var(--ink)]" data-scroll-label />
+                {columns.map((column, index) => (
+                  <th
+                    className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] p-0 text-center text-xs font-semibold"
+                    data-scroll-column
+                    key={`${column.startMinute}-${column.endMinute}`}
+                    scope="col"
+                  >
+                    {slotLabels[index]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {dates.map((date, dateIndex) => {
+              const dateLabel = formatShortDate(date)
+              const dateSlots = slots[dateIndex] ?? []
+              return (
+                <tr key={date}>
+                  <th
+                    // w-0 pins the label column at its min-width — same fix as HeatGrid: table
+                    // auto layout otherwise hands this column a large share of spare width.
+                    className="sticky left-0 z-10 w-0 min-w-16 bg-[var(--ink)] py-0 pr-3 pl-3 text-right text-xs font-normal whitespace-nowrap text-[var(--slate)]"
+                    scope="row"
+                  >
+                    {dateLabel}
+                  </th>
+                  {columns.map((column, index) => {
+                    const slot = findCellForColumn(dateSlots, column)
+                    if (!slot) {
+                      return (
+                        <td className="p-0" key={`${column.startMinute}-${column.endMinute}`}>
+                          <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                        </td>
+                      )
+                    }
+                    const on = gesture.isOn(dateIndex, slot.slotIndex)
                     return (
-                      <td className="p-0" key={`${column.startMinute}-${column.endMinute}`}>
-                        <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                      <td className="p-0" key={slot.slotIndex}>
+                        {/* touch-none lives on the cell button itself, not the scrollport: a touch that
+                          starts on a cell paints (and the browser won't hijack it into a page/grid
+                          scroll mid-drag), while a touch starting on the sticky date/time-label
+                          headers — which aren't buttons — keeps its default touch-action and scrolls
+                          the grid normally. */}
+                        <button
+                          aria-label={cellLabel(dateLabel, slotLabels[index], showSlotHeader)}
+                          aria-pressed={on}
+                          className={`flex h-8 w-full touch-none items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${
+                            on ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
+                          }`}
+                          data-date-index={dateIndex}
+                          data-slot-index={slot.slotIndex}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return
+                            e.preventDefault()
+                            gesture.startPaint(dateIndex, slot.slotIndex)
+                            gesture.endPaint()
+                          }}
+                          type="button"
+                        >
+                          {on && <Check aria-hidden="true" className="h-4 w-4 text-[var(--ink)]/70" />}
+                        </button>
                       </td>
                     )
-                  }
-                  const on = gesture.isOn(dateIndex, slot.slotIndex)
-                  return (
-                    <td className="p-0" key={slot.slotIndex}>
-                      <button
-                        aria-label={cellLabel(dateLabel, slotLabels[index], showSlotHeader)}
-                        aria-pressed={on}
-                        className={`flex h-8 w-full items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${
-                          on ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
-                        }`}
-                        data-date-index={dateIndex}
-                        data-slot-index={slot.slotIndex}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter' && e.key !== ' ') return
-                          e.preventDefault()
-                          gesture.startPaint(dateIndex, slot.slotIndex)
-                          gesture.endPaint()
-                        }}
-                        type="button"
-                      >
-                        {on && <Check aria-hidden="true" className="h-4 w-4 text-[var(--ink)]/70" />}
-                      </button>
-                    </td>
-                  )
-                })}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

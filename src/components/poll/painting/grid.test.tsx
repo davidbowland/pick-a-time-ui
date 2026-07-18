@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import React from 'react'
 
 import { TimeWindow } from '../slot-columns'
@@ -102,5 +102,28 @@ describe('PaintGrid semantic table markup', () => {
   it('renders the grid as a real table', () => {
     renderGrid()
     expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+})
+
+describe('PaintGrid scroll edge indicators', () => {
+  it('shows a right-edge indicator once content overflows, and hides it once scrolled to the end', () => {
+    const { container } = renderGrid()
+    const scrollport = container.querySelector('.overflow-auto') as HTMLElement
+    Object.defineProperty(scrollport, 'clientWidth', { configurable: true, value: 100 })
+    Object.defineProperty(scrollport, 'scrollWidth', { configurable: true, value: 300 })
+    Object.defineProperty(scrollport, 'scrollLeft', { configurable: true, value: 0, writable: true })
+
+    act(() => {
+      scrollport.dispatchEvent(new Event('scroll'))
+    })
+    expect(screen.getByTestId('scroll-edge-right')).toBeInTheDocument()
+    expect(screen.queryByTestId('scroll-edge-left')).not.toBeInTheDocument()
+
+    act(() => {
+      scrollport.scrollLeft = 200
+      scrollport.dispatchEvent(new Event('scroll'))
+    })
+    expect(screen.queryByTestId('scroll-edge-right')).not.toBeInTheDocument()
+    expect(screen.getByTestId('scroll-edge-left')).toBeInTheDocument()
   })
 })

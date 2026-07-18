@@ -2,7 +2,15 @@ import { useQuery } from '@tanstack/react-query'
 import React, { useMemo } from 'react'
 
 import { buildUnionColumns } from '../slot-columns'
-import { BestSlotBanner, EmptyBestSlot, ErrorState, formatMeetingLabel, LoadingState, SuggestedTimes } from './elements'
+import {
+  BestSlotBanner,
+  EmptyBestSlot,
+  ErrorState,
+  formatMeetingLabel,
+  LoadingState,
+  ParticipationStatus,
+  SuggestedTimes,
+} from './elements'
 import { HeatGrid } from './heat-grid'
 import { fetchOverlap, OverlapResponse } from '@services/api'
 import { PollData, User } from '@types'
@@ -14,9 +22,10 @@ export interface ResultsPhaseProps {
   sessionId: string
   poll: PollData
   users: User[]
+  viewerUserId?: string
 }
 
-const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.ReactNode => {
+const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProps): React.ReactNode => {
   const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
   const { data, isLoading, isError, refetch } = useQuery<OverlapResponse>({
     queryKey: ['overlap', sessionId],
@@ -56,6 +65,7 @@ const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.Reac
 
   return (
     <div className="flex flex-col gap-4">
+      <ParticipationStatus count={poll.participantCount} />
       {singleSlotWindow && (
         <p className="text-xs text-[var(--slate)]">
           Meeting time:{' '}
@@ -71,21 +81,32 @@ const ResultsPhase = ({ sessionId, poll, users }: ResultsPhaseProps): React.Reac
       {!bestSlot || bestSlot.freeCount === 0 ? (
         <EmptyBestSlot />
       ) : (
-        <BestSlotBanner freeCount={bestSlot.freeCount} label={label} total={poll.participantCount} />
+        <BestSlotBanner
+          freeCount={bestSlot.freeCount}
+          freeUserIds={bestSlot.freeUserIds ?? []}
+          label={label}
+          total={poll.participantCount}
+          users={users}
+          viewerUserId={viewerUserId}
+        />
       )}
       <HeatGrid
+        bestSlot={bestSlot && bestSlot.freeCount > 0 ? bestSlot : undefined}
         cells={data.grid?.cells ?? []}
         columns={columns}
         dateLabels={dateLabels}
         participantCount={poll.participantCount}
+        recommendedMeetings={data.recommendedMeetings ?? []}
         slotLabels={slotLabels}
         users={users}
+        viewerUserId={viewerUserId}
       />
       <SuggestedTimes
         meetings={data.recommendedMeetings ?? []}
         poll={poll}
         users={users}
         viewerTimezone={viewerTimezone}
+        viewerUserId={viewerUserId}
       />
     </div>
   )

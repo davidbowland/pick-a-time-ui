@@ -58,7 +58,7 @@ export const PollNameField = React.forwardRef<HTMLInputElement, PollNameFieldPro
         className="border border-[var(--slate)]/70 bg-[var(--bone)]/[0.04] text-[var(--bone)] placeholder:text-[var(--slate)]"
         maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g. Lunch with friends"
+        placeholder="e.g. Movie night"
         ref={ref}
         value={value}
       />

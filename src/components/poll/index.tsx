@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { ErrorState, LoadingState } from './elements'
 import { derivePhase } from './helpers'
 import IdentityPhase from './identity'
-import { IntroExplainer, WhatIsThisToggle } from './onboarding/elements'
+import { IntroExplainer } from './onboarding/elements'
 import PaintingPhase from './painting'
 import ResultsPhase from './results'
 import VoterIdentityControl from './voter-identity'
@@ -77,6 +77,9 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
   // machine stays stuck on `identity` forever. Invalidating forces a refetch that picks it up.
   const handleUserSelected = (newUserId: string): void => {
     setUserId(newUserId)
+    // The previous voter's tab choice (e.g. "The overlap") must not carry over to whoever
+    // joins next — every newly selected user starts on their own hours.
+    setTab('painting')
     void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
   }
 
@@ -104,28 +107,17 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
   if (phase === 'loading' || !poll) return <LoadingState />
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
+      {/* One header unit: title and actions share a row, the deadline tucks tight beneath —
+          the share buttons never wrap into an orphan row of unlabeled chrome at any width. */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl text-[var(--bone)]" style={{ fontFamily: 'var(--font-display)' }}>
             {poll.name}
           </h1>
-          <WhatIsThisToggle
-            dateCount={poll.dates.length}
-            hasJoined={phase !== 'identity'}
-            isOpen={onboarding.isGuideOpen}
-            onToggle={onboarding.toggleGuide}
-            pollName={poll.name}
-          />
+          {phase !== 'identity' && <Share pollName={poll.name} sessionId={sessionId} />}
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <p className="text-xs text-[var(--slate)]">{formatExpiration(poll.expiration, viewerTimezone)}</p>
-          {phase !== 'identity' && (
-            <div className="ml-auto">
-              <Share pollName={poll.name} sessionId={sessionId} />
-            </div>
-          )}
-        </div>
+        <p className="text-xs text-[var(--slate)]">{formatExpiration(poll.expiration, viewerTimezone)}</p>
       </div>
       {phase === 'identity' ? (
         <>
@@ -141,7 +133,7 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-start gap-3 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between">
             <div
               className="inline-flex shrink-0 gap-1 self-start rounded-full border border-[var(--hair)] bg-[var(--bone)]/[0.04] p-1"
               role="tablist"
@@ -175,7 +167,12 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
           {tab === 'painting' ? (
             <PaintingPhase poll={poll} sessionId={sessionId} userId={effectiveUserId as string} />
           ) : (
-            <ResultsPhase poll={poll} sessionId={sessionId} users={users ?? []} />
+            <ResultsPhase
+              poll={poll}
+              sessionId={sessionId}
+              users={users ?? []}
+              viewerUserId={effectiveUserId as string}
+            />
           )}
         </>
       )}

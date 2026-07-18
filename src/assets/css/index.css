@@ -19,6 +19,11 @@ body {
 }
 
 html.dark {
+  /* Tells the browser to draw native chrome — scrollbars, form controls not otherwise themed
+     below — in dark colors. Without it the OS/browser default (light) scrollbar renders as a
+     stray light-colored line down the page against this near-black background. */
+  color-scheme: dark;
+
   --ink: #17171a;
   --bone: #f2f1ee;
   --accent: #3fae8a;
@@ -32,12 +37,21 @@ html.dark {
   --heat-2: #55c39b;
   --heat-3: #84d4b7;
   --heat-4: #b4e4d3;
+  --gold: #f2b84a;
 
   /* Form fields (radio, checkbox, text input controls). HeroUI's own defaults put an
      unselected control's background within a hair of --ink with a transparent border, so
-     e.g. an unchecked radio dot is effectively invisible against our page background. */
+     e.g. an unchecked radio dot is effectively invisible against our page background.
+     --field-border specifically uses --slate rather than the fainter --hair (meant for large
+     card/button outlines) because a small radio/checkbox control needs its boundary to actually
+     read as a control at a glance — --hair's 22%-alpha line falls well short of the 3:1 UI
+     component contrast WCAG AA requires here. --field-border-width goes beyond HeroUI's 1px
+     default for a related but separate reason: even at 3:1+ color contrast, a 1px stroke on a
+     16px circle doesn't read as a visible ring — that's a stroke-weight problem, not a color
+     one. */
   --field-background: var(--surface);
-  --field-border: var(--hair);
+  --field-border: var(--slate);
+  --field-border-width: 2px;
   --field-foreground: var(--bone);
 
   /* Backgrounds */

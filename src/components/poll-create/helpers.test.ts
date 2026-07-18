@@ -5,7 +5,9 @@ import {
   formatTimeLabel,
   formatWeekdaysSummary,
   generateWeekdayDates,
+  matchingPresetLabel,
   reconcilePatternDates,
+  TIME_RANGE_PRESETS,
   updateExcludedDates,
 } from './helpers'
 
@@ -297,5 +299,29 @@ describe('computeWeekendOverride', () => {
       startMinute: 660,
       endMinute: 720,
     })
+  })
+})
+
+describe('TIME_RANGE_PRESETS', () => {
+  it('keeps every preset hour-aligned so it stays valid at any step', () => {
+    TIME_RANGE_PRESETS.forEach((preset) => {
+      expect(preset.startMinute % 60).toBe(0)
+      expect(preset.endMinute % 60).toBe(0)
+    })
+  })
+
+  it('makes "All day" a superset of every other preset, including the latest Quick-fill scenario (Weekend dinner, ending 9:00 PM/1260)', () => {
+    const allDay = TIME_RANGE_PRESETS.find((preset) => preset.label === 'All day')
+    expect(allDay).toEqual({ label: 'All day', startMinute: 480, endMinute: 1260 })
+  })
+})
+
+describe('matchingPresetLabel', () => {
+  it('returns the label of the preset matching the given range exactly', () => {
+    expect(matchingPresetLabel(1020, 1260)).toBe('Evening')
+  })
+
+  it('returns undefined when no preset matches', () => {
+    expect(matchingPresetLabel(600, 700)).toBeUndefined()
   })
 })

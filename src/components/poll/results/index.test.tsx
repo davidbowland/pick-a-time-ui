@@ -97,7 +97,7 @@ describe('ResultsPhase', () => {
           },
         ],
       ],
-      bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 3 },
+      bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 3, freeUserIds: [] },
     },
     recommendedMeetings: [],
   }
@@ -114,6 +114,14 @@ describe('ResultsPhase', () => {
 
     expect(await screen.findByText(/3 of 3/i)).toBeInTheDocument()
     expect(fetchOverlap).toHaveBeenCalledWith('amber-harbor')
+  })
+
+  it('should say how many people are in so far, sourced from the poll participant count', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText(/3 people so far/i)).toBeInTheDocument()
   })
 
   it('should show a loading state while the overlap request is in flight', async () => {
@@ -140,7 +148,7 @@ describe('ResultsPhase', () => {
   it('should show a friendly empty state instead of "0 of 3 free" when nobody overlaps yet', async () => {
     jest.mocked(fetchOverlap).mockResolvedValueOnce({
       ...overlapResponse,
-      grid: { ...overlapResponse.grid, bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { ...overlapResponse.grid, bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
     })
 
     renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
@@ -149,9 +157,23 @@ describe('ResultsPhase', () => {
     expect(screen.queryByText(/of 3 free/i)).not.toBeInTheDocument()
   })
 
+  it('should not mark any grid cell as the best slot when nobody overlaps yet', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce({
+      ...overlapResponse,
+      grid: { ...overlapResponse.grid, bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
+    })
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    await screen.findByText(/no overlap yet/i)
+    // The star badge is aria-hidden (decorative — the aria-label suffix is the accessible
+    // signal), so it has to be checked via a test id rather than role/name.
+    expect(screen.queryByTestId('best-slot-star')).not.toBeInTheDocument()
+  })
+
   it('should state the meeting time for a single-slot timed poll even before anyone has any overlap', async () => {
     jest.mocked(fetchOverlap).mockResolvedValueOnce({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -165,7 +187,7 @@ describe('ResultsPhase', () => {
 
   it('should not show a meeting-time line for a multi-slot timed poll or a dates-only poll', async () => {
     jest.mocked(fetchOverlap).mockResolvedValue({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -219,7 +241,7 @@ describe('ResultsPhase', () => {
         cells: [
           [{ dateIndex: 0, slotIndex: 0, startMinute: 0, endMinute: 1440, freeCount: 3, freeUserIds: ['a', 'b', 'c'] }],
         ],
-        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 3 },
+        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 3, freeUserIds: [] },
       },
       recommendedMeetings: [
         {
@@ -342,6 +364,28 @@ describe('ResultsPhase', () => {
     expect(await screen.findByText(/^amber tide$/i)).toBeInTheDocument()
   })
 
+  it('should mark the grid cell that matches the best slot and recommended meetings', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce({
+      ...overlapResponse,
+      recommendedMeetings: [
+        {
+          dateIndex: 0,
+          slotIndex: 0,
+          date: '2025-09-04',
+          startMinute: 1080,
+          endMinute: 1140,
+          freeCount: 3,
+          freeUserIds: ['a', 'b', 'c'],
+          excludedByCalendar: [],
+        },
+      ],
+    })
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByRole('button', { name: /recommended, best time/i })).toBeInTheDocument()
+  })
+
   it('should fall back gracefully when the response has no grid/bestSlot', async () => {
     jest
       .mocked(fetchOverlap)
@@ -355,7 +399,7 @@ describe('ResultsPhase', () => {
   it('should not render the literal word "undefined" when the best slot date index is out of range', async () => {
     jest.mocked(fetchOverlap).mockResolvedValueOnce({
       ...overlapResponse,
-      grid: { ...overlapResponse.grid, bestSlot: { dateIndex: 99, slotIndex: 0, freeCount: 3 } },
+      grid: { ...overlapResponse.grid, bestSlot: { dateIndex: 99, slotIndex: 0, freeCount: 3, freeUserIds: [] } },
     })
 
     renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
@@ -376,7 +420,7 @@ describe('ResultsPhase', () => {
   it('converts the single-slot meeting-time note to the viewer timezone', async () => {
     jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
     jest.mocked(fetchOverlap).mockResolvedValueOnce({
-      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 } },
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
       recommendedMeetings: [],
     })
 
@@ -428,7 +472,7 @@ describe('ResultsPhase', () => {
           [{ dateIndex: 0, slotIndex: 0, startMinute: 540, endMinute: 600, freeCount: 0, freeUserIds: [] }],
           [{ dateIndex: 1, slotIndex: 0, startMinute: 660, endMinute: 720, freeCount: 0, freeUserIds: [] }],
         ],
-        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0 },
+        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] },
       },
       recommendedMeetings: [],
     })

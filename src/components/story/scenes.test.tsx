@@ -30,6 +30,11 @@ describe('illustrative story scenes', () => {
     expect(screen.getByRole('heading', { name: /one link/i })).toBeInTheDocument()
   })
 
+  it('ShareScene draws a real QR code for the pick-a-time homepage', () => {
+    const { container } = render(<ShareScene />)
+    expect(container.querySelector('svg title')).toHaveTextContent('QR code for pick-a-time.com')
+  })
+
   it('none of the illustrative phone mockups expose fake interactive controls to assistive tech', () => {
     for (const Scene of [HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene]) {
       const { container, unmount } = render(<Scene />)

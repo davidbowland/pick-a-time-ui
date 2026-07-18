@@ -1,9 +1,13 @@
+import { PopoverContent, PopoverDialog } from '@heroui/react'
+import { Star } from 'lucide-react'
 import React, { useMemo, useRef, useState } from 'react'
 
+import { ScrollEdgeIndicators } from '../scroll-edge-indicators'
 import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn } from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
-import { OverlapCell } from '@services/api'
+import { useScrollEdges } from '@hooks/useScrollEdges'
+import { OverlapCell, RecommendedMeeting } from '@services/api'
 import { User } from '@types'
 import { pickAccessibleTextColor } from '@utils/contrast'
 import { displayName } from '@utils/users'
@@ -53,22 +57,53 @@ export function heatColorFor(freeCount: number, participantCount: number): strin
   return mixHex(HEAT_STEPS[lowerIndex].hex, HEAT_STEPS[upperIndex].hex, scaled - lowerIndex)
 }
 
+export function isRecommendedCell(
+  cell: { dateIndex: number; slotIndex: number },
+  recommendedMeetings: RecommendedMeeting[],
+): boolean {
+  return recommendedMeetings.some(
+    (meeting) => meeting.dateIndex === cell.dateIndex && meeting.slotIndex === cell.slotIndex,
+  )
+}
+
+export function isBestSlotCell(
+  cell: { dateIndex: number; slotIndex: number },
+  bestSlot?: { dateIndex: number; slotIndex: number },
+): boolean {
+  return !!bestSlot && bestSlot.dateIndex === cell.dateIndex && bestSlot.slotIndex === cell.slotIndex
+}
+
+// Mirrors missingUserIds in results/elements.tsx: the viewer is pulled to the front of the list
+// so "You" reads as an answer to "am I free then?" rather than being buried mid-list.
+export function orderFreeUserIds(freeUserIds: string[], viewerUserId?: string): string[] {
+  return viewerUserId !== undefined && freeUserIds.includes(viewerUserId)
+    ? [viewerUserId, ...freeUserIds.filter((id) => id !== viewerUserId)]
+    : freeUserIds
+}
+
 export const HeatGrid = ({
   cells,
   columns,
   dateLabels,
   slotLabels,
   participantCount,
+  recommendedMeetings = [],
+  bestSlot,
   users,
+  viewerUserId,
 }: {
   cells: OverlapCell[][]
   columns: TimeWindow[]
   dateLabels: string[]
   slotLabels: string[]
   participantCount: number
+  recommendedMeetings?: RecommendedMeeting[]
+  bestSlot?: { dateIndex: number; slotIndex: number }
   users: User[]
+  viewerUserId?: string
 }): React.ReactNode => {
   const [selected, setSelected] = useState<OverlapCell | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const isDatesOnly = slotLabels.length === 0
   const columnCount = isDatesOnly ? 1 : columns.length
 
@@ -88,10 +123,13 @@ export const HeatGrid = ({
     [cells, columns, dateLabels, isDatesOnly],
   )
   useInitialColumnScroll(containerRef, columnCount, scores)
+  const scrollEdges = useScrollEdges(containerRef, columnCount + dateLabels.length)
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Bounded height + scroll on both axes, matching the painting grid's scroll container
+      <div className="relative">
+        <ScrollEdgeIndicators edges={scrollEdges} />
+        {/* Bounded height + scroll on both axes, matching the painting grid's scroll container
           exactly — `position: sticky` below only pins against an actual scrollport, which a
           plain `overflow-x-auto` div with no height bound never becomes (see painting/grid.tsx
           for the full explanation). Same many-columns scenario applies here (a wide time window
@@ -103,66 +141,129 @@ export const HeatGrid = ({
           column/gap/sticky/overflow-auto combination. Sticky `<th>` cells in a table don't have
           that failure mode; it's the standard pattern for frozen table headers/columns, and it
           gives screen readers real row/column header associations as a side benefit. */}
-      <div className="max-h-[32rem] overflow-auto" ref={containerRef}>
-        <table className="w-full border-separate border-spacing-1">
-          {!isDatesOnly && (
-            <thead>
-              <tr>
-                <th className="sticky left-0 top-0 z-10 min-w-32 bg-[var(--ink)]" data-scroll-label />
-                {columns.map((column, index) => (
+        <div className="max-h-[32rem] overflow-auto" onScroll={() => setSelected(null)} ref={containerRef}>
+          {/* Cell gaps come from td/th padding, NOT border-spacing: spacing gaps are transparent
+            holes in the sticky label column/header band, so ring and star fragments scrolled
+            beneath them would stay visible through the gaps no matter the z-index. With padding
+            the sticky cells' opaque boxes touch, forming a solid band that fully hides whatever
+            scrolls under it. */}
+          <table className="w-full border-separate">
+            {!isDatesOnly && (
+              <thead>
+                <tr>
+                  {/* Layer ladder for this grid's sticky/overlay pieces, bottom to top:
+                    cells + recommended rings (z-auto) < column headers (z-10) < best-slot star
+                    (z-20, so it can overhang the header row) < date column (z-30, so cells,
+                    rings, AND stars all disappear under it when scrolled) < this corner cell
+                    (z-40, covers both headers scrolling beneath it) < scroll chevrons (z-50). */}
+                  {/* The ink box-shadows on this cell and the row-label cells below bridge the
+                    sub-pixel seams between adjacent sticky cells (the thead row's text-driven
+                    height is fractional), which otherwise let the z-20 star show through as a
+                    hairline when it scrolls beneath the label column. */}
                   <th
-                    className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] p-0 text-center text-xs font-semibold text-[var(--bone)]"
-                    data-scroll-column
-                    key={`${column.startMinute}-${column.endMinute}`}
-                    scope="col"
+                    className="sticky left-0 top-0 z-40 w-0 min-w-16 bg-[var(--ink)] shadow-[0_2px_0_var(--ink)]"
+                    data-scroll-label
+                  />
+                  {columns.map((column, index) => (
+                    <th
+                      className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] px-0.5 pt-0 pb-0.5 text-center text-xs font-semibold text-[var(--bone)]"
+                      data-scroll-column
+                      key={`${column.startMinute}-${column.endMinute}`}
+                      scope="col"
+                    >
+                      {slotLabels[index]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody>
+              {dateLabels.map((dateLabel, dateIndex) => (
+                <tr key={dateLabel}>
+                  <th
+                    // w-0 pins the label column at its min-width: with the table stretched by
+                    // w-full, auto layout otherwise hands this column a large share of any spare
+                    // width, leaving a wide dead zone left of the right-aligned labels.
+                    className="sticky left-0 z-30 w-0 min-w-16 bg-[var(--ink)] py-0 pr-3 pl-3 text-right text-xs font-normal whitespace-nowrap text-[var(--slate)] shadow-[0_-2px_0_var(--ink),0_2px_0_var(--ink)]"
+                    scope="row"
                   >
-                    {slotLabels[index]}
+                    {dateLabel}
                   </th>
-                ))}
-              </tr>
-            </thead>
-          )}
-          <tbody>
-            {dateLabels.map((dateLabel, dateIndex) => (
-              <tr key={dateLabel}>
-                <th
-                  className="sticky left-0 z-10 min-w-32 bg-[var(--ink)] py-0 pr-3 pl-0 text-right text-xs font-normal text-[var(--slate)]"
-                  scope="row"
-                >
-                  {dateLabel}
-                </th>
-                {Array.from({ length: columnCount }, (_, index) => {
-                  const cell = isDatesOnly
-                    ? cells[dateIndex]?.[0]
-                    : findCellForColumn(cells[dateIndex] ?? [], columns[index])
-                  if (!isDatesOnly && !cell) {
+                  {Array.from({ length: columnCount }, (_, index) => {
+                    const cell = isDatesOnly
+                      ? cells[dateIndex]?.[0]
+                      : findCellForColumn(cells[dateIndex] ?? [], columns[index])
+                    if (!isDatesOnly && !cell) {
+                      return (
+                        <td className="p-0.5" key={`${columns[index].startMinute}-${columns[index].endMinute}`}>
+                          <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                        </td>
+                      )
+                    }
+                    const freeCount = cell?.freeCount ?? 0
+                    const color = heatColorFor(freeCount, participantCount)
+                    const slotLabel = isDatesOnly ? undefined : slotLabels[index]
+                    const recommended = cell ? isRecommendedCell(cell, recommendedMeetings) : false
+                    const best = cell ? isBestSlotCell(cell, bestSlot) : false
+                    const statusSuffix = recommended ? (best ? ', recommended, best time' : ', recommended') : ''
                     return (
-                      <td className="p-0" key={`${columns[index].startMinute}-${columns[index].endMinute}`}>
-                        <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                      <td className="p-0.5" key={index}>
+                        <button
+                          aria-expanded={selected === cell}
+                          aria-haspopup="dialog"
+                          aria-label={`${dateLabel}${slotLabel ? `, ${slotLabel}` : ''}, ${freeCount} of ${participantCount} free${statusSuffix}`}
+                          className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
+                          onClick={(event) => {
+                            if (!cell) return
+                            triggerRef.current = event.currentTarget
+                            if (selected === cell) {
+                              setSelected(null)
+                              return
+                            }
+                            setSelected(cell)
+                          }}
+                          style={{ background: color, color: pickAccessibleTextColor(color) }}
+                          type="button"
+                        >
+                          {freeCount}
+                          {recommended && (
+                            // A bordered span, not `outline`: outlines paint in the CSS outline
+                            // phase, on top of every same-stacking-context element regardless of
+                            // z-index — including the sticky date column — so an outlined ring
+                            // stayed visible over the date labels after horizontal scroll. A
+                            // bordered child paints at the cell's own level and hides correctly.
+                            // -inset-0.5 keeps the ring inside this cell's own padding, so a
+                            // neighboring sticky cell's opaque box never clips it at rest.
+                            <span
+                              aria-hidden="true"
+                              className="absolute -inset-0.5 rounded-md border-2 border-[var(--gold)]"
+                            />
+                          )}
+                          {best && (
+                            <span
+                              aria-hidden="true"
+                              // z-20 sits between the column-header row (z-10) and the sticky date
+                              // column (z-30): the badge stays visible when it overhangs the header
+                              // row from a top-row cell, but still slides under the opaque date
+                              // column with the rest of the cell on horizontal scroll.
+                              className="absolute -top-[7px] -right-[7px] z-20 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--gold)]"
+                            >
+                              <Star
+                                className="h-2 w-2 text-[var(--ink)]"
+                                data-testid="best-slot-star"
+                                fill="currentColor"
+                              />
+                            </span>
+                          )}
+                        </button>
                       </td>
                     )
-                  }
-                  const freeCount = cell?.freeCount ?? 0
-                  const color = heatColorFor(freeCount, participantCount)
-                  const slotLabel = isDatesOnly ? undefined : slotLabels[index]
-                  return (
-                    <td className="p-0" key={index}>
-                      <button
-                        aria-label={`${dateLabel}${slotLabel ? `, ${slotLabel}` : ''}, ${freeCount} of ${participantCount} free`}
-                        className={`flex h-8 w-full items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
-                        onClick={() => cell && setSelected(cell)}
-                        style={{ background: color, color: pickAccessibleTextColor(color) }}
-                        type="button"
-                      >
-                        {freeCount}
-                      </button>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="flex items-center gap-1 text-[10px] text-[var(--slate)]">
         <span>0 free</span>
@@ -171,27 +272,71 @@ export const HeatGrid = ({
         ))}
         <span>all free</span>
       </div>
-      {selected ? (
-        <div className="flex flex-col gap-1 text-xs text-[var(--slate)]">
-          <span>
-            {selected.freeCount} of {participantCount} free:
-          </span>
-          {selected.freeUserIds.length === 0 ? (
-            <span>no one yet</span>
-          ) : (
-            // Each name renders as its own list item, not a single comma-joined string, so an
-            // individual person's name is a discrete accessible text node rather than a
-            // substring buried inside one paragraph.
-            <ul className="flex flex-wrap gap-x-3 gap-y-1">
-              {selected.freeUserIds.map((id) => {
-                const user = users.find((u) => u.userId === id)
-                return <li key={id}>{user ? displayName(user) : id}</li>
-              })}
-            </ul>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs text-[var(--slate)]">Tap a square to see who&rsquo;s free then.</p>
+      <p className="text-xs text-[var(--slate)]">Tap a square to see who&rsquo;s free.</p>
+      {/* The popover's state management uses three distinct patterns to work around react-aria's
+        standalone Popover limitations. First, the component only mounts when a cell is selected
+        (`{selected && (<PopoverContent ...>)}`), rather than always rendering with `isOpen={!!selected}`.
+        This isn't just a style choice: the popover body unconditionally dereferences `selected.dateIndex`,
+        `selected.freeCount`, and `selected.freeUserIds` below — an always-mounted `isOpen={!!selected}`
+        variant would still render that body when `selected` is null and throw. The conditional mount is
+        what makes those unguarded reads safe, by ensuring the body only ever renders while `selected` is set.
+
+        Second, the dynamic `key={`${selected.dateIndex}-${selected.slotIndex}`}` on PopoverContent
+        forces a full unmount/remount cycle whenever the user clicks a different cell while a popover is open.
+        React-aria's Popover computes its on-screen position once at mount by reading `triggerRef.current`'s
+        bounding rect, with no built-in reposition mechanism if that ref's pointee changes. Without the key-based
+        remount, jumping between cells would leave the popover anchored to the previous cell's screen position
+        while displaying the new cell's data — a visual disconnect. The remount guarantees a fresh position
+        calculation against whichever button the ref currently targets.
+
+        Third, `shouldCloseOnInteractOutside` uses a containment check rather than rejecting all clicks:
+        `!(element instanceof Node) || !triggerRef.current?.contains(element)`. In standalone Popover mode
+        (no DialogTrigger wrapper), react-aria's dismiss logic has no built-in knowledge that the grid cell's
+        `<button>` IS the trigger, so every click registers as an "outside click" and closes the popover via
+        the library's own path — including re-clicks to close or clicks on nested elements like the best-slot
+        star badge. Without this override, that would close the popover before this component's own onClick
+        toggle can run, producing a close-then-instantly-reopen glitch. The containment check (not identity)
+        matters because `event.target` can be a descendant of the button (the star badge SVG inside a cell's
+        button), not the button itself. */}
+      {selected && (
+        <PopoverContent
+          className="rounded-xl border border-[var(--hair)] bg-[var(--ink)] shadow-lg"
+          // isNonModal: this is a read-only "who's free" peek, not a workflow the user must
+          // finish. Modal mode (the default) renders a blocking underlay that locks page scroll
+          // and swallows the first outside click/tap as a dismiss gesture — on touch that means
+          // the whole page feels frozen until an extra tap. Non-modal keeps the rest of the page
+          // fully interactive; outside interactions still close the popover, they just also act
+          // immediately.
+          isNonModal
+          isOpen
+          key={`${selected.dateIndex}-${selected.slotIndex}`}
+          onOpenChange={(open) => {
+            if (!open) setSelected(null)
+          }}
+          shouldCloseOnInteractOutside={(element) =>
+            !(element instanceof Node) || !triggerRef.current?.contains(element)
+          }
+          triggerRef={triggerRef}
+        >
+          <PopoverDialog aria-label={`${selected.freeCount} of ${participantCount} free`} className="p-3">
+            <div className="flex flex-col gap-2 text-xs">
+              <span className="font-semibold text-[var(--bone)]">
+                {selected.freeCount} of {participantCount} free:
+              </span>
+              {selected.freeUserIds.length === 0 ? (
+                <span className="text-[var(--slate)]">no one yet</span>
+              ) : (
+                <ul className="flex flex-col gap-1 text-[var(--slate)]">
+                  {orderFreeUserIds(selected.freeUserIds, viewerUserId).map((id) => {
+                    if (id === viewerUserId) return <li key={id}>You</li>
+                    const user = users.find((u) => u.userId === id)
+                    return <li key={id}>{user ? displayName(user) : id}</li>
+                  })}
+                </ul>
+              )}
+            </div>
+          </PopoverDialog>
+        </PopoverContent>
       )}
     </div>
   )

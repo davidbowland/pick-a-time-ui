@@ -123,3 +123,22 @@ export function computeWeekendOverride(
   if (weekendDates.length === 0) return undefined
   return { dates: weekendDates, startMinute, endMinute }
 }
+
+export interface TimeRangePreset {
+  label: string
+  startMinute: number
+  endMinute: number
+}
+
+export const TIME_RANGE_PRESETS: TimeRangePreset[] = [
+  { label: 'Morning', startMinute: 480, endMinute: 720 },
+  { label: 'Business hours', startMinute: 540, endMinute: 1020 },
+  { label: 'Afternoon', startMinute: 720, endMinute: 1020 },
+  { label: 'Evening', startMinute: 1020, endMinute: 1260 },
+  { label: 'All day', startMinute: 480, endMinute: 1260 },
+]
+
+export function matchingPresetLabel(startMinute: number, endMinute: number): string | undefined {
+  return TIME_RANGE_PRESETS.find((preset) => preset.startMinute === startMinute && preset.endMinute === endMinute)
+    ?.label
+}

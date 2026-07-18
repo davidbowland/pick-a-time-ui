@@ -52,7 +52,7 @@ export const UserOptions = ({
         key={user.userId}
         value={user.userId}
       >
-        <Radio.Content>
+        <Radio.Content className="py-3.5">
           <Radio.Control>
             <Radio.Indicator />
           </Radio.Control>
@@ -62,7 +62,7 @@ export const UserOptions = ({
       </Radio>
     ))}
     <Radio value="__new__">
-      <Radio.Content>
+      <Radio.Content className="py-3.5">
         <Radio.Control>
           <Radio.Indicator />
         </Radio.Control>

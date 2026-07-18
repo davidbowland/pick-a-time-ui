@@ -5,7 +5,10 @@ import React from 'react'
 
 import { FOCUS_RING } from '@components/ui/focus-ring'
 
-const BUTTON_CLASS = `shrink-0 rounded-full border-[var(--hair)] bg-[var(--bone)]/[0.07] text-[var(--bone)] hover:bg-white/[0.12] ${FOCUS_RING}`
+// h-9: one step below the default control size, so the group sits beside the poll title as
+// quiet header furniture instead of competing with it.
+const BUTTON_CLASS = `h-9 shrink-0 rounded-full border-[var(--hair)] bg-[var(--bone)]/[0.07] text-[var(--bone)] hover:bg-white/[0.12] ${FOCUS_RING}`
+const ICON_BUTTON_CLASS = `w-9 min-w-0 ${BUTTON_CLASS}`
 
 export const ShareGroup = ({ children }: { children: React.ReactNode }): React.ReactNode => (
   <div className="flex items-center gap-2">{children}</div>
@@ -20,7 +23,7 @@ export const ShareButton = ({ onPress }: { onPress: () => void }): React.ReactNo
 
 export const CopyButton = ({ copied, onPress }: { copied: boolean; onPress: () => void }): React.ReactNode => (
   <span className="relative inline-flex shrink-0">
-    <Button aria-label="Copy link" className={BUTTON_CLASS} isIconOnly onPress={onPress} variant="outline">
+    <Button aria-label="Copy link" className={ICON_BUTTON_CLASS} isIconOnly onPress={onPress} variant="outline">
       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
     </Button>
     {/* A solid chip (background + shadow), not bare text, so this reads as a small overlay
@@ -43,7 +46,7 @@ export const CopyButton = ({ copied, onPress }: { copied: boolean; onPress: () =
 export const QrButton = ({ url }: { url: string }): React.ReactNode => (
   <Modal>
     <Modal.Trigger>
-      <Button aria-label="Share via QR code" className={BUTTON_CLASS} isIconOnly variant="outline">
+      <Button aria-label="Share via QR code" className={ICON_BUTTON_CLASS} isIconOnly variant="outline">
         <QrCodeIcon className="h-4 w-4" />
       </Button>
     </Modal.Trigger>

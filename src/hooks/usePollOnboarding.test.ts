@@ -49,15 +49,4 @@ describe('usePollOnboarding', () => {
     expect(result.current.showIntro).toBe(false)
     expect(storage.getItem('pat_onboarded_amber_harbor')).toBe('true')
   })
-
-  it('starts with the persistent guide closed and toggles it', () => {
-    const { result } = renderHook(() => usePollOnboarding('amber-harbor', fakeStorage()))
-    expect(result.current.isGuideOpen).toBe(false)
-
-    act(() => result.current.toggleGuide())
-    expect(result.current.isGuideOpen).toBe(true)
-
-    act(() => result.current.toggleGuide())
-    expect(result.current.isGuideOpen).toBe(false)
-  })
 })

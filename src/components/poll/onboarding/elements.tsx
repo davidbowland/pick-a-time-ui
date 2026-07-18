@@ -1,4 +1,3 @@
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import React from 'react'
 
 function preJoinCopy(pollName: string, dateCount: number): React.ReactNode {
@@ -7,18 +6,6 @@ function preJoinCopy(pollName: string, dateCount: number): React.ReactNode {
       You&apos;ve been invited to <strong>{pollName}</strong>. No account needed — jump in, mark which of these{' '}
       {dateCount} date{dateCount === 1 ? ' works' : 's work'} for you, and everyone&apos;s overlap updates as people
       join.
-    </>
-  )
-}
-
-// Once a voter has already joined, "you've been invited... jump in" is stale — they already did
-// both. This describes the ongoing mechanic instead, worded to stay accurate whether they're
-// actively marking their own availability right now or just looking at the overlap.
-function joinedCopy(dateCount: number): React.ReactNode {
-  return (
-    <>
-      Mark which of these {dateCount} date{dateCount === 1 ? ' works' : 's work'} for you. Everyone&apos;s overlap
-      updates as people join.
     </>
   )
 }
@@ -41,40 +28,5 @@ export const IntroExplainer = ({
     >
       Got it
     </button>
-  </div>
-)
-
-export const WhatIsThisToggle = ({
-  isOpen,
-  onToggle,
-  pollName,
-  dateCount,
-  hasJoined,
-}: {
-  isOpen: boolean
-  onToggle: () => void
-  pollName: string
-  dateCount: number
-  hasJoined: boolean
-}): React.ReactNode => (
-  <div>
-    <button
-      aria-expanded={isOpen}
-      className="flex items-center gap-1 text-xs font-medium text-[var(--slate)]"
-      onClick={onToggle}
-      type="button"
-    >
-      What is this?
-      {isOpen ? (
-        <ChevronUp aria-hidden="true" className="h-3 w-3" />
-      ) : (
-        <ChevronDown aria-hidden="true" className="h-3 w-3" />
-      )}
-    </button>
-    {isOpen && (
-      <p className="mt-2 max-w-[40ch] text-xs text-[var(--slate)]">
-        {hasJoined ? joinedCopy(dateCount) : preJoinCopy(pollName, dateCount)}
-      </p>
-    )}
   </div>
 )

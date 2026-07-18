@@ -62,6 +62,12 @@ describe('VoterIdentityControl', () => {
     expect(screen.getByText('Quiet Falcon')).toBeInTheDocument()
   })
 
+  it('labels the name with "Voting as" so a bare name cannot be misread as a content heading', () => {
+    renderWithClient()
+
+    expect(screen.getByText(/voting as/i)).toBeInTheDocument()
+  })
+
   it('shows the "This isn\'t me" button when not signed in, and calls onNotYou on click', async () => {
     const onNotYou = jest.fn()
     renderWithClient({ onNotYou })

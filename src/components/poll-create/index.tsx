@@ -19,7 +19,8 @@ import {
 } from './helpers'
 import { ScenarioPreset, ScenarioPresets } from './scenario-presets'
 import { SummaryDisclosure } from './summary-disclosure'
-import { SlotDurationPicker, TimeRangeSlider, TimesToggle, WeekendTimesToggle } from './time-fields'
+import { TimeEditorCoordinatorProvider } from './time-editor-coordinator'
+import { SlotDurationPicker, TimeRangeField, TimesToggle, WeekendTimesToggle } from './time-fields'
 import { useAuthContext } from '@components/auth-context'
 import FeedbackMessage from '@components/feedback-message'
 import { PillButton } from '@components/ui/pill-button'
@@ -445,11 +446,11 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                   <div className="flex flex-col gap-[18px]" id={timePanelId}>
                     <TimesToggle onChange={setUsesTimes} usesTimes={usesTimes} />
                     {usesTimes && (
-                      <>
+                      <TimeEditorCoordinatorProvider>
                         {canSplitWeekendTimes && (
                           <WeekendTimesToggle onChange={handleWeekendsDifferChange} weekendsDiffer={weekendsDiffer} />
                         )}
-                        <TimeRangeSlider
+                        <TimeRangeField
                           endMinute={endMinute}
                           error={timesError}
                           label={effectiveWeekendsDiffer ? 'Weekdays' : undefined}
@@ -459,7 +460,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                           step={computeStartEndMinuteStep(slotMinutes, config.startEndMinuteStep)}
                         />
                         {effectiveWeekendsDiffer && (
-                          <TimeRangeSlider
+                          <TimeRangeField
                             endMinute={weekendEndMinute}
                             error={weekendTimesError}
                             label="Weekends"
@@ -474,7 +475,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
                           onChange={setSlotMinutes}
                           value={slotMinutes}
                         />
-                      </>
+                      </TimeEditorCoordinatorProvider>
                     )}
                   </div>
                 )}

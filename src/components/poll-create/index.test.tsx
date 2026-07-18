@@ -1,7 +1,7 @@
 import { CalendarDate } from '@internationalized/date'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ApiError } from 'aws-amplify/api'
 import { useRouter } from 'next/router'
@@ -497,9 +497,11 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
     await userEvent.click(screen.getByRole('button', { name: '2 hr' }))
-    // Pull the end thumb in to 9:15 AM, 15 minutes after the 9:00 AM default start — shorter
-    // than the 2-hour (120 min) meeting length just selected.
-    fireEvent.change(screen.getByLabelText(/to \(time\)/i), { target: { value: '555' } })
+    // Pull the end time to 9:30 AM, 30 minutes after the 9:00 AM default start — shorter than
+    // the 2-hour (120 min) meeting length just selected.
+    await userEvent.click(screen.getByRole('button', { name: /end time.*9:00 pm/i }))
+    await userEvent.selectOptions(screen.getByLabelText('Minute'), '30')
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
     await userEvent.click(continueButton())
     await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
@@ -585,9 +587,11 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
     await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
     await userEvent.click(screen.getByRole('button', { name: '2 hr' }))
-    // Pull the weekend end thumb to 15 minutes after its (seeded-from-weekday) 9:00 AM start.
-    const toThumbs = screen.getAllByLabelText(/to \(time\)/i)
-    fireEvent.change(toThumbs[toThumbs.length - 1], { target: { value: '555' } })
+    // Pull the weekend end time to 30 minutes after its (seeded-from-weekday) 9:00 AM start —
+    // shorter than the 2-hour (120 min) meeting length just selected.
+    await userEvent.click(screen.getByRole('button', { name: /end time, weekends/i }))
+    await userEvent.selectOptions(screen.getByLabelText('Minute'), '30')
+    await userEvent.selectOptions(screen.getByLabelText('AM or PM'), 'AM')
     await userEvent.click(continueButton())
     await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
@@ -605,9 +609,9 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: /edit when/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Dates & times' }))
     await userEvent.click(screen.getByRole('button', { name: 'Weekends differ' }))
-    // Pull the weekend end thumb in an hour so the two windows actually differ.
-    const toThumbs = screen.getAllByLabelText(/to \(time\)/i)
-    fireEvent.change(toThumbs[toThumbs.length - 1], { target: { value: '1200' } })
+    // Pull the weekend end time in an hour (9:00 PM -> 8:00 PM) so the two windows actually differ.
+    await userEvent.click(screen.getByRole('button', { name: /end time, weekends/i }))
+    await userEvent.selectOptions(screen.getByLabelText('Hour'), '8')
 
     expect(screen.getByText('9:00 AM–9:00 PM weekdays, 9:00 AM–8:00 PM weekends · 1 hr')).toBeInTheDocument()
   })

@@ -154,7 +154,10 @@ export interface RecommendedMeeting extends Slot {
 }
 
 export interface OverlapResponse {
-  grid: { cells: OverlapCell[][]; bestSlot: { dateIndex: number; slotIndex: number; freeCount: number } }
+  grid: {
+    cells: OverlapCell[][]
+    bestSlot: { dateIndex: number; slotIndex: number; freeCount: number; freeUserIds: string[] }
+  }
   recommendedMeetings: RecommendedMeeting[]
 }
 

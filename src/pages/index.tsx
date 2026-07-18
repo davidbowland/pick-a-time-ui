@@ -69,10 +69,14 @@ const Index = (): React.ReactNode => {
         <section className={SCENE_CLASS}>
           <ShareScene />
         </section>
-        <div ref={footerRef}>
-          <ClosingFooter onBackToStart={scrollToCreateScene} />
+        <div className="md:flex md:min-h-[100dvh] md:flex-col" ref={footerRef}>
+          <div className="md:flex md:flex-1 md:items-center">
+            <div className="md:w-full">
+              <ClosingFooter onBackToStart={scrollToCreateScene} />
+            </div>
+          </div>
+          <PrivacyLink />
         </div>
-        <PrivacyLink />
       </main>
       <BackToFormCta footerRef={footerRef} formRef={createSceneRef} onJump={scrollToCreateScene} />
     </>

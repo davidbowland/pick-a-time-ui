@@ -19,8 +19,8 @@ export const SCENARIO_PRESETS: ScenarioPreset[] = [
     slotMinutes: 60,
   },
   {
-    label: 'Weekday evening',
-    short: 'Evening',
+    label: 'Weekday dinner',
+    short: 'Dinner',
     group: 'weekday',
     weekdays: [1, 2, 3, 4, 5],
     usesTimes: true,
