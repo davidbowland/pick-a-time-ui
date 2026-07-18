@@ -116,6 +116,49 @@ describe('ResultsPhase', () => {
     expect(fetchOverlap).toHaveBeenCalledWith('amber-harbor')
   })
 
+  it('should never show a total smaller than a free count when the poll query is staler than the overlap', async () => {
+    // participantCount rides the poll query and free counts ride the overlap query; a second
+    // person joining and voting between their refetches used to render "2 of 1 free".
+    jest.mocked(fetchOverlap).mockResolvedValueOnce({
+      grid: {
+        cells: [
+          [
+            {
+              dateIndex: 0,
+              slotIndex: 0,
+              startMinute: 1080,
+              endMinute: 1140,
+              freeCount: 2,
+              freeUserIds: ['a', 'b'],
+            },
+          ],
+        ],
+        bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 2, freeUserIds: ['a', 'b'] },
+      },
+      recommendedMeetings: [
+        {
+          dateIndex: 0,
+          slotIndex: 0,
+          date: '2025-09-04',
+          startMinute: 1080,
+          endMinute: 1140,
+          freeCount: 2,
+          freeUserIds: ['a', 'b'],
+          excludedByCalendar: [],
+        },
+      ],
+    })
+
+    renderWithClient(<ResultsPhase poll={{ ...poll, participantCount: 1 }} sessionId="amber-harbor" users={[]} />)
+
+    // Banner and suggested times both clamp to the free count, and the tag agrees with it.
+    expect(await screen.findAllByText(/2 of 2 free/i)).not.toHaveLength(0)
+    expect(screen.queryByText(/of 1 free/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/2 people so far/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/everyone.s free/i)).not.toHaveLength(0)
+    expect(screen.queryByText(/best available/i)).not.toBeInTheDocument()
+  })
+
   it('should say how many people are in so far, sourced from the poll participant count', async () => {
     jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
 

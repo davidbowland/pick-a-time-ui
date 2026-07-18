@@ -124,12 +124,14 @@ const nameFor = (users: User[], userId: string): string => {
 
 export const SuggestedTimes = ({
   meetings,
+  participantCount,
   users,
   poll,
   viewerTimezone,
   viewerUserId,
 }: {
   meetings: RecommendedMeeting[]
+  participantCount: number
   users: User[]
   poll: PollData
   viewerTimezone: string
@@ -154,13 +156,13 @@ export const SuggestedTimes = ({
                 point is after the separator, so narrow screens stack the tag and the count as two
                 clean right-aligned lines instead of orphaning "3 free" under the tag. */}
               <span className="text-right text-xs font-normal opacity-60">
-                {attendanceTag(meeting.freeCount, poll.participantCount)} ·{' '}
+                {attendanceTag(meeting.freeCount, participantCount)} ·{' '}
                 <span className="whitespace-nowrap">
-                  {meeting.freeCount} of {poll.participantCount} free
+                  {meeting.freeCount} of {participantCount} free
                 </span>
               </span>
             </div>
-            {meeting.freeCount < poll.participantCount && (
+            {meeting.freeCount < participantCount && (
               <div className="flex flex-col gap-0.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide opacity-60">Can&rsquo;t make it</div>
                 <ul className="flex flex-col gap-0.5 text-xs opacity-80">

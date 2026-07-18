@@ -38,6 +38,17 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
   // Defensive: the API contract promises `grid`/`bestSlot`, but don't let a genuinely empty
   // or not-yet-fully-robust response take the whole screen down with it.
   const bestSlot = data.grid?.bestSlot
+  const meetings = data.recommendedMeetings ?? []
+  // participantCount rides the poll query while free counts ride the overlap query, and a join
+  // can land between their refetches — a fresher overlap can then report more people free than
+  // the stale poll says exist, rendering nonsense like "2 of 1 free". Anyone counted free is
+  // proof of a participant, so the displayed total never falls below any free count on screen.
+  const participantTotal = Math.max(
+    poll.participantCount,
+    users.length,
+    bestSlot?.freeCount ?? 0,
+    ...meetings.map((meeting) => meeting.freeCount),
+  )
   const bestDate = bestSlot ? poll.dates[bestSlot.dateIndex] : undefined
   const bestCell = bestSlot ? data.grid.cells[bestSlot.dateIndex]?.[bestSlot.slotIndex] : undefined
   const label = bestSlot
@@ -65,7 +76,7 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
 
   return (
     <div className="flex flex-col gap-4">
-      <ParticipationStatus count={poll.participantCount} />
+      <ParticipationStatus count={participantTotal} />
       {singleSlotWindow && (
         <p className="text-xs text-[var(--slate)]">
           Meeting time:{' '}
@@ -85,7 +96,7 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
           freeCount={bestSlot.freeCount}
           freeUserIds={bestSlot.freeUserIds ?? []}
           label={label}
-          total={poll.participantCount}
+          total={participantTotal}
           users={users}
           viewerUserId={viewerUserId}
         />
@@ -95,14 +106,15 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
         cells={data.grid?.cells ?? []}
         columns={columns}
         dateLabels={dateLabels}
-        participantCount={poll.participantCount}
-        recommendedMeetings={data.recommendedMeetings ?? []}
+        participantCount={participantTotal}
+        recommendedMeetings={meetings}
         slotLabels={slotLabels}
         users={users}
         viewerUserId={viewerUserId}
       />
       <SuggestedTimes
-        meetings={data.recommendedMeetings ?? []}
+        meetings={meetings}
+        participantCount={participantTotal}
         poll={poll}
         users={users}
         viewerTimezone={viewerTimezone}

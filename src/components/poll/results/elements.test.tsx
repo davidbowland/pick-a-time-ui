@@ -95,7 +95,15 @@ describe('SuggestedTimes attendance tag', () => {
   }
 
   it('tags a fully-attended suggestion as "Everyone\'s free"', () => {
-    render(<SuggestedTimes meetings={[meeting]} poll={poll} users={[]} viewerTimezone="America/Chicago" />)
+    render(
+      <SuggestedTimes
+        meetings={[meeting]}
+        participantCount={3}
+        poll={poll}
+        users={[]}
+        viewerTimezone="America/Chicago"
+      />,
+    )
     expect(screen.getByText(/everyone.s free/i)).toBeInTheDocument()
   })
 
@@ -103,6 +111,7 @@ describe('SuggestedTimes attendance tag', () => {
     render(
       <SuggestedTimes
         meetings={[{ ...meeting, freeCount: 2 }]}
+        participantCount={3}
         poll={poll}
         users={[]}
         viewerTimezone="America/Chicago"
@@ -143,7 +152,15 @@ describe("SuggestedTimes can't-make-it line", () => {
   }
 
   it('names whoever is missing when attendance is not unanimous', () => {
-    render(<SuggestedTimes meetings={[meeting]} poll={poll} users={users} viewerTimezone="America/Chicago" />)
+    render(
+      <SuggestedTimes
+        meetings={[meeting]}
+        participantCount={3}
+        poll={poll}
+        users={users}
+        viewerTimezone="America/Chicago"
+      />,
+    )
     expect(screen.getByText('Can’t make it')).toBeInTheDocument()
     expect(screen.getByText('Priya Patel')).toBeInTheDocument()
   })
@@ -152,6 +169,7 @@ describe("SuggestedTimes can't-make-it line", () => {
     render(
       <SuggestedTimes
         meetings={[{ ...meeting, freeCount: 3, freeUserIds: ['a', 'b', 'c'] }]}
+        participantCount={3}
         poll={poll}
         users={users}
         viewerTimezone="America/Chicago"
@@ -164,6 +182,7 @@ describe("SuggestedTimes can't-make-it line", () => {
     render(
       <SuggestedTimes
         meetings={[{ ...meeting, excludedByCalendar: ['a'] }]}
+        participantCount={3}
         poll={poll}
         users={users}
         viewerTimezone="America/Chicago"
@@ -179,6 +198,7 @@ describe("SuggestedTimes can't-make-it line", () => {
     render(
       <SuggestedTimes
         meetings={[meeting]}
+        participantCount={3}
         poll={poll}
         users={users}
         viewerTimezone="America/Chicago"
@@ -193,6 +213,7 @@ describe("SuggestedTimes can't-make-it line", () => {
     render(
       <SuggestedTimes
         meetings={[{ ...meeting, excludedByCalendar: ['b'] }]}
+        participantCount={3}
         poll={poll}
         users={users}
         viewerTimezone="America/Chicago"

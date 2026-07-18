@@ -81,6 +81,10 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
     // joins next — every newly selected user starts on their own hours.
     setTab('painting')
     void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
+    // Joining also bumps the poll's participantCount, which every "N of M free" total renders
+    // against — left stale at its pre-join value, the results phase pairs it with a fresher
+    // overlap and shows more people free than it says exist.
+    void queryClient.invalidateQueries({ queryKey: ['poll', sessionId] })
   }
 
   const handleNotYou = (): void => {
@@ -149,7 +153,15 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
               <button
                 aria-selected={tab === 'results'}
                 className={`${TAB_BASE_CLASS} ${tabSkinFor(tab === 'results')}`}
-                onClick={() => setTab('results')}
+                onClick={() => {
+                  setTab('results')
+                  // The overlap query refetches on its own when ResultsPhase remounts, but the
+                  // participant count (poll) and roster (users) it renders against live on these
+                  // two queries — left stale while others join, the fresher overlap disagrees
+                  // with them ("2 of 1 free").
+                  void queryClient.invalidateQueries({ queryKey: ['poll', sessionId] })
+                  void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
+                }}
                 role="tab"
               >
                 The overlap

@@ -101,8 +101,9 @@ describe('Poll', () => {
     // hook's return value per-render: `useSessionCookie` is called on every render as queries
     // resolve, so a `mockReturnValueOnce` override only survives the first of several renders.
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
-    jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
-    jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+    // Sticky (not -Once) mocks: opening the overlap tab invalidates and refetches poll and users.
+    jest.mocked(fetchPoll).mockResolvedValue(poll)
+    jest.mocked(fetchUsers).mockResolvedValue([existingUser])
     jest.mocked(fetchAvailability).mockResolvedValueOnce({
       userId: existingUser.userId,
       free: [
@@ -142,6 +143,38 @@ describe('Poll', () => {
     ).toBeInTheDocument()
   })
 
+  it('should refetch the poll and users when opening the overlap tab, so participant totals are not stale', async () => {
+    // The overlap query refetches on its own when ResultsPhase mounts; without these two
+    // refetches a fresher overlap renders against a pre-join participantCount ("2 of 1 free").
+    window.history.pushState(null, '', `?id=${existingUser.userId}`)
+    jest.mocked(fetchPoll).mockResolvedValue(poll)
+    jest.mocked(fetchUsers).mockResolvedValue([existingUser])
+    jest.mocked(fetchAvailability).mockResolvedValueOnce({
+      userId: existingUser.userId,
+      free: [
+        [false, false],
+        [false, false],
+        [false, false],
+      ],
+      expiration: 1725453600,
+    })
+    jest.mocked(fetchOverlap).mockResolvedValue({
+      grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
+      recommendedMeetings: [],
+    })
+
+    renderWithClient(<Poll sessionId="amber-harbor" />)
+
+    expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
+    expect(fetchPoll).toHaveBeenCalledTimes(1)
+    expect(fetchUsers).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
+
+    await waitFor(() => expect(fetchPoll).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
+  })
+
   it('should forward the fetched users down to the results phase so the heat-grid can show real names', async () => {
     // Proves `users` is actually threaded Poll -> ResultsPhase -> HeatGrid: this file mocks only
     // `@services/api` and renders the real ResultsPhase (unlike a mocked-child assertion), so the
@@ -151,8 +184,9 @@ describe('Poll', () => {
     // (covered in heat-grid.test.tsx), and this test is about real names being forwarded.
     const otherUser: User = { userId: 'mellow-heron', name: 'Mellow Heron', calendarStatus: 'not_connected' }
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
-    jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
-    jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser, otherUser])
+    // Sticky (not -Once) mocks: opening the overlap tab invalidates and refetches poll and users.
+    jest.mocked(fetchPoll).mockResolvedValue(poll)
+    jest.mocked(fetchUsers).mockResolvedValue([existingUser, otherUser])
     jest.mocked(fetchAvailability).mockResolvedValueOnce({
       userId: existingUser.userId,
       free: [
@@ -186,9 +220,11 @@ describe('Poll', () => {
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
 
-    await userEvent.click(await screen.findByRole('button', { name: /thu, sep 4.*6:00.*1 of 1 free/i }))
+    // "1 of 2 free": the roster fetched two users, and the participant total honors the roster
+    // over this fixture's (stale) participantCount of 1.
+    await userEvent.click(await screen.findByRole('button', { name: /thu, sep 4.*6:00.*1 of 2 free/i }))
 
-    expect(within(screen.getByRole('list')).getByText('Mellow Heron')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByText('Mellow Heron')).toBeInTheDocument()
   })
 
   it('should show a loading indicator while the poll and users are still being fetched', async () => {
@@ -243,6 +279,9 @@ describe('Poll', () => {
       userId: currentUserId,
     }))
 
+    jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+    // Second poll load: selecting a user invalidates the poll query too, so its
+    // participantCount can't go stale against the fresher users/overlap data.
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
     // First load: the group is empty, which is what makes IdentityPhase auto-create a user.
     jest.mocked(fetchUsers).mockResolvedValueOnce([])
