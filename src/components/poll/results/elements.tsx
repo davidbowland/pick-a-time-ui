@@ -63,7 +63,7 @@ export const BestSlotBanner = ({
       </div>
       <div className="text-right text-xs opacity-60">
         <div className="font-semibold text-[var(--bone)]">{attendanceTag(freeCount, total)}</div>
-        <div>
+        <div className="whitespace-nowrap">
           {freeCount} of {total} free
         </div>
       </div>
@@ -150,9 +150,14 @@ export const SuggestedTimes = ({
               <span>
                 {formatMeetingLabel(poll, meeting.date, meeting.startMinute, meeting.endMinute, viewerTimezone)}
               </span>
-              <span className="text-xs font-normal opacity-60">
-                {attendanceTag(meeting.freeCount, poll.participantCount)} · {meeting.freeCount} of{' '}
-                {poll.participantCount} free
+              {/* "2 of 3 free" is one fact — never let it break mid-phrase. The only allowed wrap
+                point is after the separator, so narrow screens stack the tag and the count as two
+                clean right-aligned lines instead of orphaning "3 free" under the tag. */}
+              <span className="text-right text-xs font-normal opacity-60">
+                {attendanceTag(meeting.freeCount, poll.participantCount)} ·{' '}
+                <span className="whitespace-nowrap">
+                  {meeting.freeCount} of {poll.participantCount} free
+                </span>
               </span>
             </div>
             {meeting.freeCount < poll.participantCount && (

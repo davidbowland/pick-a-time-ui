@@ -222,7 +222,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.response?.statusCode === 403) {
-        setErrorMessage("You're going a bit fast — try again in a minute.")
+        setErrorMessage("Our security check couldn't verify your browser. Please try again.")
         return
       }
       if (error instanceof ApiError && error.response?.statusCode === 400) {

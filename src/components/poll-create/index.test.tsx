@@ -639,7 +639,7 @@ describe('PollCreate', () => {
     expect(await screen.findByText('One of those dates has already passed.')).toBeInTheDocument()
   })
 
-  it('should show a generic error message when poll creation fails with a 403 (recaptcha)', async () => {
+  it('should show the security-check message when poll creation fails with a 403 (recaptcha)', async () => {
     setup()
     const error = Object.assign(new Error('forbidden'), { response: { statusCode: 403, headers: {}, body: '' } })
     Object.setPrototypeOf(error, ApiError.prototype)
@@ -653,7 +653,7 @@ describe('PollCreate', () => {
     await userEvent.click(continueButton())
     await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
-    expect(await screen.findByText(/going a bit fast/i)).toBeInTheDocument()
+    expect(await screen.findByText(/security check couldn.t verify your browser/i)).toBeInTheDocument()
   })
 
   it('keeps the Days & times section showing as done (not locked) when navigating back to edit the Name section', async () => {

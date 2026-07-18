@@ -442,6 +442,115 @@ describe('PaintingPhase', () => {
     await waitFor(() => expect(cells[0]).toHaveAttribute('aria-pressed', 'true'))
   })
 
+  it('should not revert a newer paint when an earlier PATCH resolves while that paint is unsaved', async () => {
+    mockEmptyAvailability()
+    let resolveFirstPatch: (value: AvailabilityRecord) => void = () => {}
+    jest.mocked(patchAvailability).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstPatch = resolve
+        }),
+    )
+    jest.mocked(patchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [
+        [true, true, false],
+        [false, false, false],
+      ],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    // First PATCH goes out after the debounce and stays in flight.
+    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1), DEBOUNCE_WAIT)
+
+    // Paint a second cell while the first PATCH is still pending. Advance timers just far enough
+    // (< the 1250ms debounce) for the gesture overlay to clear, so the cell's pressed state comes
+    // from the cached record — the state a stale PATCH response could clobber — not the overlay.
+    act(() => {
+      cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+    act(() => {
+      jest.advanceTimersByTime(50)
+    })
+    expect(cells[1]).toHaveAttribute('aria-pressed', 'true')
+
+    // The first PATCH's response knows nothing about the second cell — it must not clobber the
+    // newer optimistic paint (the revert-then-reapply flicker seen when painting quickly on mobile).
+    await act(async () => {
+      resolveFirstPatch({
+        userId: 'quiet-falcon',
+        free: [
+          [true, false, false],
+          [false, false, false],
+        ],
+        expiration: 1725453600,
+      })
+    })
+    act(() => {
+      jest.advanceTimersByTime(50)
+    })
+    expect(cells[1]).toHaveAttribute('aria-pressed', 'true')
+    expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('should keep a newer paint on screen when an earlier PATCH fails while that paint is unsaved', async () => {
+    mockEmptyAvailability()
+    let rejectFirstPatch: (reason: Error) => void = () => {}
+    jest.mocked(patchAvailability).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirstPatch = reject
+        }),
+    )
+    jest.mocked(patchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [
+        [false, true, false],
+        [false, false, false],
+      ],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1), DEBOUNCE_WAIT)
+
+    act(() => {
+      cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+    act(() => {
+      jest.advanceTimersByTime(50)
+    })
+    expect(cells[1]).toHaveAttribute('aria-pressed', 'true')
+
+    // Rolling back the failed batch must not wipe the second cell's optimistic paint — its own
+    // PATCH is still pending and will reconcile the record.
+    await act(async () => {
+      rejectFirstPatch(new Error('network error'))
+    })
+    act(() => {
+      jest.advanceTimersByTime(50)
+    })
+    expect(cells[1]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save your availability")
+  })
+
   it('should roll back the cell and show an error message when the PATCH fails', async () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))

@@ -34,18 +34,26 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
   // Snapshots the record from just before the *first* optimistic update of a debounced batch, so
   // a failed (merged) PATCH can roll back everything the batch applied, not just its last call.
   const batchStartRef = useRef<AvailabilityRecord | undefined>(undefined)
+  // Counts every commit. A PATCH captures the count when it flushes; by the time its response
+  // arrives, a differing count means newer cells were painted while it was in flight — cells the
+  // response knows nothing about. Writing such a stale response (or a stale-failure rollback)
+  // into the cache would visibly revert those newer paints until their own PATCH lands.
+  const editCountRef = useRef(0)
 
   const flushCommit = async (cells: AvailabilityCell[]): Promise<void> => {
     const previous = batchStartRef.current
     batchStartRef.current = undefined
     if (!previous) return
+    const editCountAtFlush = editCountRef.current
 
     try {
       const updated = await patchAvailability(sessionId, userId, { cells })
-      // Server response wins over the optimistic guess if the two ever disagree.
-      queryClient.setQueryData(queryKey, updated)
+      // Server response wins over the optimistic guess if the two ever disagree — but only when
+      // nothing newer has been painted since; otherwise the still-pending batch owns the cache
+      // and its own PATCH response will reconcile with the server.
+      if (editCountRef.current === editCountAtFlush) queryClient.setQueryData(queryKey, updated)
     } catch {
-      queryClient.setQueryData(queryKey, previous)
+      if (editCountRef.current === editCountAtFlush) queryClient.setQueryData(queryKey, previous)
       setErrorMessage(SAVE_ERROR_MESSAGE)
     }
   }
@@ -57,6 +65,7 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
     if (!previous) return
 
     if (!batchStartRef.current) batchStartRef.current = previous
+    editCountRef.current += 1
 
     // Apply the paint optimistically to the cached record *before* the debounced PATCH fires, in
     // the same synchronous tick as the gesture's own overlay-clearing. That way the two cache
