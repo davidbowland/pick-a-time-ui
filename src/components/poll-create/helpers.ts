@@ -1,7 +1,7 @@
 import { formatSlotMinutesLabel } from './time-fields'
 import { TimeOverride } from '@types'
 import { addDays, isWeekendDate } from '@utils/dates'
-import { formatSlotRange } from '@utils/time'
+import { formatMinuteOfDay, formatSlotRange } from '@utils/time'
 
 function isoWeekday(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number)
@@ -141,4 +141,12 @@ export const TIME_RANGE_PRESETS: TimeRangePreset[] = [
 export function matchingPresetLabel(startMinute: number, endMinute: number): string | undefined {
   return TIME_RANGE_PRESETS.find((preset) => preset.startMinute === startMinute && preset.endMinute === endMinute)
     ?.label
+}
+
+// Inversion is checked first so a backwards window never surfaces as the (technically
+// also true, but misleading) too-short message.
+export function timeWindowError(startMinute: number, endMinute: number, slotMinutes: number): string | undefined {
+  if (endMinute <= startMinute) return `Pick an end time after ${formatMinuteOfDay(startMinute)}.`
+  if (endMinute - startMinute < slotMinutes) return 'Pick a longer time window, or a shorter meeting length.'
+  return undefined
 }

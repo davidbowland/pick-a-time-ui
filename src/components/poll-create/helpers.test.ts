@@ -8,6 +8,7 @@ import {
   matchingPresetLabel,
   reconcilePatternDates,
   TIME_RANGE_PRESETS,
+  timeWindowError,
   updateExcludedDates,
 } from './helpers'
 
@@ -323,5 +324,32 @@ describe('matchingPresetLabel', () => {
 
   it('returns undefined when no preset matches', () => {
     expect(matchingPresetLabel(600, 700)).toBeUndefined()
+  })
+})
+
+describe('timeWindowError', () => {
+  it('returns the end-after-start message when the end is before the start', () => {
+    expect(timeWindowError(1020, 540, 60)).toBe('Pick an end time after 5:00 PM.')
+  })
+
+  it('treats an end equal to the start as inverted, not too short', () => {
+    expect(timeWindowError(540, 540, 60)).toBe('Pick an end time after 9:00 AM.')
+  })
+
+  it('prefers the inverted message over the too-short message when both apply', () => {
+    // 30-minute backwards window with a 120-minute slot: both conditions are true.
+    expect(timeWindowError(570, 540, 120)).toBe('Pick an end time after 9:30 AM.')
+  })
+
+  it('returns the longer-window message for a forward window shorter than the meeting length', () => {
+    expect(timeWindowError(540, 570, 60)).toBe('Pick a longer time window, or a shorter meeting length.')
+  })
+
+  it('accepts a window exactly equal to the meeting length', () => {
+    expect(timeWindowError(540, 600, 60)).toBeUndefined()
+  })
+
+  it('accepts an ordinary valid window', () => {
+    expect(timeWindowError(540, 1260, 60)).toBeUndefined()
   })
 })
