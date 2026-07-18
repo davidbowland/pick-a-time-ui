@@ -1,6 +1,3 @@
-import Index from '@pages/index'
-import '@testing-library/jest-dom'
-import { render } from '@testing-library/react'
 import React from 'react'
 
 import PrivacyLink from '@components/privacy-link'
@@ -9,6 +6,9 @@ import { ClosingFooter } from '@components/story/closing-footer'
 import { CreateScene } from '@components/story/create-scene'
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from '@components/story/scenes'
 import { SkyBackground } from '@components/story/sky-background'
+import Index from '@pages/index'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
 
 jest.mock('@components/story/sky-background')
 jest.mock('@components/story/back-to-form-cta')

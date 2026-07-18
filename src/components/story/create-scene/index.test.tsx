@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import { CreateScene } from './index'
 import PollCreate from '@components/poll-create'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 jest.mock('@components/poll-create')
 

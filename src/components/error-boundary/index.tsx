@@ -4,7 +4,6 @@ import { ErrorAlert, ErrorContainer } from './elements'
 
 // Extracted so it can be replaced with a real error reporter (e.g. Sentry) later
 const logRenderError = (error: Error, errorInfo: React.ErrorInfo): void => {
-  // eslint-disable-next-line no-console
   console.error('ErrorBoundary caught:', error, errorInfo)
 }
 

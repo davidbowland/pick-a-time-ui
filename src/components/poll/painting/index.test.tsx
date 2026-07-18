@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import '@testing-library/jest-dom'
-import { act, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import PaintingPhase from './index'
 import { fetchAvailability, patchAvailability } from '@services/api'
+import '@testing-library/jest-dom'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { AvailabilityRecord, PollData } from '@types'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 

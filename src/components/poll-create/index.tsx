@@ -327,15 +327,15 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       : undefined
     const poll: NewPollRequest = usesTimes
       ? {
-        name: name.trim(),
-        dates,
-        usesTimes: true,
-        startMinute,
-        endMinute,
-        slotMinutes: slotMinutes as 15 | 30 | 60 | 90 | 120,
-        timezone,
-        ...(override ? { overrides: [override] } : {}),
-      }
+          name: name.trim(),
+          dates,
+          usesTimes: true,
+          startMinute,
+          endMinute,
+          slotMinutes: slotMinutes as 15 | 30 | 60 | 90 | 120,
+          timezone,
+          ...(override ? { overrides: [override] } : {}),
+        }
       : { name: name.trim(), dates, usesTimes: false, timezone }
 
     pollMutation.mutate(poll)

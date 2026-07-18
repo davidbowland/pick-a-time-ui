@@ -115,11 +115,11 @@ export const HeatGrid = ({
       isDatesOnly
         ? []
         : columns.map((column) =>
-          dateLabels.reduce(
-            (sum, _label, dateIndex) => sum + (findCellForColumn(cells[dateIndex] ?? [], column)?.freeCount ?? 0),
-            0,
+            dateLabels.reduce(
+              (sum, _label, dateIndex) => sum + (findCellForColumn(cells[dateIndex] ?? [], column)?.freeCount ?? 0),
+              0,
+            ),
           ),
-        ),
     [cells, columns, dateLabels, isDatesOnly],
   )
   useInitialColumnScroll(containerRef, columnCount, scores)

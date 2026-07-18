@@ -1,6 +1,5 @@
-import { renderHook } from '@testing-library/react'
-
 import { useDebouncedAvailabilityCommit } from './useDebouncedAvailabilityCommit'
+import { renderHook } from '@testing-library/react'
 import { AvailabilityCell } from '@types'
 
 describe('useDebouncedAvailabilityCommit', () => {

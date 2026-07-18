@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom'
-import { render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import { TimeRangeEditor } from './time-range-editor'
+import '@testing-library/jest-dom'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 function mockPointer(isCoarse: boolean): void {
   jest.mocked(window.matchMedia).mockReturnValueOnce({

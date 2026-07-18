@@ -1,9 +1,9 @@
-import BadRequest from '@pages/400'
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
+import BadRequest from '@pages/400'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 jest.mock('@components/app-bar')
 

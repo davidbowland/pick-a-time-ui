@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import { SummaryDisclosure } from './summary-disclosure'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 describe('SummaryDisclosure', () => {
   it('shows the label and current value, with an "Edit" button, aria-expanded=false and no aria-controls when collapsed', () => {

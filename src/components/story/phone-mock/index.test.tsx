@@ -1,9 +1,9 @@
 // src/components/story/phone-mock/index.test.tsx
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import { PhoneMock } from './index'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 describe('PhoneMock', () => {
   it('is hidden from assistive tech — it is a decorative illustration only', () => {

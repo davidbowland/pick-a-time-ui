@@ -65,8 +65,8 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
   const slotLabels =
     columns.length > 1
       ? columns.map((column) =>
-        formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
-      )
+          formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
+        )
       : []
   // That same collapse means `BestSlotBanner`/`SuggestedTimes` are the only place a single-slot
   // timed poll's meeting time would show — and neither renders at all before anyone's overlap

@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render } from '@testing-library/react'
 import React from 'react'
 
 import { Mark } from './index'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
 
 describe('Mark component', () => {
   it('should render an svg hidden from assistive tech', () => {

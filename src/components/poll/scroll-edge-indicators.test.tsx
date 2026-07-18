@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render } from '@testing-library/react'
 import React from 'react'
 
 import { ScrollEdgeIndicators } from './scroll-edge-indicators'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
 
 describe('ScrollEdgeIndicators', () => {
   it('renders nothing when no direction has more content', () => {

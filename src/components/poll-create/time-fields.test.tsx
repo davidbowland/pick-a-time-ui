@@ -1,6 +1,3 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import { TimeEditorCoordinatorProvider } from './time-editor-coordinator'
@@ -11,6 +8,9 @@ import {
   WeekendTimesToggle,
   formatSlotMinutesLabel,
 } from './time-fields'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 describe('TimesToggle', () => {
   it('marks "Dates only" as selected by default', () => {

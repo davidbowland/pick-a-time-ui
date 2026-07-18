@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 jest.mock('@components/auth-context')
 

@@ -1,9 +1,9 @@
-import NotFound from '@pages/404'
-import '@testing-library/jest-dom'
-import { act, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
+import NotFound from '@pages/404'
+import '@testing-library/jest-dom'
+import { act, render, screen, waitFor } from '@testing-library/react'
 
 jest.mock('@components/app-bar')
 

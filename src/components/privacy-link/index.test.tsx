@@ -1,10 +1,10 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import React from 'react'
 
 import PrivacyLink from './index'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 import { contrastRatio } from '@utils/contrast'
 
 // Real shipped design tokens (audited in test/utils/css-tokens.test.ts) — read from the

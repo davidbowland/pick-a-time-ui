@@ -15,8 +15,6 @@ import {
   patchUser,
 } from './api'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 jest.mock('aws-amplify/api')
 jest.mock('aws-amplify/auth')
 jest.mock('@config/amplify', () => ({

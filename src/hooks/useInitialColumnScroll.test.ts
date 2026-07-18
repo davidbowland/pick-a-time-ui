@@ -1,7 +1,7 @@
-import { renderHook } from '@testing-library/react'
 import { RefObject } from 'react'
 
 import { bestScrollWindow, ColumnScrollMetrics, useInitialColumnScroll } from './useInitialColumnScroll'
+import { renderHook } from '@testing-library/react'
 
 describe('bestScrollWindow', () => {
   it('returns 0 when the visible window already covers every column', () => {

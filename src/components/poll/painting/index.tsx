@@ -87,8 +87,8 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
   const slotLabels =
     columns.length > 1
       ? columns.map((column) =>
-        formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
-      )
+          formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
+        )
       : []
 
   return (

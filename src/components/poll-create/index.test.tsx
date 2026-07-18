@@ -1,8 +1,5 @@
 import { CalendarDate } from '@internationalized/date'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import '@testing-library/jest-dom'
-import { render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { ApiError } from 'aws-amplify/api'
 import { useRouter } from 'next/router'
 import React from 'react'
@@ -11,8 +8,9 @@ import PollCreate from './index'
 import { useAuthContext } from '@components/auth-context'
 import { setSessionCookie } from '@hooks/useSessionCookie'
 import { createPoll, createPollAuthed, createUser, fetchConfig, patchUser } from '@services/api'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import '@testing-library/jest-dom'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 jest.mock('@components/auth-context')
 jest.mock('@hooks/useSessionCookie')

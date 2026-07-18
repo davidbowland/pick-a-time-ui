@@ -1,10 +1,10 @@
-import '@testing-library/jest-dom'
-import { act, render, screen } from '@testing-library/react'
 import React from 'react'
 
 import { TimeWindow } from '../slot-columns'
 import { mockColumnLayout } from '../test-column-layout-mock'
 import PaintGrid, { PaintGridProps } from './grid'
+import '@testing-library/jest-dom'
+import { act, render, screen } from '@testing-library/react'
 
 function windowFor(startMinute: number): TimeWindow {
   return { endMinute: startMinute + 30, startMinute }

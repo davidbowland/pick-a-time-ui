@@ -1,6 +1,5 @@
-import { act, renderHook } from '@testing-library/react'
-
 import { useScrollProgress } from './useScrollProgress'
+import { act, renderHook } from '@testing-library/react'
 
 function mockScrollMetrics(scrollTop: number, scrollHeight: number, clientHeight: number): void {
   Object.defineProperty(document.documentElement, 'scrollTop', { configurable: true, value: scrollTop })

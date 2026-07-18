@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from './scenes'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 describe('illustrative story scenes', () => {
   it('HeroScene narrates finding the minute everyone is free', () => {

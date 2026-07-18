@@ -1,10 +1,10 @@
 import { CalendarDate } from '@internationalized/date'
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import { DatePickerCalendar } from './date-picker'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 describe('DatePickerCalendar', () => {
   const fixedNow = (): CalendarDate => new CalendarDate(2026, 7, 16) // Thursday, 2026-07-16

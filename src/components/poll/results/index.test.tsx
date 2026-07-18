@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import '@testing-library/jest-dom'
-import { render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import ResultsPhase from './index'
 import { fetchOverlap, OverlapResponse } from '@services/api'
+import '@testing-library/jest-dom'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { PollData, User } from '@types'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 

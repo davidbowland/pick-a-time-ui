@@ -1,6 +1,5 @@
-import { renderHook } from '@testing-library/react'
-
 import { useHasWebShare } from './useHasWebShare'
+import { renderHook } from '@testing-library/react'
 
 describe('useHasWebShare', () => {
   it('resolves to true when the injected detector reports support', () => {

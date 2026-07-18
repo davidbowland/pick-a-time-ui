@@ -1,7 +1,7 @@
-import { renderHook, act } from '@testing-library/react'
 import Cookies from 'js-cookie'
 
 import { clearSessionCookie, setSessionCookie, useSessionCookie } from './useSessionCookie'
+import { renderHook, act } from '@testing-library/react'
 
 jest.mock('js-cookie')
 

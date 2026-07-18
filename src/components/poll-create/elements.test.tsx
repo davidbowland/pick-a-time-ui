@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render } from '@testing-library/react'
 import React from 'react'
 
 import { CreateCard } from './elements'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
 
 describe('CreateCard', () => {
   it('pins its box-shadow to the settled, no-glow value under prefers-reduced-motion via a motion-reduce: utility class', () => {

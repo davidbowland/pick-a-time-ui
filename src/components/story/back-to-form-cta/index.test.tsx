@@ -1,10 +1,10 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React, { createRef } from 'react'
 
 import { BackToFormCta } from './index'
 import { useIsIntersecting } from '@hooks/useIsIntersecting'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 jest.mock('@hooks/useIsIntersecting')
 

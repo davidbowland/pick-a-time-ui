@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import '@testing-library/jest-dom'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import React from 'react'
 
 import VoterIdentityControl, { VoterIdentityControlProps } from './index'
 import { fetchConfig, patchUser } from '@services/api'
+import '@testing-library/jest-dom'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { User } from '@types'
 
 jest.mock('@services/api')

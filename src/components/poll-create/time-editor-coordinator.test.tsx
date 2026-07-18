@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { renderHook } from '@testing-library/react'
 import { act } from 'react'
 
 import { TimeEditorCoordinatorProvider, useTimeEditorCoordinator } from './time-editor-coordinator'
+import '@testing-library/jest-dom'
+import { renderHook } from '@testing-library/react'
 
 describe('useTimeEditorCoordinator', () => {
   it('starts with no active key when used standalone (no provider)', () => {

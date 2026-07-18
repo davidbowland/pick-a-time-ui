@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom'
-import { render } from '@testing-library/react'
 import React from 'react'
 
 import { SkyBackground } from './index'
 import { useScrollProgress } from '@hooks/useScrollProgress'
+import '@testing-library/jest-dom'
+import { render } from '@testing-library/react'
 import { contrastRatio } from '@utils/contrast'
 
 jest.mock('@hooks/useScrollProgress')

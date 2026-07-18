@@ -1,6 +1,5 @@
-import { act, renderHook } from '@testing-library/react'
-
 import { usePollOnboarding } from './usePollOnboarding'
+import { act, renderHook } from '@testing-library/react'
 
 function fakeStorage(initial: Record<string, string> = {}): Storage {
   const store = new Map(Object.entries(initial))

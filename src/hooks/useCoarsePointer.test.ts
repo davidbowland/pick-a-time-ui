@@ -1,6 +1,5 @@
-import { act, renderHook } from '@testing-library/react'
-
 import { useCoarsePointer } from './useCoarsePointer'
+import { act, renderHook } from '@testing-library/react'
 
 function mockMatchMedia(matches: boolean): { addEventListener: jest.Mock; removeEventListener: jest.Mock } {
   const addEventListener = jest.fn()

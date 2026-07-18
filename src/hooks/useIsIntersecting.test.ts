@@ -1,6 +1,5 @@
-import { act, renderHook } from '@testing-library/react'
-
 import { useIsIntersecting } from './useIsIntersecting'
+import { act, renderHook } from '@testing-library/react'
 
 describe('useIsIntersecting', () => {
   function setup(): {
@@ -9,7 +8,7 @@ describe('useIsIntersecting', () => {
     observe: jest.Mock
     disconnect: jest.Mock
     createObserver: jest.Mock
-    } {
+  } {
     const element = document.createElement('div')
     document.body.appendChild(element)
     const observe = jest.fn()

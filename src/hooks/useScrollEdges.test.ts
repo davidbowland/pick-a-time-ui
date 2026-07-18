@@ -1,7 +1,7 @@
-import { act, renderHook } from '@testing-library/react'
 import { RefObject } from 'react'
 
 import { useScrollEdges } from './useScrollEdges'
+import { act, renderHook } from '@testing-library/react'
 
 interface ScrollState {
   scrollLeft: number

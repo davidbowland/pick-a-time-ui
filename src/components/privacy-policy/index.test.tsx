@@ -1,8 +1,8 @@
-import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
 import React from 'react'
 
 import PrivacyPolicy from './index'
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
 
 describe('provacy-policy component', () => {
   it('should render privacy policy', async () => {

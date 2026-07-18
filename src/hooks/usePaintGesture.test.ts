@@ -1,6 +1,5 @@
-import { act, renderHook } from '@testing-library/react'
-
 import { usePaintGesture } from './usePaintGesture'
+import { act, renderHook } from '@testing-library/react'
 
 describe('usePaintGesture', () => {
   beforeAll(() => {
