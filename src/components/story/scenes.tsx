@@ -105,7 +105,10 @@ export const HeroScene = (): React.ReactNode => (
             <div className="mt-3">
               <Avatars />
             </div>
-            <p className="mt-3 text-xs text-[var(--slate)]">5 of 5 responded · 18 dates</p>
+            <p className="mt-3 text-xs text-[var(--slate)]">
+              <span className="whitespace-nowrap">5 of 5 responded</span> ·{' '}
+              <span className="whitespace-nowrap">18 dates</span>
+            </p>
             <div className="mt-3">
               <span className="rounded-xl border border-[var(--accent)]/25 bg-[var(--accent)]/10 px-3 py-1.5 text-xs font-bold text-[var(--accent-text)]">
                 Fri 6–7 PM works best
@@ -260,7 +263,10 @@ export const ShareScene = (): React.ReactNode => (
               value="https://pick-a-time.com/"
             />
           </div>
-          <p className="text-xs text-[var(--slate)]">5 joined · 18 dates on the calendar</p>
+          <p className="text-xs text-[var(--slate)]">
+            <span className="whitespace-nowrap">5 joined</span> · <span className="whitespace-nowrap">18 dates</span> on
+            the calendar
+          </p>
           <Avatars />
         </div>
       </PhoneMock>

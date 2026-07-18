@@ -57,7 +57,9 @@ export const UserOptions = ({
             <Radio.Indicator />
           </Radio.Control>
           {user.label}
-          {user.userId === lastUsedUserId && <span className="ml-1 text-xs text-[var(--slate)]">· last used</span>}
+          {user.userId === lastUsedUserId && (
+            <span className="ml-1 text-xs whitespace-nowrap text-[var(--slate)]">· last used</span>
+          )}
         </Radio.Content>
       </Radio>
     ))}

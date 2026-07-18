@@ -266,11 +266,11 @@ export const HeatGrid = ({
         </div>
       </div>
       <div className="flex items-center gap-1 text-[10px] text-[var(--slate)]">
-        <span>0 free</span>
+        <span className="whitespace-nowrap">0 free</span>
         {HEAT_STEPS.map((step) => (
           <span className="h-3 w-3 rounded" key={step.cssVar} style={{ background: `var(${step.cssVar})` }} />
         ))}
-        <span>all free</span>
+        <span className="whitespace-nowrap">all free</span>
       </div>
       <p className="text-xs text-[var(--slate)]">Tap a square to see who&rsquo;s free.</p>
       {/* The popover's state management uses three distinct patterns to work around react-aria's
@@ -320,7 +320,7 @@ export const HeatGrid = ({
         >
           <PopoverDialog aria-label={`${selected.freeCount} of ${participantCount} free`} className="p-3">
             <div className="flex flex-col gap-2 text-xs">
-              <span className="font-semibold text-[var(--bone)]">
+              <span className="font-semibold whitespace-nowrap text-[var(--bone)]">
                 {selected.freeCount} of {participantCount} free:
               </span>
               {selected.freeUserIds.length === 0 ? (
