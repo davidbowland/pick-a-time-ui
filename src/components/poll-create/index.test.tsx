@@ -738,7 +738,7 @@ describe('PollCreate', () => {
     const { push } = setup()
     jest.mocked(useAuthContext).mockReturnValue({
       isSignedIn: true,
-      user: { name: 'Alex', phone: null },
+      user: { name: 'Alex' },
       isLoading: false,
       handleSignIn: jest.fn(),
       handleSignOut: jest.fn(),

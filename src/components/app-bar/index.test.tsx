@@ -17,7 +17,7 @@ describe('AppBar', () => {
   function setupSignedIn(): void {
     jest.mocked(useAuthContext).mockReturnValue({
       isSignedIn: true,
-      user: { name: 'Alex', phone: null },
+      user: { name: 'Alex' },
       isLoading: false,
       handleSignIn,
       handleSignOut,

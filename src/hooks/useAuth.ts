@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 export interface AuthUser {
   name: string | null
-  phone: string | null
 }
 
 export interface AuthState {
@@ -28,7 +27,6 @@ export function useAuth(): AuthState {
         const claims = idToken.payload
         setUser({
           name: (claims['name'] as string) ?? null,
-          phone: (claims['phone_number'] as string) ?? null,
         })
       } else {
         setUser(null)

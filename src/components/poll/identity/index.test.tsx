@@ -70,7 +70,7 @@ describe('IdentityPhase', () => {
   function setupSignedIn(): void {
     jest.mocked(useAuthContext).mockReturnValue({
       isSignedIn: true,
-      user: { name: 'Google User', phone: null },
+      user: { name: 'Google User' },
       isLoading: false,
       handleSignIn: jest.fn(),
       handleSignOut: jest.fn(),
