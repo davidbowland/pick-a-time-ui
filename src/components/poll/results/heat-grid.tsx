@@ -324,7 +324,7 @@ export const HeatGrid = ({
                 {selected.freeCount} of {participantCount} free:
               </span>
               {selected.freeUserIds.length === 0 ? (
-                <span className="text-[var(--slate)]">no one yet</span>
+                <span className="text-[var(--slate)]">Nobody yet</span>
               ) : (
                 <ul className="flex flex-col gap-1 text-[var(--slate)]">
                   {orderFreeUserIds(selected.freeUserIds, viewerUserId).map((id) => {
