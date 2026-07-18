@@ -75,7 +75,7 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.64.0",
-    "undici": "^6.27.0"
+    "undici": "^8.7.0"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
