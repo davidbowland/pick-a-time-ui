@@ -9,7 +9,7 @@ import { formatViewerSlotLabel } from '@utils/timezone'
 import { displayName } from '@utils/users'
 
 export function attendanceTag(freeCount: number, total: number): string {
-  return freeCount === total ? "Everyone's free" : 'Best available'
+  return freeCount === total ? "Everybody's free" : 'Best available'
 }
 
 // There is no invite total to show against — the participant count only grows as people join —
@@ -83,14 +83,14 @@ export const BestSlotBanner = ({
 
 export const EmptyBestSlot = (): React.ReactNode => (
   <div className="rounded-2xl border border-[var(--hair)] bg-[var(--bone)]/[0.06] p-4 text-center text-sm text-[var(--bone)]/80">
-    No overlap yet. Once everyone paints their availability, the best time will show up here.
+    No overlap yet. Once everybody paints their availability, the best time will show up here.
   </div>
 )
 
 export const LoadingState = (): React.ReactNode => (
   <div className="flex items-center gap-3 p-4 text-sm text-[var(--slate)]" role="status">
     <Spinner size="sm" />
-    <span>Loading everyone&rsquo;s availability&hellip;</span>
+    <span>Loading everybody&rsquo;s availability&hellip;</span>
   </div>
 )
 

@@ -138,7 +138,7 @@ describe('Poll', () => {
     // Results tab is showing the real overlap panel, driven by the overlap query.
     expect(
       await screen.findByText(
-        'No overlap yet. Once everyone paints their availability, the best time will show up here.',
+        'No overlap yet. Once everybody paints their availability, the best time will show up here.',
       ),
     ).toBeInTheDocument()
   })

@@ -68,7 +68,7 @@ export const UserOptions = ({
         <Radio.Control>
           <Radio.Indicator />
         </Radio.Control>
-        Join as someone new
+        Join as somebody new
       </Radio.Content>
     </Radio>
   </RadioGroup>

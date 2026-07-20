@@ -10,7 +10,7 @@ describe('illustrative story scenes', () => {
     expect(screen.getByRole('heading', { name: /find the minute/i })).toBeInTheDocument()
   })
 
-  it('IdentityScene narrates joining anonymously', () => {
+  it('IdentityScene narrates choosing your own name, with an auto-generated one as the fallback', () => {
     render(<IdentityScene />)
     expect(screen.getByRole('heading', { name: /quiet falcon/i })).toBeInTheDocument()
   })
@@ -20,9 +20,9 @@ describe('illustrative story scenes', () => {
     expect(screen.getByRole('heading', { name: /paint your hours/i })).toBeInTheDocument()
   })
 
-  it('ResultsScene narrates the overlap', () => {
+  it('ResultsScene narrates finding the best time at a glance', () => {
     render(<ResultsScene />)
-    expect(screen.getByRole('heading', { name: /overlap/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /best time/i })).toBeInTheDocument()
   })
 
   it('ShareScene narrates the one shareable link', () => {

@@ -7,7 +7,7 @@ import Poll from '@components/poll'
 import PrivacyLink from '@components/privacy-link'
 
 const TITLE = "You're invited — Pick a Time"
-const DESCRIPTION = 'Mark the times that work for you and see where everyone overlaps. No account needed.'
+const DESCRIPTION = 'Mark the times that work for you and see where everybody overlaps. No account needed.'
 const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`
 
 function useSessionIdFromPath(): string | undefined {

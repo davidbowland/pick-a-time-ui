@@ -101,7 +101,7 @@ describe('IdentityPhase', () => {
       .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => expect(onUserSelected).toHaveBeenCalledWith('bright-heron'))
@@ -116,7 +116,7 @@ describe('IdentityPhase', () => {
     jest.mocked(createUser).mockRejectedValueOnce(error)
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(await screen.findByText('This group is full.')).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('IdentityPhase', () => {
     jest.mocked(createUser).mockRejectedValueOnce(new Error('Network error'))
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(await screen.findByText("Couldn't join. Try again.")).toBeInTheDocument()
@@ -252,13 +252,13 @@ describe('IdentityPhase', () => {
     expect(screen.getByRole('heading', { name: 'Who are you on this poll?' })).toHaveFocus()
   })
 
-  it('shows a name field only after selecting "Join as someone new" while signed out', async () => {
+  it('shows a name field only after selecting "Join as somebody new" while signed out', async () => {
     setup()
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
 
     expect(await screen.findByLabelText('Name')).toBeInTheDocument()
   })
@@ -267,7 +267,7 @@ describe('IdentityPhase', () => {
     setupSignedIn()
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
 
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
   })
@@ -279,7 +279,7 @@ describe('IdentityPhase', () => {
       .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     await waitFor(() => expect(onUserSelected).toHaveBeenCalledWith('bright-heron'))
@@ -296,7 +296,7 @@ describe('IdentityPhase', () => {
       .mockResolvedValueOnce({ userId: 'bright-heron', name: 'Alex', calendarStatus: 'not_connected' as const })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
-    await userEvent.click(screen.getByRole('radio', { name: /join as someone new/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
     await userEvent.type(await screen.findByLabelText('Name'), '  Alex  ')
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 

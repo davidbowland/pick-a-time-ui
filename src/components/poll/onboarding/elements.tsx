@@ -4,7 +4,7 @@ function preJoinCopy(pollName: string, dateCount: number): React.ReactNode {
   return (
     <>
       You&apos;ve been invited to <strong>{pollName}</strong>. No account needed — jump in, mark which of these{' '}
-      {dateCount} date{dateCount === 1 ? ' works' : 's work'} for you, and everyone&apos;s overlap updates as people
+      {dateCount} date{dateCount === 1 ? ' works' : 's work'} for you, and everybody&apos;s overlap updates as people
       join.
     </>
   )

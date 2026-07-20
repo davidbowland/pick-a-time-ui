@@ -19,8 +19,8 @@ describe('ParticipationStatus', () => {
 })
 
 describe('attendanceTag', () => {
-  it('labels full attendance as "Everyone\'s free"', () => {
-    expect(attendanceTag(3, 3)).toBe("Everyone's free")
+  it('labels full attendance as "Everybody\'s free"', () => {
+    expect(attendanceTag(3, 3)).toBe("Everybody's free")
   })
 
   it('labels partial attendance as "Best available"', () => {
@@ -29,9 +29,9 @@ describe('attendanceTag', () => {
 })
 
 describe('BestSlotBanner attendance tag', () => {
-  it('shows "Everyone\'s free" when every participant is free', () => {
+  it('shows "Everybody\'s free" when every participant is free', () => {
     render(<BestSlotBanner freeCount={3} freeUserIds={['a', 'b', 'c']} label="Thu, Sep 4" total={3} users={[]} />)
-    expect(screen.getByText("Everyone's free")).toBeInTheDocument()
+    expect(screen.getByText("Everybody's free")).toBeInTheDocument()
   })
 
   it('shows "Best available" when only some participants are free', () => {
@@ -94,7 +94,7 @@ describe('SuggestedTimes attendance tag', () => {
     excludedByCalendar: [],
   }
 
-  it('tags a fully-attended suggestion as "Everyone\'s free"', () => {
+  it('tags a fully-attended suggestion as "Everybody\'s free"', () => {
     render(
       <SuggestedTimes
         meetings={[meeting]}
@@ -104,7 +104,7 @@ describe('SuggestedTimes attendance tag', () => {
         viewerTimezone="America/Chicago"
       />,
     )
-    expect(screen.getByText(/everyone.s free/i)).toBeInTheDocument()
+    expect(screen.getByText(/everybody.s free/i)).toBeInTheDocument()
   })
 
   it('tags a partially-attended suggestion as "Best available"', () => {

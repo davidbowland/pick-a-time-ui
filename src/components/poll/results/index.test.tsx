@@ -155,7 +155,7 @@ describe('ResultsPhase', () => {
     expect(await screen.findAllByText(/2 of 2 free/i)).not.toHaveLength(0)
     expect(screen.queryByText(/of 1 free/i)).not.toBeInTheDocument()
     expect(screen.getByText(/2 people so far/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/everyone.s free/i)).not.toHaveLength(0)
+    expect(screen.getAllByText(/everybody.s free/i)).not.toHaveLength(0)
     expect(screen.queryByText(/best available/i)).not.toBeInTheDocument()
   })
 

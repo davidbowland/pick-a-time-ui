@@ -56,8 +56,8 @@ const PrivacyPolicy = (): React.ReactNode => {
 
       <Section title="Who Can See Your Data">
         <p>
-          Everyone else on a poll can see your name and the hours you&apos;ve marked as free — that&apos;s how the tool
-          works. Anyone who has the poll&apos;s link or QR code can open it and join, since a poll isn&apos;t locked to
+          Everybody else on a poll can see your name and the hours you&apos;ve marked as free — that&apos;s how the tool
+          works. Anybody who has the poll&apos;s link or QR code can open it and join, since a poll isn&apos;t locked to
           specific people, only to that link.
         </p>
       </Section>
@@ -91,8 +91,8 @@ const PrivacyPolicy = (): React.ReactNode => {
       <Section title="Data Retention">
         <p>We keep server logs for 30 days, then delete them.</p>
         <p>
-          We delete everything tied to a poll — its schedule, its participants, their names, and everyone&apos;s marked
-          availability — 14 days after the poll is created. This happens automatically, whether or not everyone has
+          We delete everything tied to a poll — its schedule, its participants, their names, and everybody&apos;s marked
+          availability — 14 days after the poll is created. This happens automatically, whether or not everybody has
           finished entering their availability, and no matter how far out the poll&apos;s dates are.
         </p>
         <p>

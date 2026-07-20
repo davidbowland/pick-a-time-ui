@@ -41,7 +41,7 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
   const meetings = data.recommendedMeetings ?? []
   // participantCount rides the poll query while free counts ride the overlap query, and a join
   // can land between their refetches — a fresher overlap can then report more people free than
-  // the stale poll says exist, rendering nonsense like "2 of 1 free". Anyone counted free is
+  // the stale poll says exist, rendering nonsense like "2 of 1 free". Anybody counted free is
   // proof of a participant, so the displayed total never falls below any free count on screen.
   const participantTotal = Math.max(
     poll.participantCount,
@@ -69,8 +69,8 @@ const ResultsPhase = ({ sessionId, poll, users, viewerUserId }: ResultsPhaseProp
         )
       : []
   // That same collapse means `BestSlotBanner`/`SuggestedTimes` are the only place a single-slot
-  // timed poll's meeting time would show — and neither renders at all before anyone's overlap
-  // exists (the `EmptyBestSlot` state, which is also the very first state anyone sees on a
+  // timed poll's meeting time would show — and neither renders at all before anybody's overlap
+  // exists (the `EmptyBestSlot` state, which is also the very first state anybody sees on a
   // freshly-created poll). State it here too, same as the painting grid does.
   const singleSlotWindow = poll.usesTimes && columns.length === 1 ? columns[0] : undefined
 

@@ -16,8 +16,9 @@ export const CreateScene = (): React.ReactNode => (
         Pick your dates.
       </h2>
       <p className="mt-4 max-w-[46ch] text-[1.08rem] leading-relaxed text-[var(--copy-color,var(--bone))]/75">
-        Name the poll, pick the dates on the calendar — or fill in a weekly pattern in one tap — and add a time window
-        if it matters. This form is real — fill it in and we&apos;ll build your poll.
+        Name the poll. Then choose dates — click them one at a time on the calendar, or set a weekly pattern like
+        &lsquo;every Tuesday&rsquo; in one tap. Add a time window only if the hour matters. This form is real: fill it
+        in and we&apos;ll build your poll.
       </p>
     </div>
     <div className="mx-auto w-full max-w-md">
