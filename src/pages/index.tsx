@@ -18,11 +18,13 @@ const PAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/`
 
 const Index = (): React.ReactNode => {
   const createSceneRef = useRef<HTMLDivElement>(null)
+  const pollFormRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
 
   const scrollToCreateScene = (): void => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    createSceneRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+    const target = pollFormRef.current ?? createSceneRef.current
+    target?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
   }
 
   return (
@@ -55,7 +57,7 @@ const Index = (): React.ReactNode => {
           <HeroScene />
         </section>
         <section className={SCENE_CLASS} ref={createSceneRef}>
-          <CreateScene />
+          <CreateScene formRef={pollFormRef} />
         </section>
         <section className={SCENE_CLASS}>
           <IdentityScene />
@@ -69,9 +71,9 @@ const Index = (): React.ReactNode => {
         <section className={SCENE_CLASS}>
           <ShareScene />
         </section>
-        <div className="md:flex md:min-h-[100dvh] md:flex-col" ref={footerRef}>
-          <div className="md:flex md:flex-1 md:items-center">
-            <div className="md:w-full">
+        <div className="flex min-h-[100dvh] flex-col" ref={footerRef}>
+          <div className="flex flex-1 items-center">
+            <div className="w-full">
               <ClosingFooter onBackToStart={scrollToCreateScene} />
             </div>
           </div>

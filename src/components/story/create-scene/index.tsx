@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { RefObject } from 'react'
 
 import PollCreate from '@components/poll-create'
 import { EyebrowTag } from '@components/ui/eyebrow-tag'
 
-export const CreateScene = (): React.ReactNode => (
+export const CreateScene = ({ formRef }: { formRef?: RefObject<HTMLDivElement | null> }): React.ReactNode => (
   // `grid-cols-1` (rather than bare `grid`) gives the mobile track an explicit `minmax(0, 1fr)`,
   // so it can't grow past the viewport to fit a descendant's un-wrapped `truncate` text
   // (`white-space: nowrap` reports that text's full width as this column's intrinsic size unless
@@ -21,7 +21,7 @@ export const CreateScene = (): React.ReactNode => (
         in and we&apos;ll build your poll.
       </p>
     </div>
-    <div className="mx-auto w-full max-w-md">
+    <div className="mx-auto w-full max-w-md scroll-mt-6" ref={formRef}>
       <PollCreate />
     </div>
   </div>

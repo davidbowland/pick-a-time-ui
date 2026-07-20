@@ -3,7 +3,7 @@ import React from 'react'
 import { PillButton } from '@components/ui/pill-button'
 
 export const ClosingFooter = ({ onBackToStart }: { onBackToStart: () => void }): React.ReactNode => (
-  <footer className="px-5 py-32 text-center">
+  <footer className="px-5 py-12 text-center">
     <div className="mx-auto max-w-[640px]">
       <h2 className="text-[clamp(1.6rem,3vw,2.2rem)] font-medium text-[var(--copy-color,var(--bone))]">
         Now go find the time that works.
