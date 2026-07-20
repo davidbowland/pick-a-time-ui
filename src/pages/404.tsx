@@ -15,7 +15,7 @@ const NotFound = (): React.ReactNode => {
     return (
       <>
         <Head>
-          <title>404: Not Found | dbowland.com</title>
+          <title>Page not found | Pick a Time</title>
         </Head>
         <AppBar />
         <div className="mx-auto mt-8 max-w-md px-4 text-center">
@@ -31,7 +31,7 @@ const NotFound = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>404: Not Found | dbowland.com</title>
+        <title>You&apos;re invited — Pick a Time</title>
       </Head>
     </>
   )

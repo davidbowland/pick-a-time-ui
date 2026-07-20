@@ -10,7 +10,7 @@ import { SkyBackground } from '@components/story/sky-background'
 
 const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
 
-const TITLE = "Pick a Time — find the minute everybody's free"
+const TITLE = "Pick a Time — Find the minute everybody's free"
 const DESCRIPTION =
   'Start a poll, send one link, and see the times everybody can make. No accounts, no reply-all threads.'
 const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`

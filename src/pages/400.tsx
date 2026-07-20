@@ -8,7 +8,7 @@ const BadRequest = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>400: Bad Request | dbowland.com</title>
+        <title>Something went wrong | Pick a Time</title>
       </Head>
       <AppBar />
       <div className="mx-auto mt-8 max-w-md px-4 text-center">

@@ -8,7 +8,7 @@ const InternalServerError = (): React.ReactNode => {
   return (
     <>
       <Head>
-        <title>500: Internal Server Error | dbowland.com</title>
+        <title>Something went wrong on our end | Pick a Time</title>
       </Head>
       <AppBar />
       <div className="mx-auto mt-8 max-w-md px-4 text-center">
