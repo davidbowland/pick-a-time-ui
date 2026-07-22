@@ -28,4 +28,13 @@ describe('CreateScene', () => {
     // form must not live inside one, or it inherits the "this is a picture" visual grammar.
     expect(container.querySelector('[aria-hidden="true"] [data-testid="real-poll-create"]')).not.toBeInTheDocument()
   })
+
+  it('forwards the controlled name props to PollCreate', () => {
+    const onNameChange = jest.fn()
+    const registerFocusName = jest.fn()
+    render(<CreateScene name="Book club" onNameChange={onNameChange} registerFocusName={registerFocusName} />)
+    expect(jest.mocked(PollCreate).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ name: 'Book club', onNameChange, registerFocusName }),
+    )
+  })
 })

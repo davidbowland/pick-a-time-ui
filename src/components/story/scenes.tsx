@@ -11,12 +11,14 @@ const SceneLayout = ({
   heading,
   copy,
   visual,
+  action,
   reverse = false,
 }: {
   eyebrow: string
   heading: string
   copy: string
   visual: React.ReactNode
+  action?: React.ReactNode
   reverse?: boolean
 }): React.ReactNode => (
   // `grid-cols-1` (rather than bare `grid`) gives the mobile track an explicit `minmax(0, 1fr)`,
@@ -31,6 +33,7 @@ const SceneLayout = ({
         {heading}
       </h2>
       <p className="mt-4 max-w-[46ch] text-[1.08rem] leading-relaxed text-[var(--copy-color,var(--bone))]/75">{copy}</p>
+      {action && <div className="mt-6">{action}</div>}
     </div>
     <div className={reverse ? 'md:order-first' : undefined}>{visual}</div>
   </div>
@@ -216,8 +219,9 @@ const MockRadioOption = ({ label, selected }: { label: string; selected?: boolea
   </div>
 )
 
-export const HeroScene = (): React.ReactNode => (
+export const HeroScene = ({ action }: { action?: React.ReactNode } = {}): React.ReactNode => (
   <SceneLayout
+    action={action}
     copy="Start a poll. Send one link. Watch the times fill in as people mark when they're free. No downloads, no logins needed."
     eyebrow="No cost. No account."
     heading="Find the minute everybody's free."

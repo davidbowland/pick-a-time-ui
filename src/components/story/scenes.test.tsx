@@ -10,6 +10,11 @@ describe('illustrative story scenes', () => {
     expect(screen.getByRole('heading', { name: /find the minute/i })).toBeInTheDocument()
   })
 
+  it('HeroScene renders an action slot when given one', () => {
+    render(<HeroScene action={<button type="button">Start</button>} />)
+    expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
+  })
+
   it('IdentityScene narrates choosing your own name, with an auto-generated one as the fallback', () => {
     render(<IdentityScene />)
     expect(screen.getByRole('heading', { name: /quiet falcon/i })).toBeInTheDocument()

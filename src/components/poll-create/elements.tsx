@@ -1,5 +1,5 @@
 import { FieldError, Input, Label, TextField } from '@heroui/react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Minus, Plus } from 'lucide-react'
 import React, { useId } from 'react'
 
@@ -11,25 +11,31 @@ const SETTLED_BOX_SHADOW = '0 0 0 0 rgba(63,174,138,0)'
 
 const STEPPER_BUTTON_CLASS = `flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hair)] bg-[var(--bone)]/[0.05] text-[var(--bone)] hover:bg-[var(--bone)]/[0.1] ${FOCUS_RING}`
 
-export const CreateCard = ({ children }: { children: React.ReactNode }): React.ReactNode => (
-  <motion.div
-    animate={{ boxShadow: SETTLED_BOX_SHADOW }}
-    // `motion-reduce:` maps directly to the `prefers-reduced-motion: reduce` media query.
-    // The trailing `!` (Tailwind v4 important syntax) makes this an important author-stylesheet
-    // rule, which legitimately beats framer-motion's plain (non-!important) inline `style`
-    // per the CSS cascade — pinning the box-shadow to its settled, no-glow value for
-    // reduced-motion users without any JS state, SSR guard, or hydration-mismatch risk.
-    className="rounded-[2rem] border border-[var(--hair)] bg-[var(--bone)]/[0.06] p-1.5 motion-reduce:[box-shadow:0_0_0_0_rgba(63,174,138,0)]!"
-    initial={{ boxShadow: '0 0 0 4px rgba(63,174,138,0.35)' }}
-    transition={{ duration: 1.1, ease: [0.32, 0.72, 0, 1] }}
-    viewport={{ once: true, amount: 0.6 }}
-    whileInView={{ boxShadow: SETTLED_BOX_SHADOW }}
-  >
-    <div className="rounded-[calc(2rem-0.375rem)] bg-[var(--ink)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-      <div className="flex flex-col gap-[18px]">{children}</div>
-    </div>
-  </motion.div>
-)
+export const CreateCard = ({ children }: { children: React.ReactNode }): React.ReactNode => {
+  // The card announces itself as it scrolls into view: a one-time fade + rise layered over the
+  // existing accent-glow settle, so it reads as a live surface assembling rather than a static
+  // screenshot. `once: true` means it settles once with no re-trigger or bounce, and the whole
+  // card moves as a single unit so a pre-filled name never jitters. Reduced-motion users skip the
+  // entrance entirely (`initial={false}` renders the settled state) — the `motion-reduce:` class
+  // still pins the box-shadow with no JS/SSR/hydration risk.
+  const reduce = useReducedMotion()
+  return (
+    <motion.div
+      animate={{ boxShadow: SETTLED_BOX_SHADOW }}
+      className="rounded-[2rem] border border-[var(--hair)] bg-[var(--bone)]/[0.06] p-1.5 motion-reduce:[box-shadow:0_0_0_0_rgba(63,174,138,0)]!"
+      initial={reduce ? false : { boxShadow: '0 0 0 4px rgba(63,174,138,0.35)', opacity: 0, y: 14 }}
+      transition={{ duration: 1.1, ease: [0.32, 0.72, 0, 1] }}
+      // Trigger as soon as any sliver is in view (not 50%), so a form taller than a short mobile
+      // viewport — e.g. after the hero's Start scrolls it to the top — can never strand at opacity 0.
+      viewport={{ once: true, amount: 0.1 }}
+      whileInView={{ boxShadow: SETTLED_BOX_SHADOW, opacity: 1, y: 0 }}
+    >
+      <div className="rounded-[calc(2rem-0.375rem)] bg-[var(--ink)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="flex flex-col gap-[18px]">{children}</div>
+      </div>
+    </motion.div>
+  )
+}
 
 export const CreateCardHeader = (): React.ReactNode => (
   <div className="flex flex-col gap-2">

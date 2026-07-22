@@ -56,13 +56,29 @@ const waitForRecaptcha = (): Promise<void> =>
 
 export interface PollCreateProps {
   now?: () => CalendarDate
+  name?: string
+  onNameChange?: (name: string) => void
+  registerFocusName?: (focus: () => void) => void
 }
 
-const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreateProps): React.ReactNode => {
+const PollCreate = ({
+  now = () => calendarToday(getLocalTimeZone()),
+  name: controlledName,
+  onNameChange,
+  registerFocusName,
+}: PollCreateProps): React.ReactNode => {
   const router = useRouter()
   const [openSection, setOpenSection] = useState<OpenSection>('name')
   const [furthestIndex, setFurthestIndex] = useState(0)
-  const [name, setName] = useState('')
+  // The poll name is optionally controlled by the landing page so a hero starter can share it.
+  // When left uncontrolled (the standalone default), it manages its own state — keeping every
+  // existing caller and test working unchanged.
+  const [internalName, setInternalName] = useState('')
+  const name = controlledName ?? internalName
+  const setName = (next: string): void => {
+    if (onNameChange) onNameChange(next)
+    else setInternalName(next)
+  }
   const [nameError, setNameError] = useState<string | undefined>()
   const [dates, setDates] = useState<string[]>([])
   const [datesError, setDatesError] = useState<string | undefined>()
@@ -94,7 +110,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   const reviewSectionRef = useRef<HTMLDivElement>(null)
   const isFirstOpenSectionRenderRef = useRef(true)
   const calendarRef = useRef<HTMLDivElement>(null)
-  const { isSignedIn } = useAuthContext()
+  const { isSignedIn, isLoading: isAuthLoading } = useAuthContext()
   const isSignedInRef = useRef(isSignedIn)
   isSignedInRef.current = isSignedIn
   const [voterName, setVoterName] = useState('')
@@ -124,6 +140,13 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
     if (nameError) nameInputRef.current?.focus()
   }, [nameError])
 
+  // Expose a focus handle so the hero starter's "Start" can move focus into the poll-name field
+  // after it scrolls the form into view. `preventScroll` keeps the focus from cancelling that
+  // smooth scroll (the caller focuses synchronously so iOS still opens the keyboard).
+  useEffect(() => {
+    registerFocusName?.(() => nameInputRef.current?.focus({ preventScroll: true }))
+  }, [registerFocusName])
+
   // Opening the next section can grow or shrink the page height above/around the current scroll
   // position by hundreds of pixels (e.g. the Days & times editor expanding from a one-line
   // summary, or collapsing back to one). scrollTop doesn't move when that happens, so the content
@@ -152,6 +175,31 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       document.body.appendChild(script)
     }
   }, [])
+
+  // reCAPTCHA v3 scores the first, cold `execute` of a page load low (0.2–0.4) because it has
+  // gathered almost no behavioural signal yet; the next execute, against a warmed session, scores
+  // ~0.8. Fire one throwaway warm-up here so the user's real submission is never the cold first
+  // token. Signed-out only (the signed-in path skips reCAPTCHA), once per mount, and best-effort —
+  // a failed warm-up must never block or surface to the user.
+  // Primed once the visitor shows create intent (the first "Continue"), not on every landing-page
+  // view — so we only spend a reCAPTCHA assessment on people actually starting a poll. The name and
+  // days/times steps between here and submit give the warmed session plenty of time to settle.
+  // Signed-out only (the signed-in submit path skips reCAPTCHA), once, and best-effort — a failed
+  // warm-up must never block or surface to the user.
+  const hasPrimedRef = useRef(false)
+  const primeRecaptcha = (): void => {
+    if (isSignedIn || isAuthLoading || hasPrimedRef.current) return
+    hasPrimedRef.current = true
+    const prime = async (): Promise<void> => {
+      try {
+        await waitForRecaptcha()
+        await grecaptcha.execute(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY, { action: 'WARMUP' })
+      } catch {
+        // best-effort priming; ignore failures
+      }
+    }
+    void prime()
+  }
 
   useEffect(() => {
     if (!config) return
@@ -205,6 +253,7 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
       return createPoll(input, token)
     },
     onSuccess: async (data) => {
+      let identifiedUserId: string | undefined
       try {
         const newUser = await createUser(data.sessionId, isSignedInRef.current)
         const trimmedVoterName = voterName.trim()
@@ -217,13 +266,24 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
           )
         }
         setSessionCookie(data.sessionId, newUser.userId)
+        identifiedUserId = newUser.userId
       } catch (err) {
         // The poll itself was created successfully — a failure here just means the creator falls
         // back to the normal auto-create/picker flow on the poll page, same as any first-time visitor.
         console.warn('Post-creation voter setup failed; falling back to standard identity flow', err)
       }
       setIsNavigating(true)
-      router.push(`/p/${data.sessionId}`)
+      // Carry the creator's id in the URL rather than relying on the just-set cookie. During this
+      // client-side navigation the poll page reads its identity cookie once, synchronously, as it
+      // mounts — but a cookie scoped to `/p/{sessionId}` that was written moments ago on a
+      // different path isn't yet visible to `document.cookie` in that first read, so the creator
+      // would land on the "Who are you?" picker until a full refresh. The `?id=` param is the poll
+      // page's built-in identity hand-off: it identifies the creator immediately and strips itself
+      // from the URL, while the cookie still handles refreshes and return visits.
+      const target = identifiedUserId
+        ? `/p/${data.sessionId}?id=${encodeURIComponent(identifiedUserId)}`
+        : `/p/${data.sessionId}`
+      router.push(target)
     },
     onError: (error: unknown) => {
       if (error instanceof ApiError && error.response?.statusCode === 403) {
@@ -239,6 +299,10 @@ const PollCreate = ({ now = () => calendarToday(getLocalTimeZone()) }: PollCreat
   })
 
   const goToNextSection = (): void => {
+    // The first advance out of a step is the earliest reliable signal of create intent; warm up
+    // reCAPTCHA now so the eventual submit runs on a high-scoring token. `primeRecaptcha` is a
+    // once-only no-op after the first call.
+    primeRecaptcha()
     const idx = SECTION_ORDER.indexOf(openSection)
     if (idx < SECTION_ORDER.length - 1) {
       const nextIdx = idx + 1

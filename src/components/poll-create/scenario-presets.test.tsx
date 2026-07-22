@@ -1,8 +1,8 @@
 import React from 'react'
 
-import { ScenarioPresets } from './scenario-presets'
+import { describePreset, ScenarioPresets } from './scenario-presets'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 describe('ScenarioPresets', () => {
@@ -111,5 +111,67 @@ describe('ScenarioPresets', () => {
 
     expect(screen.getByText('Quick-fill (optional)')).toBeInTheDocument()
     expect(screen.getByText('Tap to fill in the days, dates, and time below.')).toBeInTheDocument()
+  })
+
+  describe('describePreset', () => {
+    it('describes a timed preset in plain language', () => {
+      expect(
+        describePreset({
+          label: 'Weekday dinner',
+          short: 'Dinner',
+          group: 'weekday',
+          weekdays: [1, 2, 3, 4, 5],
+          usesTimes: true,
+          startMinute: 1050,
+          endMinute: 1200,
+          slotMinutes: 90,
+        }),
+      ).toBe('Filled weekdays · dinner 5:30–8:00 PM · 90-minute slots')
+    })
+
+    it('describes a no-time preset', () => {
+      expect(
+        describePreset({
+          label: 'Weekends, no time',
+          short: 'No time',
+          group: 'weekend',
+          weekdays: [0, 6],
+          usesTimes: false,
+        }),
+      ).toBe('Filled weekends · no set time')
+    })
+  })
+
+  describe('momentary quick-fill feedback', () => {
+    beforeAll(() => jest.useFakeTimers())
+    afterAll(() => jest.useRealTimers())
+
+    it('announces what was filled and flashes the chip, then clears', () => {
+      render(<ScenarioPresets onApply={jest.fn()} />)
+      const dinner = screen.getByRole('button', { name: 'Weekdays Dinner' })
+
+      fireEvent.click(dinner)
+
+      expect(screen.getByRole('status')).toHaveTextContent('Filled weekdays · dinner 5:30–8:00 PM · 90-minute slots')
+      expect(within(dinner).getByText('Filled')).toBeInTheDocument()
+
+      act(() => {
+        jest.advanceTimersByTime(1600)
+      })
+
+      expect(within(dinner).queryByText('Filled')).not.toBeInTheDocument()
+    })
+
+    it('moves the flash to the most recently applied preset', () => {
+      render(<ScenarioPresets onApply={jest.fn()} />)
+      const lunch = screen.getByRole('button', { name: 'Weekdays Lunch' })
+      const dinner = screen.getByRole('button', { name: 'Weekdays Dinner' })
+
+      fireEvent.click(lunch)
+      fireEvent.click(dinner)
+
+      expect(within(lunch).queryByText('Filled')).not.toBeInTheDocument()
+      expect(within(dinner).getByText('Filled')).toBeInTheDocument()
+    })
   })
 })

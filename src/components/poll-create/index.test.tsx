@@ -215,7 +215,7 @@ describe('PollCreate', () => {
       }),
       'token',
     )
-    expect(push).toHaveBeenCalledWith('/p/amber-harbor')
+    expect(push).toHaveBeenCalledWith('/p/amber-harbor?id=clever-fox')
   })
 
   it('should add another week of dates automatically when the week count is bumped after a preset is applied', async () => {
@@ -752,7 +752,7 @@ describe('PollCreate', () => {
 
     await waitFor(() => expect(createPoll).toHaveBeenCalled())
     expect(createPollAuthed).not.toHaveBeenCalled()
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/p/amber-harbor'))
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/p/amber-harbor?id=clever-fox'))
   })
 
   it('creates the voter and patches the trimmed "Your name" after poll creation succeeds', async () => {
@@ -806,7 +806,7 @@ describe('PollCreate', () => {
       expect(createPollAuthed).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch with friends' })),
     )
     expect(createPoll).not.toHaveBeenCalled()
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/p/amber-harbor'))
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/p/amber-harbor?id=clever-fox'))
   })
 
   it('still redirects when the post-creation voter setup fails', async () => {
@@ -823,5 +823,108 @@ describe('PollCreate', () => {
     await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/p/amber-harbor'))
+  })
+
+  function renderWithProps(props: React.ComponentProps<typeof PollCreate>): ReturnType<typeof render> {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <PollCreate now={fixedNow} {...props} />
+      </QueryClientProvider>,
+    )
+  }
+
+  describe('controlled poll name', () => {
+    it('renders a controlled poll name from props', async () => {
+      setup()
+      renderWithProps({ name: 'Book club', onNameChange: jest.fn() })
+      expect(await screen.findByDisplayValue('Book club')).toBeInTheDocument()
+    })
+
+    it('reports poll-name edits to onNameChange when controlled', async () => {
+      setup()
+      const onNameChange = jest.fn()
+      renderWithProps({ name: '', onNameChange })
+      await userEvent.type(screen.getByLabelText(/poll name/i), 'Ga')
+      expect(onNameChange).toHaveBeenCalledWith('G')
+      expect(onNameChange).toHaveBeenCalledWith('a')
+    })
+
+    it('registers a focus handler that focuses the poll-name field without scrolling', async () => {
+      setup()
+      let focusFn: (() => void) | undefined
+      renderWithProps({
+        registerFocusName: (fn) => {
+          focusFn = fn
+        },
+      })
+      const input = await screen.findByLabelText(/poll name/i)
+      const focusSpy = jest.spyOn(input, 'focus')
+      focusFn?.()
+      expect(input).toHaveFocus()
+      // preventScroll keeps the hero Start's smooth scroll from being cancelled by the focus.
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
+    })
+  })
+
+  describe('reCAPTCHA priming', () => {
+    const warmup = { action: 'WARMUP' }
+
+    it('does not prime on mount, only on create intent', async () => {
+      setup()
+      renderWithProps({})
+      await screen.findByLabelText(/poll name/i)
+      expect((global as any).grecaptcha.execute).not.toHaveBeenCalledWith(expect.any(String), warmup)
+    })
+
+    it('fires a warm-up execute when the visitor continues past the first step', async () => {
+      setup()
+      renderWithProps({})
+      await screen.findByLabelText(/poll name/i)
+      await userEvent.click(continueButton())
+      await waitFor(() => expect((global as any).grecaptcha.execute).toHaveBeenCalledWith(expect.any(String), warmup))
+    })
+
+    it('does not prime when signed in', async () => {
+      setup()
+      jest.mocked(useAuthContext).mockReturnValue({
+        isSignedIn: true,
+        user: null,
+        isLoading: false,
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+      })
+      renderWithProps({})
+      await userEvent.click(continueButton())
+      expect((global as any).grecaptcha.execute).not.toHaveBeenCalledWith(expect.any(String), warmup)
+    })
+
+    it('does not prime while auth is still loading', async () => {
+      setup()
+      jest.mocked(useAuthContext).mockReturnValue({
+        isSignedIn: false,
+        user: null,
+        isLoading: true,
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+      })
+      renderWithProps({})
+      await userEvent.click(continueButton())
+      expect((global as any).grecaptcha.execute).not.toHaveBeenCalledWith(expect.any(String), warmup)
+    })
+
+    it('surfaces no error to the user when priming fails', async () => {
+      setup()
+      ;(global as any).grecaptcha = {
+        ready: (cb: () => void) => cb(),
+        execute: jest.fn().mockRejectedValue(new Error('nope')),
+      }
+      renderWithProps({})
+      await userEvent.click(continueButton())
+      await waitFor(() => expect((global as any).grecaptcha.execute).toHaveBeenCalled())
+      // A failed warm-up must not block the flow or show an error: the next step still opens.
+      expect(await screen.findByText(/how many weeks/i)).toBeInTheDocument()
+      expect(screen.queryByText(/security check/i)).not.toBeInTheDocument()
+    })
   })
 })

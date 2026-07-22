@@ -1,9 +1,19 @@
 import React, { RefObject } from 'react'
 
 import PollCreate from '@components/poll-create'
-import { EyebrowTag } from '@components/ui/eyebrow-tag'
+import { LivePill } from '@components/story/live-pill'
 
-export const CreateScene = ({ formRef }: { formRef?: RefObject<HTMLDivElement | null> }): React.ReactNode => (
+export const CreateScene = ({
+  formRef,
+  name,
+  onNameChange,
+  registerFocusName,
+}: {
+  formRef?: RefObject<HTMLDivElement | null>
+  name?: string
+  onNameChange?: (name: string) => void
+  registerFocusName?: (focus: () => void) => void
+}): React.ReactNode => (
   // `grid-cols-1` (rather than bare `grid`) gives the mobile track an explicit `minmax(0, 1fr)`,
   // so it can't grow past the viewport to fit a descendant's un-wrapped `truncate` text
   // (`white-space: nowrap` reports that text's full width as this column's intrinsic size unless
@@ -11,7 +21,7 @@ export const CreateScene = ({ formRef }: { formRef?: RefObject<HTMLDivElement | 
   // blow the whole page out once it first rendered.
   <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-12 px-5 md:grid-cols-2 md:items-center md:gap-20">
     <div>
-      <EyebrowTag>This one&apos;s live — try it now</EyebrowTag>
+      <LivePill />
       <h2 className="mt-4 text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium text-[var(--copy-color,var(--bone))]">
         Pick your dates.
       </h2>
@@ -22,7 +32,7 @@ export const CreateScene = ({ formRef }: { formRef?: RefObject<HTMLDivElement | 
       </p>
     </div>
     <div className="mx-auto w-full max-w-md scroll-mt-6" ref={formRef}>
-      <PollCreate />
+      <PollCreate name={name} onNameChange={onNameChange} registerFocusName={registerFocusName} />
     </div>
   </div>
 )
