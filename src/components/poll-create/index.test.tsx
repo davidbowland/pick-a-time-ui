@@ -9,7 +9,7 @@ import { useAuthContext } from '@components/auth-context'
 import { setSessionCookie } from '@hooks/useSessionCookie'
 import { createPoll, createPollAuthed, createUser, fetchConfig, patchUser } from '@services/api'
 import '@testing-library/jest-dom'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('@components/auth-context')
@@ -850,20 +850,59 @@ describe('PollCreate', () => {
       expect(onNameChange).toHaveBeenCalledWith('a')
     })
 
-    it('registers a focus handler that focuses the poll-name field without scrolling', async () => {
+    it('registers a focus handler that skips the already-filled poll name and focuses your name', async () => {
       setup()
       let focusFn: (() => void) | undefined
       renderWithProps({
+        name: 'Book club',
+        onNameChange: jest.fn(),
+        registerFocusName: (fn) => {
+          focusFn = fn
+        },
+      })
+      const input = await screen.findByLabelText(/your name/i)
+      const focusSpy = jest.spyOn(input, 'focus')
+      act(() => focusFn?.())
+      expect(input).toHaveFocus()
+      // preventScroll keeps the hero Start's smooth scroll from being cancelled by the focus.
+      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
+    })
+
+    it('focuses the poll-name field instead when the hero handed over an empty name', async () => {
+      setup()
+      let focusFn: (() => void) | undefined
+      renderWithProps({
+        name: '   ',
+        onNameChange: jest.fn(),
         registerFocusName: (fn) => {
           focusFn = fn
         },
       })
       const input = await screen.findByLabelText(/poll name/i)
-      const focusSpy = jest.spyOn(input, 'focus')
-      focusFn?.()
+      act(() => focusFn?.())
       expect(input).toHaveFocus()
-      // preventScroll keeps the hero Start's smooth scroll from being cancelled by the focus.
-      expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
+    })
+
+    it('focuses the poll-name field when signed in, since there is no your-name field to fill', async () => {
+      setup()
+      jest.mocked(useAuthContext).mockReturnValue({
+        isSignedIn: true,
+        user: null,
+        isLoading: false,
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+      })
+      let focusFn: (() => void) | undefined
+      renderWithProps({
+        name: 'Book club',
+        onNameChange: jest.fn(),
+        registerFocusName: (fn) => {
+          focusFn = fn
+        },
+      })
+      const input = await screen.findByLabelText(/poll name/i)
+      act(() => focusFn?.())
+      expect(input).toHaveFocus()
     })
   })
 

@@ -27,6 +27,13 @@ describe('VoterNameField', () => {
     expect(screen.getByText('Optional — skip it and we’ll give you a name like ‘Clever Fox.’')).toBeInTheDocument()
   })
 
+  it('exposes the underlying input through a forwarded ref so callers can focus it', () => {
+    const ref = React.createRef<HTMLInputElement>()
+    render(<VoterNameField label="Name" onChange={jest.fn()} ref={ref} value="" />)
+
+    expect(ref.current).toBe(screen.getByLabelText('Name'))
+  })
+
   it('applies the maxLength constraint to the input when provided', () => {
     render(<VoterNameField label="Name" maxLength={50} onChange={jest.fn()} value="" />)
 

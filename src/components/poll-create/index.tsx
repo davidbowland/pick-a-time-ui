@@ -105,9 +105,12 @@ const PollCreate = ({
   const datesRef = useRef<string[]>([])
   const lastPatternDatesRef = useRef<string[]>([])
   const nameInputRef = useRef<HTMLInputElement>(null)
+  const voterNameInputRef = useRef<HTMLInputElement>(null)
   const nameSectionRef = useRef<HTMLDivElement>(null)
   const daysTimesSectionRef = useRef<HTMLDivElement>(null)
   const reviewSectionRef = useRef<HTMLDivElement>(null)
+  const nameRef = useRef(name)
+  nameRef.current = name
   const isFirstOpenSectionRenderRef = useRef(true)
   const calendarRef = useRef<HTMLDivElement>(null)
   const { isSignedIn, isLoading: isAuthLoading } = useAuthContext()
@@ -140,11 +143,20 @@ const PollCreate = ({
     if (nameError) nameInputRef.current?.focus()
   }, [nameError])
 
-  // Expose a focus handle so the hero starter's "Start" can move focus into the poll-name field
-  // after it scrolls the form into view. `preventScroll` keeps the focus from cancelling that
-  // smooth scroll (the caller focuses synchronously so iOS still opens the keyboard).
+  // Expose a focus handle so the hero starter's "Start" can move focus into the form after it
+  // scrolls it into view. The hero already captured the poll name, so the first thing still to
+  // type is "Your name" — land there rather than back in a field the visitor just filled. Falls
+  // back to the poll-name field when there's nothing to skip (the hero handed over a blank name)
+  // or nowhere to skip to (signed in, so no voter-name field renders). Reads the refs at call
+  // time, so the handler registers once and still sees the current name and fields.
+  // `preventScroll` keeps the focus from cancelling that smooth scroll (the caller focuses
+  // synchronously so iOS still opens the keyboard).
   useEffect(() => {
-    registerFocusName?.(() => nameInputRef.current?.focus({ preventScroll: true }))
+    registerFocusName?.(() => {
+      const skipsFilledName = nameRef.current.trim() !== ''
+      const target = (skipsFilledName ? voterNameInputRef.current : null) ?? nameInputRef.current
+      target?.focus({ preventScroll: true })
+    })
   }, [registerFocusName])
 
   // Opening the next section can grow or shrink the page height above/around the current scroll
@@ -441,6 +453,7 @@ const PollCreate = ({
                 label="Your name"
                 maxLength={config?.participantNameMaxLength}
                 onChange={setVoterName}
+                ref={voterNameInputRef}
                 value={voterName}
               />
             )}
