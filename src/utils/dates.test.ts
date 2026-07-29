@@ -1,4 +1,4 @@
-import { addDays, formatExpiration, formatShortDate, isWeekendDate, toIsoDate } from './dates'
+import { addDays, buildGridDateLabels, formatExpiration, formatShortDate, isWeekendDate, toIsoDate } from './dates'
 
 describe('toIsoDate', () => {
   it('formats a local Date as YYYY-MM-DD, zero-padded', () => {
@@ -31,6 +31,44 @@ describe('formatExpiration', () => {
   it('renders a different clock time and date for a different zone from the same instant', () => {
     const expirationSeconds = Date.UTC(2026, 7, 24, 17, 30) / 1000 // 2026-08-24T17:30:00Z
     expect(formatExpiration(expirationSeconds, 'Asia/Tokyo')).toBe('Closes Aug 25, 2026 at 2:30 AM')
+  })
+})
+
+describe('buildGridDateLabels', () => {
+  it('shows the month on the first row only, within one month', () => {
+    expect(buildGridDateLabels(['2026-07-28', '2026-07-29', '2026-07-30'])).toEqual(['Tue Jul 28', 'Wed 29', 'Thu 30'])
+  })
+
+  it('shows the month again on a row entering a new month', () => {
+    expect(buildGridDateLabels(['2026-07-30', '2026-07-31', '2026-08-01'])).toEqual([
+      'Thu Jul 30',
+      'Fri 31',
+      'Sat Aug 1',
+    ])
+  })
+
+  it('never includes a year, even across a year boundary', () => {
+    expect(buildGridDateLabels(['2026-12-31', '2027-01-01'])).toEqual(['Thu Dec 31', 'Fri Jan 1'])
+  })
+
+  it('repeats the month when the same month recurs in a later year', () => {
+    expect(buildGridDateLabels(['2026-07-28', '2027-07-28'])).toEqual(['Tue Jul 28', 'Wed Jul 28'])
+  })
+
+  it('compares against the previous listed date, not the previous calendar day', () => {
+    expect(buildGridDateLabels(['2026-07-28', '2026-08-04', '2026-08-05'])).toEqual([
+      'Tue Jul 28',
+      'Tue Aug 4',
+      'Wed 5',
+    ])
+  })
+
+  it('shows the month for a single date', () => {
+    expect(buildGridDateLabels(['2026-07-28'])).toEqual(['Tue Jul 28'])
+  })
+
+  it('returns an empty array for no dates', () => {
+    expect(buildGridDateLabels([])).toEqual([])
   })
 })
 

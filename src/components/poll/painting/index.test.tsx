@@ -78,6 +78,17 @@ describe('PaintingPhase', () => {
     ], // 6:00-7:00 PM
   }
 
+  // One date, three slots — the shape this collapse exists for. Every grid column is a time slot,
+  // so the date moves out of the sticky column and above the grid.
+  const singleDatePoll: PollData = { ...poll, dates: ['2025-09-04'], slots: [poll.slots[0]] }
+
+  // One date AND one slot: both notes would fire, so they combine into one line.
+  const singleDateSingleSlotPoll: PollData = {
+    ...singleSlotTimedPoll,
+    dates: ['2025-09-04'],
+    slots: [singleSlotTimedPoll.slots[0]],
+  }
+
   const datesOnlyPoll: PollData = {
     sessionId: 'amber-harbor',
     name: 'Lunch with friends',
@@ -113,12 +124,23 @@ describe('PaintingPhase', () => {
     expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
   })
 
+  // `Thu, Sep 4`, not the `Thu Sep 4` the row header shows: the visible row label drops the month
+  // on rows after the first, and a cell's aria-label is exactly the out-of-context announcement
+  // where that month matters most.
   it('should label each cell with its date and time so screen readers can announce it', async () => {
     mockEmptyAvailability()
 
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM' })).toBeInTheDocument()
+  })
+
+  it('should state the slot cadence once, since the column headers omit end times', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText('Each column is a 1-hour slot.')).toBeInTheDocument()
   })
 
   it('should PATCH the painted cell on pointer up', async () => {
@@ -663,13 +685,62 @@ describe('PaintingPhase', () => {
     expect(screen.queryByText(/meeting time/i)).not.toBeInTheDocument()
   })
 
+  it('should state the date above the grid for a single-date poll, which renders no date column', async () => {
+    jest.mocked(fetchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [[false, false, false]],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={singleDatePoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText('Date: Thu, Sep 4')).toBeInTheDocument()
+    expect(screen.queryByRole('rowheader')).not.toBeInTheDocument()
+  })
+
+  it('should combine the date and the meeting time into one line when the poll has one of each', async () => {
+    jest.mocked(fetchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [[false]],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase poll={singleDateSingleSlotPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText('Meeting time: Thu, Sep 4, 6:00–7:00 PM')).toBeInTheDocument()
+    expect(screen.queryByText(/^Date:/)).not.toBeInTheDocument()
+  })
+
   it('shows slot header times converted to the viewer timezone', async () => {
     jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
     mockEmptyAvailability()
 
     renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
-    expect(await screen.findByText('8:00–9:00 AM (next day for you)')).toBeInTheDocument()
+    // The header now *displays* an abbreviation (`8a` plus a `+1` marker) and carries the full
+    // converted range as its accessible name, so read it by role rather than by visible text.
+    expect(await screen.findByRole('columnheader', { name: '8:00–9:00 AM (next day for you)' })).toBeInTheDocument()
+  })
+
+  // The `+1` on an offset column header is aria-hidden, so sighted users get a bare symbol with no
+  // explanation anywhere on the page. This line is the explanation, and it appears only when a
+  // column actually carries the marker.
+  it('explains the day-offset markers when some column falls on another day', async () => {
+    jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText('+1 means the next day in your time zone.')).toBeInTheDocument()
+  })
+
+  it('omits the day-offset legend when every column is on the same day', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    await screen.findAllByRole('button', { pressed: false })
+    expect(screen.queryByText(/in your time zone/)).not.toBeInTheDocument()
   })
 
   it('shows the meeting-time note converted to the viewer timezone, flagged when the day shifts', async () => {

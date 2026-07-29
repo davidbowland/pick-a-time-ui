@@ -1,6 +1,6 @@
 import { RefObject } from 'react'
 
-import { bestScrollWindow, ColumnScrollMetrics, useInitialColumnScroll } from './useInitialColumnScroll'
+import { bestScrollWindow, ColumnScrollMetrics, defaultMeasure, useInitialColumnScroll } from './useInitialColumnScroll'
 import { renderHook } from '@testing-library/react'
 
 describe('bestScrollWindow', () => {
@@ -145,5 +145,82 @@ describe('useInitialColumnScroll', () => {
       useInitialColumnScroll({ current: container } as RefObject<HTMLDivElement | null>, 4, [1, 2, 3, 4]),
     )
     expect(container.scrollLeft).toBe(0)
+  })
+})
+
+describe('defaultMeasure', () => {
+  // clientWidth is defined on each freshly created container instance, never on a prototype, so
+  // there is nothing to restore and nothing that can leak into a later test — unlike
+  // components/poll/test-column-layout-mock.ts, which patches Element/HTMLElement prototypes
+  // globally and therefore needs a careful teardown.
+  const stubRect = (element: HTMLElement, rect: { left: number; right: number; width: number }): void => {
+    element.getBoundingClientRect = () => ({
+      ...rect,
+      bottom: 0,
+      height: 0,
+      toJSON: () => ({}),
+      top: 0,
+      x: rect.left,
+      y: 0,
+    })
+  }
+
+  const buildColumn = (left: number): HTMLDivElement => {
+    const column = document.createElement('div')
+    column.setAttribute('data-scroll-column', '')
+    stubRect(column, { left, right: left + 48, width: 48 })
+    return column
+  }
+
+  const buildContainer = (options: { columnCount: number; withLabel: boolean }): HTMLDivElement => {
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'clientWidth', { value: 300 })
+    const label = document.createElement('div')
+    label.setAttribute('data-scroll-label', '')
+    stubRect(label, { left: 0, right: 72, width: 72 })
+    const columns = Array.from({ length: options.columnCount }, (_, index) => buildColumn(76 + index * 52))
+    container.append(...(options.withLabel ? [label] : []), ...columns)
+    return container
+  }
+
+  // Columns laid out right to left (an RTL locale) put the second column's left edge *before* the
+  // first column's right edge, so the raw subtraction is negative and must clamp rather than
+  // propagate a negative track size into the scroll offset.
+  const buildReversedContainer = (): HTMLDivElement => {
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'clientWidth', { value: 300 })
+    container.append(buildColumn(200), buildColumn(148))
+    return container
+  }
+
+  it('measures the label column when it is present', () => {
+    expect(defaultMeasure(buildContainer({ columnCount: 2, withLabel: true }))).toEqual({
+      columnGap: 4,
+      columnWidth: 48,
+      containerWidth: 300,
+      labelWidth: 72,
+    })
+  })
+
+  it('measures with a zero label width when no label column is rendered', () => {
+    expect(defaultMeasure(buildContainer({ columnCount: 2, withLabel: false }))).toEqual({
+      columnGap: 4,
+      columnWidth: 48,
+      containerWidth: 300,
+      labelWidth: 0,
+    })
+  })
+
+  it('reports a zero gap when there is only one column to measure', () => {
+    expect(defaultMeasure(buildContainer({ columnCount: 1, withLabel: true }))?.columnGap).toBe(0)
+  })
+
+  it('clamps a negative gap to zero when columns are laid out right to left', () => {
+    expect(defaultMeasure(buildReversedContainer())?.columnGap).toBe(0)
+  })
+
+  it('returns null when there are no columns to measure', () => {
+    const container = document.createElement('div')
+    expect(defaultMeasure(container)).toBeNull()
   })
 })

@@ -41,3 +41,18 @@ export function isWeekendDate(iso: string, timezone: string): boolean {
   const weekday = new Intl.DateTimeFormat(undefined, { timeZone: timezone, weekday: 'short' }).format(noon)
   return weekday === 'Sat' || weekday === 'Sun'
 }
+
+// Grid row labels, shortened for a phone-width sticky column. The weekday is the token people
+// navigate by — nobody infers "Wednesday" from "Jul 29" — so it always stays and the month is
+// what becomes conditional. Year and month are compared together so a poll spanning a full year
+// doesn't silently hide a month change. Deliberately not `formatShortDate`, which keeps its
+// longer comma'd form for prose (see results/elements.tsx).
+export function buildGridDateLabels(dates: string[]): string[] {
+  return dates.map((iso, index) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    const dayName = DAY_NAMES[new Date(y, m - 1, d).getDay()]
+    const [previousYear, previousMonth] = (dates[index - 1] ?? '').split('-').map(Number)
+    const sameMonth = y === previousYear && m === previousMonth
+    return sameMonth ? `${dayName} ${d}` : `${dayName} ${MONTH_NAMES[m - 1]} ${d}`
+  })
+}

@@ -2,14 +2,16 @@ import { PopoverContent, PopoverDialog } from '@heroui/react'
 import { Star } from 'lucide-react'
 import React, { useMemo, useRef, useState } from 'react'
 
+import { GridColumns } from '../grid-columns'
 import { ScrollEdgeIndicators } from '../scroll-edge-indicators'
-import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn } from '../slot-columns'
+import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn, gridLayout, showsDateColumn } from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
 import { useScrollEdges } from '@hooks/useScrollEdges'
 import { OverlapCell, RecommendedMeeting } from '@services/api'
 import { User } from '@types'
 import { pickAccessibleTextColor } from '@utils/contrast'
+import { GridSlotLabel } from '@utils/timezone'
 import { displayName } from '@utils/users'
 
 // CSS var name paired with its real hex (matching index.css's dark-theme values exactly) — the
@@ -84,7 +86,9 @@ export function orderFreeUserIds(freeUserIds: string[], viewerUserId?: string): 
 export const HeatGrid = ({
   cells,
   columns,
+  dateAriaLabels,
   dateLabels,
+  slotAriaLabels,
   slotLabels,
   participantCount,
   recommendedMeetings = [],
@@ -94,8 +98,18 @@ export const HeatGrid = ({
 }: {
   cells: OverlapCell[][]
   columns: TimeWindow[]
+  // What every cell is *named*: the full comma'd date from formatShortDate, one per date. Separate
+  // from the visible row labels for the same reason slotAriaLabels is separate from slotLabels —
+  // buildGridDateLabels repeats the month only when it changes, which reads fine in a column
+  // scanned top to bottom and badly as the out-of-context announcement for a single cell.
+  dateAriaLabels: string[]
   dateLabels: string[]
-  slotLabels: string[]
+  // What the header and every cell are *named*: the full unabbreviated range, including the
+  // day-offset wording. Kept as a separate parallel array so shortening the visible label can
+  // never shorten what a screen reader announces.
+  slotAriaLabels: string[]
+  // What the header *shows*: abbreviated, series-aware, sized for a 3rem column (48px at a 16px root).
+  slotLabels: GridSlotLabel[]
   participantCount: number
   recommendedMeetings?: RecommendedMeeting[]
   bestSlot?: { dateIndex: number; slotIndex: number }
@@ -106,6 +120,23 @@ export const HeatGrid = ({
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const isDatesOnly = slotLabels.length === 0
   const columnCount = isDatesOnly ? 1 : columns.length
+  // A single-date poll states its date above the grid instead (results/index.tsx), reclaiming the
+  // whole sticky column for the poll type where every other column is a time slot. This value and
+  // the two `{hasLabelColumn && ...}` guards below are one indivisible unit: gridLayout must
+  // describe the columns the table ACTUALLY renders, so claiming `false` while a <th> still
+  // rendered would declare N columns in the colgroup against N+1 real ones — the label column
+  // would lose its fixed width and divide evenly with the slots, and min-width would come up 5rem
+  // (80px at a 16px root) short, enough for a many-slot single-date poll on a phone to fall under
+  // the 24x24 AA target minimum. Style assertions are barred, so no test could catch it. Never
+  // change one alone.
+  // PaintGrid carries the identical local for the identical reason.
+  const hasLabelColumn = showsDateColumn(dateLabels.length)
+  // One call, never gridMinWidth and GridColumns separately: the colgroup gives the slot columns
+  // no width at all (that is what makes fixed layout share leftover space equally), so the entire
+  // 24x24 target-size floor lives in the table's min-width. Derived apart, the two could drift and
+  // nothing would fail — style assertions are barred, so no test can catch it. `columnCount`, not
+  // `columns.length`: a dates-only poll renders one implicit column against an empty `columns`.
+  const layout = gridLayout(columnCount, hasLabelColumn)
 
   const containerRef = useRef<HTMLDivElement>(null)
   // Unlike PaintGrid's actionable-cell scoring, this grid is read-only overlap data — its score
@@ -146,8 +177,20 @@ export const HeatGrid = ({
             holes in the sticky label column/header band, so ring and star fragments scrolled
             beneath them would stay visible through the gaps no matter the z-index. With padding
             the sticky cells' opaque boxes touch, forming a solid band that fully hides whatever
-            scrolls under it. */}
-          <table className="w-full border-separate">
+            scrolls under it.
+
+            `border-spacing-0` is what makes that paragraph true rather than merely intended.
+            Tailwind preflight sets `border-collapse: collapse` but never touches border-spacing,
+            and Tailwind v4's `border-separate` sets only `border-collapse: separate` — so the HTML
+            UA stylesheet's `table { border-spacing: 2px }` survived here. That left 2px transparent
+            holes in the sticky band this table's padding exists to avoid, and made the real
+            inter-cell gap 6px rather than the 4px the width model assumes.
+
+            `table-fixed` replaces auto layout, which sized every column to its own header text and
+            let the label column swallow spare width; the <colgroup> supplies the widths instead,
+            and applies even on the dates-only path where no <thead> renders. */}
+          <table className="w-full table-fixed border-separate border-spacing-0" style={layout.tableStyle}>
+            <GridColumns {...layout.colgroupProps} />
             {!isDatesOnly && (
               <thead>
                 <tr>
@@ -160,107 +203,165 @@ export const HeatGrid = ({
                     sub-pixel seams between adjacent sticky cells (the thead row's text-driven
                     height is fractional), which otherwise let the z-20 star show through as a
                     hairline when it scrolls beneath the label column. */}
-                  <th
-                    className="sticky left-0 top-0 z-40 w-0 min-w-16 bg-[var(--ink)] shadow-[0_2px_0_var(--ink)]"
-                    data-scroll-label
-                  />
+                  {/* No `w-0 min-w-16`: this corner cell sits in the table's authoritative first
+                    row, so under fixed layout a width here would contradict the colgroup's
+                    GRID_LABEL_WIDTH track. The colgroup owns every column width now. */}
+                  {hasLabelColumn && (
+                    <th
+                      className="sticky top-0 left-0 z-40 bg-[var(--ink)] shadow-[0_2px_0_var(--ink)]"
+                      data-scroll-label
+                    />
+                  )}
                   {columns.map((column, index) => (
                     <th
-                      className="sticky top-0 z-10 min-w-20 bg-[var(--ink)] px-0.5 pt-0 pb-0.5 text-center text-xs font-semibold text-[var(--bone)]"
+                      // A `<th scope="col">`'s own text is announced during table navigation, so
+                      // without this a screen reader reads the abbreviation verbatim — `9a`. The
+                      // full range, day-offset wording included, stays here.
+                      aria-label={slotAriaLabels[index]}
+                      // whitespace-nowrap so a gap column's `9a–10` range can't wrap the sticky
+                      // header band to two lines while every neighbouring header stays on one.
+                      // overflow-hidden text-ellipsis for the case that leaves: a range label such
+                      // as `11:30a–1p` is wider than the 3rem (48px at a 16px root) this column is
+                      // budgeted, and the next header is opaque and at the same z-index, so it
+                      // would paint over the spill and slice the label mid-glyph. The ellipsis
+                      // makes that degrade legibly. The accessible name is unaffected — the full
+                      // range lives in aria-label above — so this is a purely visual clamp.
+                      className="sticky top-0 z-10 overflow-hidden bg-[var(--ink)] px-0.5 pt-0 pb-0.5 text-center text-xs font-semibold text-ellipsis whitespace-nowrap text-[var(--bone)]"
                       data-scroll-column
                       key={`${column.startMinute}-${column.endMinute}`}
                       scope="col"
                     >
-                      {slotLabels[index]}
+                      {slotLabels[index]?.label}
+                      {/* `?.` and `?? 0` are belt and braces, not a guard against any state this
+                        app can reach: results/index.tsx keeps slotLabels parallel to columns
+                        whenever it is non-empty, and when it is empty `isDatesOnly` is true and
+                        this whole <thead> never renders. What they do buy is a direct consumer — a
+                        test, say — passing shorter arrays than `columns`, where the naive `!== 0`
+                        check would pass on `undefined` and then throw dereferencing .dayOffset.
+                        aria-hidden because the same fact is already spelled out in this header's
+                        aria-label and in every cell's — a bare `+1` read aloud is noise. */}
+                      {(slotLabels[index]?.dayOffset ?? 0) !== 0 && (
+                        <sup aria-hidden="true" className="ml-0.5 text-[0.625rem] text-[var(--slate)]">
+                          {(slotLabels[index]?.dayOffset ?? 0) > 0 ? '+1' : '−1'}
+                        </sup>
+                      )}
                     </th>
                   ))}
                 </tr>
               </thead>
             )}
             <tbody>
-              {dateLabels.map((dateLabel, dateIndex) => (
-                <tr key={dateLabel}>
-                  <th
-                    // w-0 pins the label column at its min-width: with the table stretched by
-                    // w-full, auto layout otherwise hands this column a large share of any spare
-                    // width, leaving a wide dead zone left of the right-aligned labels.
-                    className="sticky left-0 z-30 w-0 min-w-16 bg-[var(--ink)] py-0 pr-3 pl-3 text-right text-xs font-normal whitespace-nowrap text-[var(--slate)] shadow-[0_-2px_0_var(--ink),0_2px_0_var(--ink)]"
-                    scope="row"
-                  >
-                    {dateLabel}
-                  </th>
-                  {Array.from({ length: columnCount }, (_, index) => {
-                    const cell = isDatesOnly
-                      ? cells[dateIndex]?.[0]
-                      : findCellForColumn(cells[dateIndex] ?? [], columns[index])
-                    if (!isDatesOnly && !cell) {
+              {dateLabels.map((dateLabel, dateIndex) => {
+                const dateAriaLabel = dateAriaLabels[dateIndex]
+                return (
+                  // Positional, deliberately, and NOT `dateLabel`: buildGridDateLabels repeats the
+                  // month only when it changes, so every row after the first in a month is a bare
+                  // `Weekday Day` — and two months that begin on the same weekday collide. April
+                  // and July 2026 are aligned, so ['2026-04-07', '2026-04-08', '2026-07-07',
+                  // '2026-07-08'] yields ['Tue Apr 7', 'Wed 8', 'Tue Jul 7', 'Wed 8']. Poll
+                  // creation permits non-contiguous multi-select across a 365-day range, so that
+                  // shape is reachable, and a duplicate key lets React reuse one row's cells and
+                  // popover trigger for a row holding a different date. HeatGrid has no ISO date to
+                  // key on (PaintGrid does, and keys on it); the row index is the honest identity
+                  // here, since these rows are purely positional and never reordered.
+                  <tr key={dateIndex}>
+                    {hasLabelColumn && (
+                      <th
+                        // A `<th scope="row">`'s own text is announced during table navigation, the
+                        // same way a `<th scope="col">`'s is, so without this a row after a month
+                        // change announces `Fri 5` — a date with no month in it. The full comma'd
+                        // form stays here; the abbreviation stays a purely visual economy.
+                        aria-label={dateAriaLabel}
+                        // pr-2 pl-1 is exactly the 0.75rem (12px at a 16px root) of padding
+                        // GRID_LABEL_WIDTH (5.25rem) assumes.
+                        // Widen it and the widest label — `Wed May 28`, see slot-columns.ts — no
+                        // longer fits, and because this cell is whitespace-nowrap text-right the
+                        // overflow spills LEFT out of the scrollport rather than clipping visibly,
+                        // which is easy to miss and hard to attribute. The w-0 hack this replaces
+                        // is gone: the colgroup pins the column now.
+                        className="sticky left-0 z-30 bg-[var(--ink)] py-0 pr-2 pl-1 text-right text-xs font-normal whitespace-nowrap text-[var(--slate)] shadow-[0_-2px_0_var(--ink),0_2px_0_var(--ink)]"
+                        scope="row"
+                      >
+                        {dateLabel}
+                      </th>
+                    )}
+                    {Array.from({ length: columnCount }, (_, index) => {
+                      const cell = isDatesOnly
+                        ? cells[dateIndex]?.[0]
+                        : findCellForColumn(cells[dateIndex] ?? [], columns[index])
+                      if (!isDatesOnly && !cell) {
+                        return (
+                          <td className="p-0.5" key={`${columns[index].startMinute}-${columns[index].endMinute}`}>
+                            <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                          </td>
+                        )
+                      }
+                      const freeCount = cell?.freeCount ?? 0
+                      const color = heatColorFor(freeCount, participantCount)
+                      // Deliberately the long form, never what the header displays — the same rule
+                      // dateAriaLabel above follows. A cell is the only place a screen reader hears
+                      // the date or the time at all when the user tabs straight into the grid, and
+                      // a single-date poll has no row header to fall back on.
+                      const slotAriaLabel = isDatesOnly ? undefined : slotAriaLabels[index]
+                      const recommended = cell ? isRecommendedCell(cell, recommendedMeetings) : false
+                      const best = cell ? isBestSlotCell(cell, bestSlot) : false
+                      const statusSuffix = recommended ? (best ? ', recommended, best time' : ', recommended') : ''
                       return (
-                        <td className="p-0.5" key={`${columns[index].startMinute}-${columns[index].endMinute}`}>
-                          <div aria-hidden="true" className={`${DISABLED_CELL_CLASS} w-full`} />
+                        <td className="p-0.5" key={index}>
+                          <button
+                            aria-expanded={selected === cell}
+                            aria-haspopup="dialog"
+                            aria-label={`${dateAriaLabel}${slotAriaLabel ? `, ${slotAriaLabel}` : ''}, ${freeCount} of ${participantCount} free${statusSuffix}`}
+                            className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
+                            onClick={(event) => {
+                              if (!cell) return
+                              triggerRef.current = event.currentTarget
+                              if (selected === cell) {
+                                setSelected(null)
+                                return
+                              }
+                              setSelected(cell)
+                            }}
+                            style={{ background: color, color: pickAccessibleTextColor(color) }}
+                            type="button"
+                          >
+                            {freeCount}
+                            {recommended && (
+                              // A bordered span, not `outline`: outlines paint in the CSS outline
+                              // phase, on top of every same-stacking-context element regardless of
+                              // z-index — including the sticky date column — so an outlined ring
+                              // stayed visible over the date labels after horizontal scroll. A
+                              // bordered child paints at the cell's own level and hides correctly.
+                              // -inset-0.5 keeps the ring inside this cell's own padding, so a
+                              // neighboring sticky cell's opaque box never clips it at rest.
+                              <span
+                                aria-hidden="true"
+                                className="absolute -inset-0.5 rounded-md border-2 border-[var(--gold)]"
+                              />
+                            )}
+                            {best && (
+                              <span
+                                aria-hidden="true"
+                                // z-20 sits between the column-header row (z-10) and the sticky date
+                                // column (z-30): the badge stays visible when it overhangs the header
+                                // row from a top-row cell, but still slides under the opaque date
+                                // column with the rest of the cell on horizontal scroll.
+                                className="absolute -top-[7px] -right-[7px] z-20 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--gold)]"
+                              >
+                                <Star
+                                  className="h-2 w-2 text-[var(--ink)]"
+                                  data-testid="best-slot-star"
+                                  fill="currentColor"
+                                />
+                              </span>
+                            )}
+                          </button>
                         </td>
                       )
-                    }
-                    const freeCount = cell?.freeCount ?? 0
-                    const color = heatColorFor(freeCount, participantCount)
-                    const slotLabel = isDatesOnly ? undefined : slotLabels[index]
-                    const recommended = cell ? isRecommendedCell(cell, recommendedMeetings) : false
-                    const best = cell ? isBestSlotCell(cell, bestSlot) : false
-                    const statusSuffix = recommended ? (best ? ', recommended, best time' : ', recommended') : ''
-                    return (
-                      <td className="p-0.5" key={index}>
-                        <button
-                          aria-expanded={selected === cell}
-                          aria-haspopup="dialog"
-                          aria-label={`${dateLabel}${slotLabel ? `, ${slotLabel}` : ''}, ${freeCount} of ${participantCount} free${statusSuffix}`}
-                          className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-bold ${FOCUS_RING}`}
-                          onClick={(event) => {
-                            if (!cell) return
-                            triggerRef.current = event.currentTarget
-                            if (selected === cell) {
-                              setSelected(null)
-                              return
-                            }
-                            setSelected(cell)
-                          }}
-                          style={{ background: color, color: pickAccessibleTextColor(color) }}
-                          type="button"
-                        >
-                          {freeCount}
-                          {recommended && (
-                            // A bordered span, not `outline`: outlines paint in the CSS outline
-                            // phase, on top of every same-stacking-context element regardless of
-                            // z-index — including the sticky date column — so an outlined ring
-                            // stayed visible over the date labels after horizontal scroll. A
-                            // bordered child paints at the cell's own level and hides correctly.
-                            // -inset-0.5 keeps the ring inside this cell's own padding, so a
-                            // neighboring sticky cell's opaque box never clips it at rest.
-                            <span
-                              aria-hidden="true"
-                              className="absolute -inset-0.5 rounded-md border-2 border-[var(--gold)]"
-                            />
-                          )}
-                          {best && (
-                            <span
-                              aria-hidden="true"
-                              // z-20 sits between the column-header row (z-10) and the sticky date
-                              // column (z-30): the badge stays visible when it overhangs the header
-                              // row from a top-row cell, but still slides under the opaque date
-                              // column with the rest of the cell on horizontal scroll.
-                              className="absolute -top-[7px] -right-[7px] z-20 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--gold)]"
-                            >
-                              <Star
-                                className="h-2 w-2 text-[var(--ink)]"
-                                data-testid="best-slot-star"
-                                fill="currentColor"
-                              />
-                            </span>
-                          )}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

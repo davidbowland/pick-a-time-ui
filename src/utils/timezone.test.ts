@@ -1,4 +1,10 @@
-import { formatViewerSlotLabel, getZonedComponents, toViewerLocal, toViewerLocalSlot } from './timezone'
+import {
+  buildGridSlotLabels,
+  formatViewerSlotLabel,
+  getZonedComponents,
+  toViewerLocal,
+  toViewerLocalSlot,
+} from './timezone'
 
 describe('getZonedComponents', () => {
   it('converts a UTC instant to date/time components in a zone behind UTC', () => {
@@ -87,6 +93,82 @@ describe('formatViewerSlotLabel', () => {
     expect(formatViewerSlotLabel('2026-01-15', 30, 90, 'America/Chicago', 'Pacific/Honolulu')).toBe(
       '8:30–9:30 PM (previous day for you)',
     )
+  })
+})
+
+describe('buildGridSlotLabels', () => {
+  const hourly = (starts: number[]): { endMinute: number; startMinute: number }[] =>
+    starts.map((startMinute) => ({ endMinute: startMinute + 60, startMinute }))
+
+  it('shows only the start time for contiguous columns, and for the final column when durations are uniform', () => {
+    const labels = buildGridSlotLabels(hourly([540, 600, 660]), '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['9a', '10a', '11a'])
+  })
+
+  it('marks every column with a period, so the marker cannot scroll out of view', () => {
+    const labels = buildGridSlotLabels(hourly([600, 660, 720, 780]), '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['10a', '11a', '12p', '1p'])
+  })
+
+  it('renders a range when the next column does not start where this one ends', () => {
+    const columns = [
+      { endMinute: 600, startMinute: 540 },
+      { endMinute: 720, startMinute: 660 },
+    ]
+    const labels = buildGridSlotLabels(columns, '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['9a–10', '11a'])
+  })
+
+  it('keeps a range on the final column when durations are not uniform', () => {
+    const columns = [
+      { endMinute: 600, startMinute: 540 },
+      { endMinute: 720, startMinute: 600 },
+    ]
+    const labels = buildGridSlotLabels(columns, '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['9a', '10a–12p'])
+  })
+
+  it('labels half-hour columns across midday', () => {
+    const columns = [
+      { endMinute: 720, startMinute: 690 },
+      { endMinute: 750, startMinute: 720 },
+    ]
+    const labels = buildGridSlotLabels(columns, '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['11:30a', '12p'])
+  })
+
+  it('labels a series that runs up to midnight', () => {
+    const labels = buildGridSlotLabels(hourly([1320, 1380]), '2026-07-28', 'UTC', 'UTC')
+    expect(labels.map((entry) => entry.label)).toEqual(['10p', '11p'])
+  })
+
+  it('reports a zero day offset when the viewer shares the poll timezone', () => {
+    const labels = buildGridSlotLabels(hourly([540]), '2026-07-28', 'UTC', 'UTC')
+    expect(labels[0].dayOffset).toBe(0)
+  })
+
+  it('reports a positive day offset as data without putting it in the label', () => {
+    const labels = buildGridSlotLabels(hourly([960]), '2026-07-28', 'UTC', 'Asia/Tokyo')
+    expect(labels[0]).toEqual({ dayOffset: 1, label: '1a' })
+  })
+
+  it('reports a negative day offset as data', () => {
+    const labels = buildGridSlotLabels(hourly([300]), '2026-07-28', 'Asia/Tokyo', 'UTC')
+    expect(labels[0]).toEqual({ dayOffset: -1, label: '8p' })
+  })
+
+  it('handles a viewer timezone with a half-hour offset', () => {
+    const labels = buildGridSlotLabels(hourly([540]), '2026-07-28', 'UTC', 'Asia/Kolkata')
+    expect(labels[0]).toEqual({ dayOffset: 0, label: '2:30p' })
+  })
+
+  it('handles a viewer timezone with a three-quarter-hour offset', () => {
+    const labels = buildGridSlotLabels(hourly([540]), '2026-07-28', 'UTC', 'Australia/Eucla')
+    expect(labels[0]).toEqual({ dayOffset: 0, label: '5:45p' })
+  })
+
+  it('returns an empty array for no columns', () => {
+    expect(buildGridSlotLabels([], '2026-07-28', 'UTC', 'UTC')).toEqual([])
   })
 })
 

@@ -1,4 +1,12 @@
-import { formatMinuteOfDay, formatSlotRange, toClockParts, fromClockParts } from './time'
+import {
+  formatGridTime,
+  formatMinuteOfDay,
+  formatSlotDuration,
+  formatSlotRange,
+  hasUniformDuration,
+  toClockParts,
+  fromClockParts,
+} from './time'
 
 describe('formatMinuteOfDay', () => {
   it('formats midnight', () => {
@@ -41,6 +49,94 @@ describe('formatSlotRange', () => {
 
   it('formats a range ending exactly at midnight', () => {
     expect(formatSlotRange(1380, 1440)).toBe('11:00 PM–12:00 AM')
+  })
+})
+
+describe('formatGridTime', () => {
+  it('drops :00 from a whole hour', () => {
+    expect(formatGridTime(540, false)).toBe('9')
+    expect(formatGridTime(540, true)).toBe('9a')
+  })
+
+  it('keeps the minutes on a half or quarter hour', () => {
+    expect(formatGridTime(570, true)).toBe('9:30a')
+    expect(formatGridTime(555, true)).toBe('9:15a')
+  })
+
+  it('uses 12a and 12p rather than Midnight and Noon', () => {
+    expect(formatGridTime(720, true)).toBe('12p')
+    expect(formatGridTime(0, true)).toBe('12a')
+  })
+
+  it('marks afternoon hours with p', () => {
+    expect(formatGridTime(780, true)).toBe('1p')
+  })
+
+  it('normalizes a minute past the end of the day', () => {
+    expect(formatGridTime(1440, true)).toBe('12a')
+    expect(formatGridTime(1470, false)).toBe('12:30')
+  })
+})
+
+describe('formatSlotDuration', () => {
+  const columnsOf = (durationMinutes: number, count: number): { endMinute: number; startMinute: number }[] =>
+    Array.from({ length: count }, (_, index) => ({
+      endMinute: 540 + index * durationMinutes + durationMinutes,
+      startMinute: 540 + index * durationMinutes,
+    }))
+
+  it('names a uniform one-hour cadence', () => {
+    expect(formatSlotDuration(columnsOf(60, 4))).toBe('Each column is a 1-hour slot.')
+  })
+
+  it('names a uniform multi-hour cadence', () => {
+    expect(formatSlotDuration(columnsOf(120, 3))).toBe('Each column is a 2-hour slot.')
+  })
+
+  it('names a uniform sub-hour cadence in minutes', () => {
+    expect(formatSlotDuration(columnsOf(30, 4))).toBe('Each column is a 30-minute slot.')
+    expect(formatSlotDuration(columnsOf(90, 2))).toBe('Each column is a 90-minute slot.')
+  })
+
+  it('returns nothing when durations vary, since no single line can state them', () => {
+    expect(
+      formatSlotDuration([
+        { endMinute: 600, startMinute: 540 },
+        { endMinute: 720, startMinute: 600 },
+      ]),
+    ).toBeUndefined()
+  })
+
+  it('returns nothing when there are no columns', () => {
+    expect(formatSlotDuration([])).toBeUndefined()
+  })
+
+  it('states no cadence for a zero-length column rather than "a 0-hour slot"', () => {
+    expect(formatSlotDuration([{ endMinute: 540, startMinute: 540 }])).toBeUndefined()
+  })
+})
+
+describe('hasUniformDuration', () => {
+  it('is true when every column spans the same minutes', () => {
+    expect(
+      hasUniformDuration([
+        { endMinute: 600, startMinute: 540 },
+        { endMinute: 660, startMinute: 600 },
+      ]),
+    ).toBe(true)
+  })
+
+  it('is false when a column spans a different number of minutes', () => {
+    expect(
+      hasUniformDuration([
+        { endMinute: 600, startMinute: 540 },
+        { endMinute: 720, startMinute: 600 },
+      ]),
+    ).toBe(false)
+  })
+
+  it('is false when there are no columns', () => {
+    expect(hasUniformDuration([])).toBe(false)
   })
 })
 

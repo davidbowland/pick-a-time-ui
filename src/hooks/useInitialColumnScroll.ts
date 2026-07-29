@@ -27,10 +27,17 @@ export function bestScrollWindow(columnCount: number, visibleColumns: number, sc
   return bestStart
 }
 
-function defaultMeasure(container: HTMLDivElement): ColumnScrollMetrics | null {
+// Exported for direct testing: jsdom has no layout engine, so getBoundingClientRect returns zeros
+// and driving the hook end-to-end can never exercise this.
+//
+// A missing label element means the grid deliberately rendered no label column (a single-date
+// poll states its date above the grid instead), not that measurement failed — so it contributes
+// zero width rather than aborting. Aborting would silently disable initial column scroll on
+// exactly the polls that need it most: one date, many slots.
+export function defaultMeasure(container: HTMLDivElement): ColumnScrollMetrics | null {
   const label = container.querySelector<HTMLElement>('[data-scroll-label]')
   const columns = Array.from(container.querySelectorAll<HTMLElement>('[data-scroll-column]'))
-  if (!label || columns.length === 0) return null
+  if (columns.length === 0) return null
 
   const firstRect = columns[0].getBoundingClientRect()
   const gap = columns.length > 1 ? columns[1].getBoundingClientRect().left - firstRect.right : 0
@@ -38,7 +45,7 @@ function defaultMeasure(container: HTMLDivElement): ColumnScrollMetrics | null {
     columnGap: Math.max(0, gap),
     columnWidth: firstRect.width,
     containerWidth: container.clientWidth,
-    labelWidth: label.getBoundingClientRect().width,
+    labelWidth: label?.getBoundingClientRect().width ?? 0,
   }
 }
 

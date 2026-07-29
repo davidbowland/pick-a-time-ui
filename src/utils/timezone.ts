@@ -1,4 +1,4 @@
-import { formatSlotRange } from './time'
+import { formatGridTime, formatSlotRange, hasUniformDuration, toClockParts } from './time'
 
 export function getZonedComponents(utcMs: number, timeZone: string): { date: string; minuteOfDay: number } {
   try {
@@ -122,4 +122,57 @@ export function formatViewerSlotLabel(
   if (local.dayOffset > 0) return `${range} (next day for you)`
   if (local.dayOffset < 0) return `${range} (previous day for you)`
   return range
+}
+
+export interface GridSlotLabel {
+  label: string
+  dayOffset: number
+}
+
+// Column headers for the availability grids. Unlike formatViewerSlotLabel (which stays as-is for
+// prose and the "Meeting time:" note), this drops every character the grid can infer, because the
+// header string — not the tap target — is what sets column width under table layout.
+//
+// The period marker is on EVERY start, not only where the period changes. A change-only marker
+// was tried and is wrong for this grid specifically: only ~5 of N columns are on screen and
+// useInitialColumnScroll auto-scrolls before the user looks, so the marker scrolls off with its
+// anchoring column — an afternoon view showed no AM/PM at all, and a noon-start series emitted
+// labels identical to a midnight-start one. Dropping `:00` from whole hours pays for it.
+//
+// A contiguous column needs only its start: the next column's start IS this one's end. The final
+// column also shows only its start when every slot shares one duration, because that duration is
+// stated once above the grid (formatSlotDuration); when durations vary, no such line exists and
+// the final column keeps its range. The condition is hasUniformDuration, not "formatSlotDuration
+// returned a string", so a change to that copy cannot silently drop an end time nothing states.
+// Ranges are otherwise reserved for genuine gaps, since one is
+// 1.3-2x the 3rem (48px at a 16px root) column floor and would wrap the header to two lines under table-layout: fixed.
+//
+// Contiguity is judged on poll-timezone minutes, the authoritative slot geometry, since the
+// viewer conversion is a uniform shift. Known pre-existing limitation: toViewerLocalSlot derives
+// a local end as start + duration rather than converting it, so a slot spanning a DST transition
+// reports an end that is off by the transition. Not introduced here and not fixed here.
+//
+// `columns` is typed structurally rather than as TimeWindow so this util doesn't depend on a
+// component module; TimeWindow satisfies it.
+export function buildGridSlotLabels(
+  columns: { startMinute: number; endMinute: number }[],
+  date: string,
+  pollTimezone: string,
+  viewerTimezone: string,
+): GridSlotLabel[] {
+  const locals = columns.map((column) =>
+    toViewerLocalSlot(date, column.startMinute, column.endMinute, pollTimezone, viewerTimezone),
+  )
+  const uniformDuration = hasUniformDuration(columns)
+  return locals.map((local, index) => {
+    const start = formatGridTime(local.startMinute, true)
+    const next = columns[index + 1]
+    const contiguous = next !== undefined && next.startMinute === columns[index].endMinute
+    if (contiguous || (next === undefined && uniformDuration)) return { dayOffset: local.dayOffset, label: start }
+
+    const startPeriod = toClockParts(local.startMinute).period
+    const endPeriod = toClockParts(local.endMinute).period
+    const end = formatGridTime(local.endMinute, endPeriod !== startPeriod)
+    return { dayOffset: local.dayOffset, label: `${start}–${end}` }
+  })
 }

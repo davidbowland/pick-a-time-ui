@@ -1,15 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useMemo, useRef, useState } from 'react'
 
-import { buildUnionColumns } from '../slot-columns'
+import { buildUnionColumns, dayOffsetLegendLine, gridContextLine, showsDateColumn } from '../slot-columns'
 import { Toolbar } from './elements'
 import PaintGrid from './grid'
 import FeedbackMessage from '@components/feedback-message'
 import { useDebouncedAvailabilityCommit } from '@hooks/useDebouncedAvailabilityCommit'
 import { fetchAvailability, patchAvailability } from '@services/api'
 import { AvailabilityCell, AvailabilityRecord, PollData, Slot } from '@types'
+import { formatShortDate } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
-import { formatViewerSlotLabel } from '@utils/timezone'
+import { formatSlotDuration } from '@utils/time'
+import { buildGridSlotLabels, formatViewerSlotLabel } from '@utils/timezone'
 
 export interface PaintingPhaseProps {
   sessionId: string
@@ -84,12 +86,45 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
   // visibly and for screen readers, instead of silently dropping it.
   const columns = buildUnionColumns(poll.slots)
   const singleSlotWindow = poll.usesTimes && columns.length === 1 ? columns[0] : undefined
+  // Two parallel arrays, deliberately: the grid *shows* the short series-aware labels and *names*
+  // every header and cell with the long ones. Both stay empty when there is at most one column,
+  // which is what tells the grid to render no header row at all.
   const slotLabels =
+    columns.length > 1 ? buildGridSlotLabels(columns, poll.dates[0], poll.timezone, viewerTimezone) : []
+  const slotAriaLabels =
     columns.length > 1
       ? columns.map((column) =>
           formatViewerSlotLabel(poll.dates[0], column.startMinute, column.endMinute, poll.timezone, viewerTimezone),
         )
       : []
+  // The same short-visible / long-accessible split the slot labels use. `formatShortDate` is
+  // untouched by the grid-density work precisely so it can stay the long form here.
+  const dateAriaLabels = poll.dates.map((date) => formatShortDate(date))
+
+  // Whatever the grid can no longer say for itself, said once above it. Both halves are derived
+  // from the same predicates the grid uses — `showsDateColumn` for the row column, `columns.length`
+  // for the header row — so the line and the thing it replaces can never both appear or both
+  // vanish. `gridContextLine` owns the wording so painting and results cannot drift apart.
+  const singleDate = showsDateColumn(poll.dates.length) ? undefined : dateAriaLabels[0]
+  const singleSlotLabel = singleSlotWindow
+    ? formatViewerSlotLabel(
+        poll.dates[0],
+        singleSlotWindow.startMinute,
+        singleSlotWindow.endMinute,
+        poll.timezone,
+        viewerTimezone,
+      )
+    : undefined
+  const gridContext = gridContextLine(singleDate, singleSlotLabel)
+  // Required, not decorative: buildGridSlotLabels drops the end time from the final column exactly
+  // because the duration is stated here instead. Without this line a uniform-duration grid never
+  // says how long a slot is. A single column already gets its full range from the line above, and
+  // formatSlotDuration returns undefined when durations vary — in which case the final column
+  // keeps its own range.
+  const slotDuration = columns.length > 1 ? formatSlotDuration(columns) : undefined
+  // Reads the same dayOffset the headers mark, so the legend cannot appear without a marker on
+  // screen or vanish while one is still showing.
+  const dayOffsetLegend = dayOffsetLegendLine(slotLabels.map((entry) => entry.dayOffset))
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,23 +132,16 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
         onClear={() => handleCommit(allCells(poll.slots, false))}
         onSelectAll={() => handleCommit(allCells(poll.slots, true))}
       />
-      {singleSlotWindow && (
-        <p className="text-xs text-[var(--slate)]">
-          Meeting time:{' '}
-          {formatViewerSlotLabel(
-            poll.dates[0],
-            singleSlotWindow.startMinute,
-            singleSlotWindow.endMinute,
-            poll.timezone,
-            viewerTimezone,
-          )}
-        </p>
-      )}
+      {gridContext && <p className="text-xs text-[var(--slate)]">{gridContext}</p>}
+      {slotDuration && <p className="text-xs text-[var(--slate)]">{slotDuration}</p>}
+      {dayOffsetLegend && <p className="text-xs text-[var(--slate)]">{dayOffsetLegend}</p>}
       <PaintGrid
         columns={columns}
+        dateAriaLabels={dateAriaLabels}
         dates={poll.dates}
         grid={availability.free}
         onCommit={handleCommit}
+        slotAriaLabels={slotAriaLabels}
         slotLabels={slotLabels}
         slots={poll.slots}
       />

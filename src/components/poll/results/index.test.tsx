@@ -68,6 +68,17 @@ describe('ResultsPhase', () => {
     ],
   }
 
+  // One date, three slots — the shape the collapsed date column exists for. Every grid column is a
+  // time slot, so the date moves out of the sticky column and above the grid.
+  const singleDatePoll: PollData = { ...poll, dates: ['2025-09-04'], slots: [poll.slots[0]] }
+
+  // One date AND one slot: both notes would fire, so they combine into one line.
+  const singleDateSingleSlotPoll: PollData = {
+    ...singleSlotTimedPoll,
+    dates: ['2025-09-04'],
+    slots: [singleSlotTimedPoll.slots[0]],
+  }
+
   const datesOnlyPoll: PollData = {
     sessionId: 'amber-harbor',
     name: 'Lunch with friends',
@@ -244,6 +255,34 @@ describe('ResultsPhase', () => {
     expect(screen.queryByText(/meeting time/i)).not.toBeInTheDocument()
   })
 
+  it('should state the date above the grid for a single-date poll, which renders no date column', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={singleDatePoll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText('Date: Thu, Sep 4')).toBeInTheDocument()
+    expect(screen.queryByRole('rowheader')).not.toBeInTheDocument()
+  })
+
+  it('should combine the date and the meeting time into one line when the poll has one of each', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={singleDateSingleSlotPoll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText('Meeting time: Thu, Sep 4, 6:00–7:00 PM')).toBeInTheDocument()
+    expect(screen.queryByText(/^Date:/)).not.toBeInTheDocument()
+  })
+
+  // Matches the painting phase exactly — one voter moves between the two screens in a session, and
+  // buildGridSlotLabels drops the final column's end time on the strength of this line existing.
+  it('should state the slot cadence once, since the column headers omit end times', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText('Each column is a 1-hour slot.')).toBeInTheDocument()
+  })
+
   it('should not render a "Suggested times" section when there are no recommended meetings', async () => {
     jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
 
@@ -401,6 +440,9 @@ describe('ResultsPhase', () => {
 
     renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={users} />)
 
+    // `Fri, Sep 5`, not the `Fri 5` this row's visible header shows: buildGridDateLabels repeats
+    // the month only when it changes, which reads fine down a column but strands a screen reader
+    // who tabs straight into this cell. Cell labels take the long formatShortDate form instead.
     await userEvent.click(await screen.findByRole('button', { name: /fri, sep 5.*6:00.*2 of 3 free/i }))
 
     expect(await screen.findByText(/quiet falcon/i)).toBeInTheDocument()
@@ -457,7 +499,30 @@ describe('ResultsPhase', () => {
 
     renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
 
-    expect(await screen.findByText('8:00–9:00 AM (next day for you)')).toBeInTheDocument()
+    // The header now *shows* the abbreviated label and is *named* with the full converted range,
+    // so the accessible name — not the text — is where the conversion and the day-shift wording
+    // have to survive.
+    expect(await screen.findByRole('columnheader', { name: '8:00–9:00 AM (next day for you)' })).toBeInTheDocument()
+  })
+
+  // Same conditional legend the painting phase shows: the `+1` superscript is aria-hidden, so
+  // without this line a sighted voter sees a symbol nothing on the page defines.
+  it('explains the day-offset markers when some column falls on another day', async () => {
+    jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    expect(await screen.findByText('+1 means the next day in your time zone.')).toBeInTheDocument()
+  })
+
+  it('omits the day-offset legend when every column is on the same day', async () => {
+    jest.mocked(fetchOverlap).mockResolvedValueOnce(overlapResponse)
+
+    renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={[]} />)
+
+    await screen.findAllByRole('columnheader')
+    expect(screen.queryByText(/in your time zone/)).not.toBeInTheDocument()
   })
 
   it('converts the single-slot meeting-time note to the viewer timezone', async () => {
@@ -522,7 +587,7 @@ describe('ResultsPhase', () => {
 
     renderWithClient(<ResultsPhase poll={overridePoll} sessionId="amber-harbor" users={[]} />)
 
-    expect(await screen.findByText('9:00–10:00 AM')).toBeInTheDocument()
-    expect(screen.getByText('11:00 AM–12:00 PM')).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: '9:00–10:00 AM' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '11:00 AM–12:00 PM' })).toBeInTheDocument()
   })
 })

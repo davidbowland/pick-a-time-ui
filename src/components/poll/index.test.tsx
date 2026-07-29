@@ -222,6 +222,7 @@ describe('Poll', () => {
 
     // "1 of 2 free": the roster fetched two users, and the participant total honors the roster
     // over this fixture's (stale) participantCount of 1.
+    // `Thu, Sep 4`: cell labels carry the long formatShortDate form, not the abbreviated row header.
     await userEvent.click(await screen.findByRole('button', { name: /thu, sep 4.*6:00.*1 of 2 free/i }))
 
     expect(within(screen.getByRole('dialog')).getByText('Mellow Heron')).toBeInTheDocument()
