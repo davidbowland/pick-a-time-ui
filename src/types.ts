@@ -60,7 +60,6 @@ export interface ConfigData {
 export interface User {
   userId: string
   name: string | null
-  calendarStatus: 'not_connected' | 'connected' | 'error'
 }
 
 export interface AvailabilityRecord {

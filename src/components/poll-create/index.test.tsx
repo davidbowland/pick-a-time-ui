@@ -71,9 +71,7 @@ describe('PollCreate', () => {
       handleSignIn: jest.fn(),
       handleSignOut: jest.fn(),
     })
-    jest
-      .mocked(createUser)
-      .mockResolvedValue({ userId: 'clever-fox', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValue({ userId: 'clever-fox', name: null })
     ;(global as any).grecaptcha = { ready: (cb: () => void) => cb(), execute: jest.fn().mockResolvedValue('token') }
     return { push }
   }

@@ -28,7 +28,7 @@ function renderWithClient(props: IdentityPhaseProps): ReturnType<typeof render> 
 
 describe('IdentityPhase', () => {
   const onUserSelected = jest.fn()
-  const users = [{ userId: 'quiet-falcon', name: null, calendarStatus: 'not_connected' as const }]
+  const users = [{ userId: 'quiet-falcon', name: null }]
 
   const config = {
     maxPollDates: 90,
@@ -96,9 +96,7 @@ describe('IdentityPhase', () => {
 
   it('should call onUserSelected with the new userId after creating one', async () => {
     setup()
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
     await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
@@ -135,9 +133,7 @@ describe('IdentityPhase', () => {
 
   it('should auto-create a user when the group starts empty', async () => {
     setup()
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users: [] })
 
@@ -147,9 +143,7 @@ describe('IdentityPhase', () => {
 
   it('should only call createUser once even across re-renders while the group is empty', async () => {
     setup()
-    jest
-      .mocked(createUser)
-      .mockResolvedValue({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValue({ userId: 'bright-heron', name: null })
 
     const { rerender } = renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users: [] })
     rerender(
@@ -171,9 +165,7 @@ describe('IdentityPhase', () => {
 
   it('should auto-create with authenticated=true once auth resolves as signed in', async () => {
     setupAuthLoading()
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const { rerender } = render(
@@ -206,9 +198,7 @@ describe('IdentityPhase', () => {
   it('should retry auto-create when the retry button is pressed', async () => {
     setup()
     jest.mocked(createUser).mockRejectedValueOnce(new Error('Network error'))
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users: [] })
     await screen.findByRole('button', { name: /try again/i })
@@ -274,9 +264,7 @@ describe('IdentityPhase', () => {
 
   it('creates the user without patching when the name field is left blank', async () => {
     setup()
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
     await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
@@ -288,12 +276,8 @@ describe('IdentityPhase', () => {
 
   it('creates the user then patches the trimmed name when one is entered', async () => {
     setup()
-    jest
-      .mocked(createUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: null, calendarStatus: 'not_connected' as const })
-    jest
-      .mocked(patchUser)
-      .mockResolvedValueOnce({ userId: 'bright-heron', name: 'Alex', calendarStatus: 'not_connected' as const })
+    jest.mocked(createUser).mockResolvedValueOnce({ userId: 'bright-heron', name: null })
+    jest.mocked(patchUser).mockResolvedValueOnce({ userId: 'bright-heron', name: 'Alex' })
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
     await userEvent.click(screen.getByRole('radio', { name: /join as somebody new/i }))
@@ -311,12 +295,14 @@ describe('IdentityPhase', () => {
     expect(onUserSelected).toHaveBeenCalledWith('bright-heron')
   })
 
-  it('explains that signing in keeps the name the same across devices', () => {
+  it('should offer the calendar as the reason to sign in', () => {
     setup()
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })
 
     expect(
-      screen.getByText('Signing in keeps your name the same if you come back on another device.'),
+      screen.getByText(
+        "Sign in with Google to mark yourself busy where you're already booked, and to keep your name on other devices.",
+      ),
     ).toBeInTheDocument()
   })
 })

@@ -119,7 +119,7 @@ export function formatMeetingLabel(
 
 const nameFor = (users: User[], userId: string): string => {
   const user = users.find((u) => u.userId === userId)
-  return displayName(user ?? { userId, name: null, calendarStatus: 'not_connected' })
+  return displayName(user ?? { userId, name: null })
 }
 
 export const SuggestedTimes = ({
@@ -168,20 +168,6 @@ export const SuggestedTimes = ({
                 <ul className="flex flex-col gap-0.5 text-xs opacity-80">
                   {missingUserIds(meeting.freeUserIds, users, viewerUserId).map((id) => (
                     <li key={id}>{cantMakeItName(users, id, viewerUserId)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {(meeting.excludedByCalendar ?? []).length > 0 && (
-              <div className="flex flex-col gap-0.5">
-                <div className="text-[10px] font-semibold uppercase tracking-wide opacity-60">Heads up</div>
-                <ul className="flex flex-col gap-0.5 text-xs opacity-80">
-                  {(meeting.excludedByCalendar ?? []).map((userId) => (
-                    <li key={userId}>
-                      {userId === viewerUserId
-                        ? 'Your calendar shows a conflict.'
-                        : `${nameFor(users, userId)}’s calendar shows a conflict.`}
-                    </li>
                   ))}
                 </ul>
               </div>

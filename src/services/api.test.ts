@@ -1,11 +1,14 @@
-import { ApiError, get, patch, post } from 'aws-amplify/api'
+import { ApiError, del, get, patch, post } from 'aws-amplify/api'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
 import {
+  connectCalendar,
   createPoll,
   createPollAuthed,
   createUser,
+  disconnectCalendar,
   fetchAvailability,
+  fetchCalendarState,
   fetchConfig,
   fetchOverlap,
   fetchPoll,
@@ -13,6 +16,7 @@ import {
   parseApiMessage,
   patchAvailability,
   patchUser,
+  syncCalendar,
 } from './api'
 
 jest.mock('aws-amplify/api')
@@ -153,7 +157,7 @@ describe('API service', () => {
 
   describe('fetchUsers', () => {
     it('should fetch users for session', async () => {
-      const users = [{ userId, name: null, calendarStatus: 'not_connected' as const }]
+      const users = [{ userId, name: null }]
       mockGet.mockReturnValue(mockResponse(users))
       const result = await fetchUsers(sessionId)
       expect(result).toEqual(users)
@@ -161,7 +165,7 @@ describe('API service', () => {
   })
 
   describe('createUser', () => {
-    const newUser = { userId: 'clever-fox', name: null, calendarStatus: 'not_connected' as const }
+    const newUser = { userId: 'clever-fox', name: null }
 
     it('should hit /users/authed with auth headers when authenticated', async () => {
       mockPost.mockReturnValue(mockResponse(newUser))
@@ -355,6 +359,74 @@ describe('API service', () => {
           options: expect.objectContaining({ queryParams: undefined }),
         }),
       )
+    })
+  })
+
+  describe('calendar', () => {
+    it('should post to the connect endpoint authenticated', async () => {
+      jest.mocked(post).mockReturnValueOnce(mockResponse({ alreadyConnected: false, authUrl: 'https://auth' }))
+
+      const result = await connectCalendar('spring-owl', 'brave-tiger')
+
+      expect(post).toHaveBeenCalledWith({
+        apiName: 'PickATimeAPI',
+        path: '/sessions/spring-owl/users/brave-tiger/calendar/connect',
+        options: { headers: { Authorization: 'Bearer mock-jwt-token' }, body: undefined },
+      })
+      expect(result.authUrl).toEqual('https://auth')
+    })
+
+    it('should report an already-connected calendar without an auth url', async () => {
+      jest.mocked(post).mockReturnValueOnce(mockResponse({ alreadyConnected: true }))
+
+      const result = await connectCalendar('spring-owl', 'brave-tiger')
+
+      expect(result).toEqual({ alreadyConnected: true })
+    })
+
+    it('should post force to the sync endpoint', async () => {
+      jest.mocked(post).mockReturnValueOnce(mockResponse({ applied: true, markedBusyCount: 4 }))
+
+      const result = await syncCalendar('spring-owl', 'brave-tiger', true)
+
+      expect(post).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiName: 'PickATimeAPI',
+          options: expect.objectContaining({
+            body: { force: true },
+            headers: { Authorization: 'Bearer mock-jwt-token' },
+          }),
+          path: '/sessions/spring-owl/users/brave-tiger/calendar/sync',
+        }),
+      )
+      expect(result.markedBusyCount).toEqual(4)
+    })
+
+    it('should get calendar state with no path parameters', async () => {
+      jest.mocked(get).mockReturnValueOnce(mockResponse({ lastSyncedAt: 1754006400, status: 'connected' }))
+
+      const result = await fetchCalendarState()
+
+      expect(get).toHaveBeenCalledWith({
+        apiName: 'PickATimeAPI',
+        path: '/calendar',
+        options: { headers: { Authorization: 'Bearer mock-jwt-token' } },
+      })
+      expect(result.status).toEqual('connected')
+    })
+
+    it('should delete the calendar without parsing a body', async () => {
+      const json = jest.fn()
+      jest.mocked(del).mockReturnValueOnce({ response: Promise.resolve({ body: { json } }) } as never)
+
+      await disconnectCalendar()
+
+      expect(del).toHaveBeenCalledWith({
+        apiName: 'PickATimeAPI',
+        path: '/calendar',
+        options: { headers: { Authorization: 'Bearer mock-jwt-token' } },
+      })
+      expect(json).not.toHaveBeenCalled()
     })
   })
 

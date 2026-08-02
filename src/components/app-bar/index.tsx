@@ -1,16 +1,29 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import React from 'react'
 
 import { BrandLink, GoogleSignInButton, NavContainer, UserMenu } from './elements'
 import { useAuthContext } from '@components/auth-context'
 import { clearSessionCookie } from '@hooks/useSessionCookie'
+import { disconnectCalendar, fetchCalendarState } from '@services/api'
 
 export interface AppBarProps {
   sessionId?: string
+  now?: () => number
 }
 
-const AppBar = ({ sessionId }: AppBarProps): React.ReactNode => {
+const AppBar = ({ sessionId, now }: AppBarProps): React.ReactNode => {
   const { isSignedIn, isLoading, user, handleSignIn, handleSignOut } = useAuthContext()
+  const queryClient = useQueryClient()
+
+  // Keyed on nothing but 'calendar': a connection belongs to a Google account, not a poll, so the
+  // painting screen and this menu read the same cache entry and one disconnect refreshes both.
+  const { data: calendar } = useQuery({ enabled: isSignedIn, queryFn: fetchCalendarState, queryKey: ['calendar'] })
+
+  const disconnectMutation = useMutation({
+    mutationFn: disconnectCalendar,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+  })
 
   const handleSignOutClick = (): void => {
     // Clears the cookie only — it does NOT update any `useSessionCookie` hook's in-memory
@@ -29,7 +42,14 @@ const AppBar = ({ sessionId }: AppBarProps): React.ReactNode => {
       {!isLoading && (
         <>
           {isSignedIn ? (
-            <UserMenu name={user?.name ?? 'User'} onSignOut={handleSignOutClick} />
+            <UserMenu
+              calendarStatus={calendar?.status}
+              lastSyncedAt={calendar?.lastSyncedAt ?? null}
+              name={user?.name ?? 'User'}
+              now={now}
+              onDisconnect={() => disconnectMutation.mutate()}
+              onSignOut={handleSignOutClick}
+            />
           ) : (
             <GoogleSignInButton onPress={handleSignIn} />
           )}

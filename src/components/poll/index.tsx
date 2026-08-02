@@ -177,7 +177,12 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
             )}
           </div>
           {tab === 'painting' ? (
-            <PaintingPhase poll={poll} sessionId={sessionId} userId={effectiveUserId as string} />
+            <PaintingPhase
+              isSignedIn={isSignedIn}
+              poll={poll}
+              sessionId={sessionId}
+              userId={effectiveUserId as string}
+            />
           ) : (
             <ResultsPhase
               poll={poll}

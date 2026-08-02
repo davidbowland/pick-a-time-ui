@@ -15,8 +15,8 @@ import { contrastRatio } from '@utils/contrast'
 type HeatGridProps = React.ComponentProps<typeof HeatGrid>
 
 const defaultUsers: User[] = [
-  { userId: 'a', name: 'Amber Harbor', calendarStatus: 'not_connected' },
-  { userId: 'b', name: null, calendarStatus: 'not_connected' },
+  { userId: 'a', name: 'Amber Harbor' },
+  { userId: 'b', name: null },
 ]
 
 const defaultCells = [
@@ -148,7 +148,6 @@ describe('isRecommendedCell', () => {
       endMinute: 1170,
       freeCount: 2,
       freeUserIds: [],
-      excludedByCalendar: [],
     },
   ]
 
@@ -191,7 +190,6 @@ describe('HeatGrid', () => {
       endMinute: 1140,
       freeCount: 2,
       freeUserIds: [],
-      excludedByCalendar: [],
     },
   ]
 

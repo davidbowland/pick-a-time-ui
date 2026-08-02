@@ -17,26 +17,38 @@ const PrivacyPolicy = (): React.ReactNode => {
         <h1 className="text-4xl font-bold text-[var(--bone)]">Privacy Policy</h1>
         <p className="text-[var(--bone)]">
           This policy explains what pick-a-time.com does with your data. Short version: we collect little, we delete it
-          fast, and we never sell it.
+          on the schedule below, and we never sell it.
         </p>
       </div>
 
       <Section title="What We Collect">
         <p>
-          Our servers automatically log your IP address, browser type, and the pages you request. We use these logs to
-          detect abuse and keep the site running.
+          When your browser calls our API, the request is logged: your IP address, the time, the address requested, and
+          your browser&apos;s user-agent string. We keep those logs to see what breaks. We don&apos;t record which pages
+          you view — the website itself keeps no access log.
         </p>
         <p>
           When you join a poll, we set a small cookie in your browser that remembers which participant you are on that
           poll. It only works for that one poll, and it lasts 14 days — the same time the poll itself stays alive.
         </p>
         <p>
-          If you sign in with Google, we store your name so we can recognize you the next time you sign in. We
-          don&apos;t store your email address.
+          Your browser also holds two things of its own: a note of whether you&apos;ve seen the introduction, and — if
+          you start connecting a calendar — the poll you were on, so we can return you there afterwards. The first stays
+          until you clear your browser data; the second disappears when you close the tab.
         </p>
         <p>
-          When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot. Google processes
-          that check on our behalf, under our instructions — it doesn&apos;t use the data for its own purposes.
+          If you sign in with Google, we store your name, your email address, and the Google account identifier that
+          links you across devices, so we can recognize you the next time you sign in.
+        </p>
+        <p>
+          If you connect Google Calendar, we ask Google only for your busy and free times. That permission makes it
+          impossible for us to see event titles, guests, or locations. We store an encrypted token so we can check again
+          without asking you every time, and we cache the busy time ranges themselves.
+        </p>
+        <p>
+          When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot. Google receives
+          the signals it needs to make that judgement and handles them under its own privacy policy, which permits it to
+          use them to improve reCAPTCHA and general security.
         </p>
       </Section>
 
@@ -60,6 +72,10 @@ const PrivacyPolicy = (): React.ReactNode => {
           works. Anybody who has the poll&apos;s link or QR code can open it and join, since a poll isn&apos;t locked to
           specific people, only to that link.
         </p>
+        <p>
+          If you connect your calendar, the hours it marks busy look exactly like the hours you marked by hand. Other
+          people on the poll see which hours you&apos;re free and can&apos;t tell which of them came from your calendar.
+        </p>
       </Section>
 
       <Section title="When We Share Your Data">
@@ -68,9 +84,17 @@ const PrivacyPolicy = (): React.ReactNode => {
           independent service. Google&apos;s privacy policy governs what Google does with that data.
         </p>
         <p>
-          Creating a poll sends data to Google&apos;s reCAPTCHA to screen out bots. Google acts as our processor for
-          that check, bound by our instructions, not as an independent user of the data. We share data beyond this only
-          when the law requires it — for example, a valid court order.
+          Checking your calendar sends Google the dates we&apos;re asking about and the token you gave us when you
+          connected. Nothing about the poll or the other people on it goes to Google.
+        </p>
+        <p>
+          Creating a poll sends data to Google&apos;s reCAPTCHA to screen out bots. Google handles those signals under
+          its own privacy policy, which permits it to use them to improve reCAPTCHA and general security.
+        </p>
+        <p>
+          Amazon Web Services hosts the site and stores everything described here, and Amazon Cognito manages Google
+          sign-in. Log lines recording an error are copied to a separate error-reporting function we run in the same AWS
+          account. We share data beyond this only when the law requires it — for example, a valid court order.
         </p>
       </Section>
 
@@ -92,8 +116,20 @@ const PrivacyPolicy = (): React.ReactNode => {
         <p>We keep server logs for 30 days, then delete them.</p>
         <p>
           We delete everything tied to a poll — its schedule, its participants, their names, and everybody&apos;s marked
-          availability — 14 days after the poll is created. This happens automatically, whether or not everybody has
-          finished entering their availability, and no matter how far out the poll&apos;s dates are.
+          availability — 14 days after the poll is created, with one exception noted below. This happens automatically,
+          whether or not everybody has finished entering their availability, and no matter how far out the poll&apos;s
+          dates are.
+        </p>
+        <p>
+          Calendar data is the exception to that 14-day rule. It&apos;s tied to your Google account rather than to any
+          one poll, so it outlives the poll: we keep it for 90 days after the last time we checked your calendar, and
+          that clock restarts every time we check. The busy times we cache cover the combined date range of every poll
+          you&apos;re in, not just one.
+        </p>
+        <p>
+          Disconnect your calendar and we delete the token and the cached busy times right away. The hours we already
+          marked busy stay busy on your polls — they&apos;re part of your availability now, and you can mark yourself
+          free again at any time.
         </p>
         <p>
           If you sign in with Google, we keep the record that lets us recognize you until you ask us to delete it —
@@ -120,13 +156,8 @@ const PrivacyPolicy = (): React.ReactNode => {
             href="mailto:privacy@dbowland.com"
           >
             privacy@dbowland.com
-          </Link>{' '}
-          or write to:
-        </p>
-        <p>
-          pick-a-time.com Privacy
-          <br />
-          P.O. Box 81226, Seattle, WA 98108-1226
+          </Link>
+          .
         </p>
       </Section>
 
@@ -135,7 +166,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
           Back to Pick a Time
         </Link>
-        <span>Last updated July 2026</span>
+        <span>Effective August 1, 2026</span>
       </div>
     </div>
   )

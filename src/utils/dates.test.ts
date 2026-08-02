@@ -1,4 +1,12 @@
-import { addDays, buildGridDateLabels, formatExpiration, formatShortDate, isWeekendDate, toIsoDate } from './dates'
+import {
+  addDays,
+  buildGridDateLabels,
+  formatCheckedAgo,
+  formatExpiration,
+  formatShortDate,
+  isWeekendDate,
+  toIsoDate,
+} from './dates'
 
 describe('toIsoDate', () => {
   it('formats a local Date as YYYY-MM-DD, zero-padded', () => {
@@ -88,5 +96,29 @@ describe('isWeekendDate', () => {
   it('resolves the weekday in the given timezone, not implicitly in whatever zone the runtime defaults to', () => {
     expect(isWeekendDate('2026-07-18', 'Asia/Tokyo')).toBe(true) // still Saturday in Tokyo
     expect(isWeekendDate('2026-07-20', 'Asia/Tokyo')).toBe(false) // Monday in Tokyo
+  })
+})
+
+describe('formatCheckedAgo', () => {
+  const now = () => 1_754_006_400_000 // fixed; never read the wall clock in a test
+
+  it('should read as just now under a minute', () => {
+    expect(formatCheckedAgo(1_754_006_370, now)).toEqual('just now')
+  })
+
+  it('should count a single minute in the singular', () => {
+    expect(formatCheckedAgo(1_754_006_330, now)).toEqual('1 minute ago')
+  })
+
+  it('should count minutes', () => {
+    expect(formatCheckedAgo(1_754_006_280, now)).toEqual('2 minutes ago')
+  })
+
+  it('should count hours', () => {
+    expect(formatCheckedAgo(1_754_002_800, now)).toEqual('1 hour ago')
+  })
+
+  it('should count days', () => {
+    expect(formatCheckedAgo(1_753_920_000, now)).toEqual('1 day ago')
   })
 })

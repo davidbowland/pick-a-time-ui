@@ -42,9 +42,9 @@ describe('BestSlotBanner attendance tag', () => {
 
 describe("BestSlotBanner can't-make-it line", () => {
   const users: User[] = [
-    { userId: 'a', name: 'Amber Harbor', calendarStatus: 'not_connected' },
-    { userId: 'b', name: 'Priya Patel', calendarStatus: 'not_connected' },
-    { userId: 'c', name: 'Jordan Lee', calendarStatus: 'not_connected' },
+    { userId: 'a', name: 'Amber Harbor' },
+    { userId: 'b', name: 'Priya Patel' },
+    { userId: 'c', name: 'Jordan Lee' },
   ]
 
   it('names whoever is missing when attendance is not unanimous', () => {
@@ -91,7 +91,6 @@ describe('SuggestedTimes attendance tag', () => {
     endMinute: 1140,
     freeCount: 3,
     freeUserIds: [],
-    excludedByCalendar: [],
   }
 
   it('tags a fully-attended suggestion as "Everybody\'s free"', () => {
@@ -136,9 +135,9 @@ describe("SuggestedTimes can't-make-it line", () => {
     slots: [[{ slotIndex: 0, startMinute: 1080, endMinute: 1140 }]],
   }
   const users: User[] = [
-    { userId: 'a', name: 'Amber Harbor', calendarStatus: 'not_connected' },
-    { userId: 'b', name: 'Priya Patel', calendarStatus: 'not_connected' },
-    { userId: 'c', name: 'Jordan Lee', calendarStatus: 'not_connected' },
+    { userId: 'a', name: 'Amber Harbor' },
+    { userId: 'b', name: 'Priya Patel' },
+    { userId: 'c', name: 'Jordan Lee' },
   ]
   const meeting: RecommendedMeeting = {
     dateIndex: 0,
@@ -148,7 +147,6 @@ describe("SuggestedTimes can't-make-it line", () => {
     endMinute: 1140,
     freeCount: 2,
     freeUserIds: ['a', 'c'],
-    excludedByCalendar: [],
   }
 
   it('names whoever is missing when attendance is not unanimous', () => {
@@ -178,22 +176,6 @@ describe("SuggestedTimes can't-make-it line", () => {
     expect(screen.queryByText('Can’t make it')).not.toBeInTheDocument()
   })
 
-  it("shows both the can't-make-it line and the heads-up calendar-conflict block, in that order, without merging them", () => {
-    render(
-      <SuggestedTimes
-        meetings={[{ ...meeting, excludedByCalendar: ['a'] }]}
-        participantCount={3}
-        poll={poll}
-        users={users}
-        viewerTimezone="America/Chicago"
-      />,
-    )
-    const cantMakeIt = screen.getByText('Can’t make it')
-    const headsUp = screen.getByText('Heads up')
-    expect(cantMakeIt.compareDocumentPosition(headsUp) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText(/amber harbor.s calendar shows a conflict/i)).toBeInTheDocument()
-  })
-
   it('calls the viewer "You" in the can\'t-make-it list instead of their own name', () => {
     render(
       <SuggestedTimes
@@ -207,21 +189,6 @@ describe("SuggestedTimes can't-make-it line", () => {
     )
     expect(screen.getByText('You')).toBeInTheDocument()
     expect(screen.queryByText('Priya Patel')).not.toBeInTheDocument()
-  })
-
-  it('phrases the viewer\'s own calendar conflict in second person, not "You\'s"', () => {
-    render(
-      <SuggestedTimes
-        meetings={[{ ...meeting, excludedByCalendar: ['b'] }]}
-        participantCount={3}
-        poll={poll}
-        users={users}
-        viewerTimezone="America/Chicago"
-        viewerUserId="b"
-      />,
-    )
-    expect(screen.getByText('Your calendar shows a conflict.')).toBeInTheDocument()
-    expect(screen.queryByText(/priya patel.s calendar/i)).not.toBeInTheDocument()
   })
 })
 

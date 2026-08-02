@@ -1,4 +1,4 @@
-import { ApiError, get, patch, post } from 'aws-amplify/api'
+import { ApiError, del, get, patch, post } from 'aws-amplify/api'
 import { fetchAuthSession } from 'aws-amplify/auth'
 
 import { apiName, apiNameUnauthenticated } from '@config/amplify'
@@ -42,6 +42,16 @@ async function apiGet<T>(
 ): Promise<T> {
   const { body } = await get({ apiName: apiNameUnauthenticated, path, options: { headers, queryParams } }).response
   return body.json() as Promise<T>
+}
+
+async function apiGetAuthed<T>(path: string): Promise<T> {
+  const { body } = await get({ apiName, path, options: { headers: await authHeaders() } }).response
+  return body.json() as Promise<T>
+}
+
+async function apiDel(path: string): Promise<void> {
+  // 204 No Content -- there is no body to parse, and calling body.json() on one throws.
+  await del({ apiName, path, options: { headers: await authHeaders() } }).response
 }
 
 async function apiPost<T>(
@@ -138,6 +148,35 @@ export const patchAvailability = (
 ): Promise<AvailabilityRecord> =>
   apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`, false, body)
 
+export interface CalendarState {
+  status: 'not_connected' | 'connected' | 'error'
+  lastSyncedAt: number | null
+}
+
+export interface CalendarSyncResult {
+  applied: boolean
+  markedBusyCount: number
+  lastSyncedAt: number
+  availability: AvailabilityRecord
+}
+
+export const connectCalendar = (
+  sessionId: string,
+  userId: string,
+): Promise<{ alreadyConnected: boolean; authUrl?: string }> =>
+  apiPost(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/connect`, true)
+
+export const syncCalendar = (sessionId: string, userId: string, force: boolean): Promise<CalendarSyncResult> =>
+  apiPost(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/sync`, true, {
+    force,
+  })
+
+// No arguments: a calendar connection belongs to a Google account, not a poll, and the JWT
+// identifies it. Disconnecting therefore works with no poll in context.
+export const fetchCalendarState = (): Promise<CalendarState> => apiGetAuthed('/calendar')
+
+export const disconnectCalendar = (): Promise<void> => apiDel('/calendar')
+
 export interface OverlapCell extends Slot {
   dateIndex: number
   freeCount: number
@@ -149,7 +188,6 @@ export interface RecommendedMeeting extends Slot {
   date: string
   freeCount: number
   freeUserIds: string[]
-  excludedByCalendar: string[]
 }
 
 export interface OverlapResponse {

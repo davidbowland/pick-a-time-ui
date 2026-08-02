@@ -155,7 +155,6 @@ describe('ResultsPhase', () => {
           endMinute: 1140,
           freeCount: 2,
           freeUserIds: ['a', 'b'],
-          excludedByCalendar: [],
         },
       ],
     })
@@ -304,7 +303,6 @@ describe('ResultsPhase', () => {
           endMinute: 1140,
           freeCount: 3,
           freeUserIds: ['a', 'b', 'c'],
-          excludedByCalendar: [],
         },
       ],
     })
@@ -334,7 +332,6 @@ describe('ResultsPhase', () => {
           endMinute: 1440,
           freeCount: 3,
           freeUserIds: ['a', 'b', 'c'],
-          excludedByCalendar: [],
         },
       ],
     })
@@ -345,8 +342,13 @@ describe('ResultsPhase', () => {
     expect(within(section).getByText('Thu, Sep 4')).toBeInTheDocument()
   })
 
-  it('should explain a calendar-conflict exclusion in plain language', async () => {
-    const users: User[] = [{ userId: 'bright-heron', name: 'Bright Heron', calendarStatus: 'connected' }]
+  // Whether somebody connected a calendar, and which hours it says they are booked, is nobody
+  // else's business. A suggested time names who can't make it and stops there.
+  it("should not disclose anyone's calendar conflicts", async () => {
+    const users: User[] = [
+      { userId: 'a', name: 'Amber Harbor' },
+      { userId: 'bright-heron', name: 'Bright Heron' },
+    ]
     jest.mocked(fetchOverlap).mockResolvedValueOnce({
       ...overlapResponse,
       recommendedMeetings: [
@@ -356,9 +358,8 @@ describe('ResultsPhase', () => {
           date: '2025-09-04',
           startMinute: 1080,
           endMinute: 1140,
-          freeCount: 2,
-          freeUserIds: ['a', 'b'],
-          excludedByCalendar: ['bright-heron'],
+          freeCount: 1,
+          freeUserIds: ['a'],
         },
       ],
     })
@@ -366,7 +367,10 @@ describe('ResultsPhase', () => {
     renderWithClient(<ResultsPhase poll={poll} sessionId="amber-harbor" users={users} />)
 
     const section = await screen.findByRole('region', { name: /suggested times/i })
-    expect(within(section).getByText(/bright heron.s calendar shows a conflict/i)).toBeInTheDocument()
+    // Guards against a vacuous pass: the meeting really rendered, and it really names an absentee.
+    expect(within(section).getByText('Bright Heron')).toBeInTheDocument()
+    expect(within(section).queryByText(/heads up/i)).not.toBeInTheDocument()
+    expect(within(section).queryByText(/calendar shows a conflict/i)).not.toBeInTheDocument()
   })
 
   it('should rank recommended meetings in the order the server returns them', async () => {
@@ -381,7 +385,6 @@ describe('ResultsPhase', () => {
           endMinute: 1140,
           freeCount: 3,
           freeUserIds: [],
-          excludedByCalendar: [],
         },
         {
           dateIndex: 2,
@@ -391,7 +394,6 @@ describe('ResultsPhase', () => {
           endMinute: 1170,
           freeCount: 2,
           freeUserIds: [],
-          excludedByCalendar: [],
         },
       ],
     })
@@ -407,8 +409,8 @@ describe('ResultsPhase', () => {
 
   it('should reveal free participants by name when a heat-grid cell is activated', async () => {
     const users: User[] = [
-      { userId: 'quiet-falcon', name: 'Quiet Falcon', calendarStatus: 'not_connected' },
-      { userId: 'amber-tide', name: null, calendarStatus: 'not_connected' },
+      { userId: 'quiet-falcon', name: 'Quiet Falcon' },
+      { userId: 'amber-tide', name: null },
     ]
     // A full date x slot grid (3 dates x 3 slots, matching this poll's dates/slots) with one
     // populated cell — HeatGrid indexes cells[dateIndex][slotIndex] directly.
@@ -461,7 +463,6 @@ describe('ResultsPhase', () => {
           endMinute: 1140,
           freeCount: 3,
           freeUserIds: ['a', 'b', 'c'],
-          excludedByCalendar: [],
         },
       ],
     })
@@ -550,7 +551,6 @@ describe('ResultsPhase', () => {
           endMinute: 1140,
           freeCount: 3,
           freeUserIds: ['a', 'b', 'c'],
-          excludedByCalendar: [],
         },
       ],
     })

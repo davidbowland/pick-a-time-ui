@@ -18,7 +18,7 @@ describe('useDebouncedAvailabilityCommit', () => {
     const onFlush = jest.fn()
     const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
 
-    result.current([cellA])
+    result.current.commit([cellA])
     jest.advanceTimersByTime(1249)
 
     expect(onFlush).not.toHaveBeenCalled()
@@ -28,7 +28,7 @@ describe('useDebouncedAvailabilityCommit', () => {
     const onFlush = jest.fn()
     const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
 
-    result.current([cellA])
+    result.current.commit([cellA])
     jest.advanceTimersByTime(1250)
 
     expect(onFlush).toHaveBeenCalledWith([cellA])
@@ -38,9 +38,9 @@ describe('useDebouncedAvailabilityCommit', () => {
     const onFlush = jest.fn()
     const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
 
-    result.current([cellA])
+    result.current.commit([cellA])
     jest.advanceTimersByTime(600)
-    result.current([cellB])
+    result.current.commit([cellB])
     jest.advanceTimersByTime(1250)
 
     expect(onFlush).toHaveBeenCalledTimes(1)
@@ -51,8 +51,8 @@ describe('useDebouncedAvailabilityCommit', () => {
     const onFlush = jest.fn()
     const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
 
-    result.current([cellA])
-    result.current([{ ...cellA, value: false }])
+    result.current.commit([cellA])
+    result.current.commit([{ ...cellA, value: false }])
     jest.advanceTimersByTime(1250)
 
     expect(onFlush).toHaveBeenCalledTimes(1)
@@ -69,7 +69,7 @@ describe('useDebouncedAvailabilityCommit', () => {
       initialProps: { onFlush: firstOnFlush },
     })
 
-    result.current([cellA])
+    result.current.commit([cellA])
     rerender({ onFlush: secondOnFlush })
 
     jest.advanceTimersByTime(1249)
@@ -85,10 +85,42 @@ describe('useDebouncedAvailabilityCommit', () => {
     const onFlush = jest.fn()
     const { result, unmount } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
 
-    result.current([cellA])
+    result.current.commit([cellA])
     unmount()
 
     expect(onFlush).toHaveBeenCalledWith([cellA])
+  })
+
+  it('should expose a flush that commits pending cells immediately', () => {
+    const onFlush = jest.fn()
+    const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
+
+    result.current.commit([cellA])
+    expect(onFlush).not.toHaveBeenCalled()
+
+    result.current.flush()
+
+    expect(onFlush).toHaveBeenCalledWith([cellA])
+  })
+
+  it('should not flush again on the timer after an explicit flush drained the queue', () => {
+    const onFlush = jest.fn()
+    const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
+
+    result.current.commit([cellA])
+    result.current.flush()
+    jest.advanceTimersByTime(1250)
+
+    expect(onFlush).toHaveBeenCalledTimes(1)
+  })
+
+  it('should do nothing when flushed with nothing pending', () => {
+    const onFlush = jest.fn()
+    const { result } = renderHook(() => useDebouncedAvailabilityCommit(onFlush, 1250))
+
+    result.current.flush()
+
+    expect(onFlush).not.toHaveBeenCalled()
   })
 
   it('should not flush on unmount when nothing is pending', () => {

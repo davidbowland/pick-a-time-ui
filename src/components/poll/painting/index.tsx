@@ -1,12 +1,12 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { buildUnionColumns, dayOffsetLegendLine, gridContextLine, showsDateColumn } from '../slot-columns'
-import { Toolbar } from './elements'
+import { CalendarStrip, Toolbar } from './elements'
 import PaintGrid from './grid'
 import FeedbackMessage from '@components/feedback-message'
 import { useDebouncedAvailabilityCommit } from '@hooks/useDebouncedAvailabilityCommit'
-import { fetchAvailability, patchAvailability } from '@services/api'
+import { connectCalendar, fetchAvailability, fetchCalendarState, patchAvailability, syncCalendar } from '@services/api'
 import { AvailabilityCell, AvailabilityRecord, PollData, Slot } from '@types'
 import { formatShortDate } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
@@ -17,12 +17,28 @@ export interface PaintingPhaseProps {
   sessionId: string
   userId: string
   poll: PollData
+  isSignedIn: boolean
+  // Injectable so a test can assert the OAuth hand-off instead of forcing a real navigation.
+  redirectTo?: (url: string) => void
 }
 
 const SAVE_ERROR_MESSAGE = "Couldn't save your availability. Please try again."
 const PATCH_DEBOUNCE_MS = 1250
+// The API's OAuth callback lands on a fixed /calendar-connected path carrying no session context,
+// so stashing the current path here is the only way back to the poll the person left.
+const CALENDAR_RETURN_KEY = 'pat_calendar_return'
 
-const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.ReactNode => {
+const assignLocation = (url: string): void => {
+  window.location.href = url
+}
+
+const PaintingPhase = ({
+  sessionId,
+  userId,
+  poll,
+  isSignedIn,
+  redirectTo = assignLocation,
+}: PaintingPhaseProps): React.ReactNode => {
   const queryClient = useQueryClient()
   const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
   const queryKey = ['availability', sessionId, userId]
@@ -60,7 +76,73 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
     }
   }
 
-  const debouncedFlush = useDebouncedAvailabilityCommit(flushCommit, PATCH_DEBOUNCE_MS)
+  const { commit: debouncedFlush, flush: flushPending } = useDebouncedAvailabilityCommit(flushCommit, PATCH_DEBOUNCE_MS)
+
+  const { data: calendar } = useQuery({
+    enabled: isSignedIn,
+    queryFn: fetchCalendarState,
+    // No session or user in the key: a calendar connection belongs to a Google account, so the app
+    // bar and every poll read the same entry and one disconnect invalidates all of them.
+    queryKey: ['calendar'],
+  })
+  const [dismissed, setDismissed] = useState(false)
+  const [markedBusyCount, setMarkedBusyCount] = useState<number | null>(null)
+  // The same counter `flushCommit` reads, captured when a check starts. See editCountRef above.
+  const editCountAtSyncRef = useRef(0)
+
+  const syncMutation = useMutation({
+    mutationFn: async (force: boolean) => {
+      // Drain anything the debounce is still holding: the check rewrites this record server-side,
+      // and paints left sitting in the debounce would be thrown away by the record it returns.
+      flushPending()
+      return syncCalendar(sessionId, userId, force)
+    },
+    onMutate: () => {
+      editCountAtSyncRef.current = editCountRef.current
+    },
+    onSuccess: (result) => {
+      // Only claim a count when the check actually ran. A skipped check (`applied: false`) reports
+      // zero because it did nothing, not because the calendar is clear -- and this phase remounts on
+      // every tab switch, so that skip is the common case, not an edge one.
+      setMarkedBusyCount(result.applied ? result.markedBusyCount : null)
+      // Same guard the PATCH path uses: if cells were painted while this was in flight, the
+      // response predates them and writing it would visibly revert those paints.
+      if (editCountRef.current === editCountAtSyncRef.current) {
+        queryClient.setQueryData(queryKey, result.availability)
+      }
+      void queryClient.invalidateQueries({ queryKey: ['calendar'] })
+      // Hours the check marked busy change everyone's overlap, not just this grid.
+      void queryClient.invalidateQueries({ queryKey: ['overlap', sessionId] })
+    },
+  })
+
+  const connectMutation = useMutation({
+    mutationFn: () => connectCalendar(sessionId, userId),
+    onSuccess: ({ authUrl }) => {
+      // alreadyConnected comes back with no authUrl: there is nothing to consent to, and the
+      // refreshed ['calendar'] query is what moves the strip to its connected state.
+      if (!authUrl) {
+        void queryClient.invalidateQueries({ queryKey: ['calendar'] })
+        return
+      }
+      sessionStorage.setItem(CALENDAR_RETURN_KEY, window.location.pathname + window.location.search)
+      redirectTo(authUrl)
+    },
+  })
+
+  // Fire once per mount and let the server decide whether it does anything: an unforced check is a
+  // no-op if this poll was already checked. The ref is what makes strict mode's double-invoke, and
+  // any later re-render, unable to fire a second one. The availability record deliberately carries
+  // no checked-at timestamp to consult -- it is served unauthenticated, so a visible value would
+  // tell anyone holding the poll link which participants have a calendar connected.
+  const checkFiredRef = useRef(false)
+  const { mutate: runSync } = syncMutation
+  useEffect(() => {
+    if (calendar?.status === 'connected' && !checkFiredRef.current) {
+      checkFiredRef.current = true
+      runSync(false)
+    }
+  }, [calendar?.status, runSync])
 
   const handleCommit = (cells: AvailabilityCell[]): void => {
     const previous = availability
@@ -126,8 +208,27 @@ const PaintingPhase = ({ sessionId, userId, poll }: PaintingPhaseProps): React.R
   // screen or vanish while one is still showing.
   const dayOffsetLegend = dayOffsetLegendLine(slotLabels.map((entry) => entry.dayOffset))
 
+  // A check that never reached Google leaves the stored connection state reading `connected`, so
+  // without this the failure is silent -- the grid just doesn't change and nothing says why.
+  const calendarStatus = syncMutation.isError ? 'error' : calendar?.status
+  // "Not now" only hides the invitation. Once a calendar is connected the strip is the only place
+  // that explains why hours turned busy, so dismissing it there would hide the explanation.
+  const showsCalendarStrip = isSignedIn && calendarStatus && !(calendarStatus === 'not_connected' && dismissed)
+
   return (
     <div className="flex flex-col gap-4">
+      {showsCalendarStrip && (
+        <CalendarStrip
+          isChecking={syncMutation.isPending}
+          lastSyncedAt={calendar?.lastSyncedAt ?? null}
+          markedBusyCount={markedBusyCount}
+          onCheckAgain={() => syncMutation.mutate(true)}
+          onConnect={() => connectMutation.mutate()}
+          onDismiss={() => setDismissed(true)}
+          status={calendarStatus}
+          usesTimes={poll.usesTimes}
+        />
+      )}
       <Toolbar
         onClear={() => handleCommit(allCells(poll.slots, false))}
         onSelectAll={() => handleCommit(allCells(poll.slots, true))}

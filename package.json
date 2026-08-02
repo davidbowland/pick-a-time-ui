@@ -21,7 +21,7 @@
     "clean": "rm -rf .next coverage out && npm ci --legacy-peer-deps",
     "deploy": "DEVELOPMENT=true npm run build && ./scripts/deploy.sh",
     "lint": "prettier --write . && eslint --fix .",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "start": "next dev",
     "serve": "next build && npx serve out",
     "test": "jest --colors",

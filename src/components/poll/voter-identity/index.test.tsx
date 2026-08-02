@@ -23,7 +23,7 @@ const config = {
   sessionExpireHours: 336,
 }
 
-const user: User = { userId: 'quiet-falcon', name: 'Quiet Falcon', calendarStatus: 'not_connected' }
+const user: User = { userId: 'quiet-falcon', name: 'Quiet Falcon' }
 
 function renderWithClient(props: Partial<VoterIdentityControlProps> = {}): { queryClient: QueryClient } {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })

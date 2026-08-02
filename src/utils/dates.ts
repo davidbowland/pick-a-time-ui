@@ -30,6 +30,23 @@ export function formatExpiration(expirationSeconds: number, timeZone: string): s
   return `Closes ${MONTH_NAMES[month - 1]} ${day}, ${year} at ${formatMinuteOfDay(minuteOfDay)}`
 }
 
+const plural = (count: number, unit: string): string => `${count} ${unit}${count === 1 ? '' : 's'} ago`
+
+// `now` is injected so the calendar strip's timestamp is assertable without touching the wall clock.
+export const formatCheckedAgo = (epochSeconds: number, now: () => number = Date.now): string => {
+  const seconds = Math.floor(now() / 1000) - epochSeconds
+  if (seconds < 60) {
+    return 'just now'
+  }
+  if (seconds < 3600) {
+    return plural(Math.floor(seconds / 60), 'minute')
+  }
+  if (seconds < 86_400) {
+    return plural(Math.floor(seconds / 3600), 'hour')
+  }
+  return plural(Math.floor(seconds / 86_400), 'day')
+}
+
 export function isWeekendDate(iso: string, timezone: string): boolean {
   const [y, m, d] = iso.split('-').map(Number)
   // Date.UTC, not `new Date(y, m-1, d, 12)` — the latter interprets "noon" in the *host

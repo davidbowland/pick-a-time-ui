@@ -2,7 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
 import PaintingPhase from './index'
-import { fetchAvailability, patchAvailability } from '@services/api'
+import {
+  CalendarSyncResult,
+  connectCalendar,
+  fetchAvailability,
+  fetchCalendarState,
+  patchAvailability,
+  syncCalendar,
+} from '@services/api'
 import '@testing-library/jest-dom'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -119,7 +126,7 @@ describe('PaintingPhase', () => {
   it('should render an empty grid once availability loads', async () => {
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
   })
@@ -130,7 +137,7 @@ describe('PaintingPhase', () => {
   it('should label each cell with its date and time so screen readers can announce it', async () => {
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM' })).toBeInTheDocument()
   })
@@ -138,7 +145,7 @@ describe('PaintingPhase', () => {
   it('should state the slot cadence once, since the column headers omit end times', async () => {
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findByText('Each column is a 1-hour slot.')).toBeInTheDocument()
   })
@@ -154,7 +161,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -182,7 +189,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
@@ -205,7 +212,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     // Two separate click gestures, close enough together to both land inside one debounce window.
@@ -243,7 +250,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
     cells[0].focus()
 
@@ -272,7 +279,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
     await user.click(await screen.findByRole('button', { name: 'Select all' }))
 
@@ -310,7 +317,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
     await user.click(await screen.findByRole('button', { name: 'Clear all' }))
 
@@ -345,7 +352,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
     // (0,0)=Thu 6-7p, (0,1)=Thu 7-8p, (0,2)=Thu 8-9p — same date, three consecutive slots.
     const [cellA, cellB, cellC] = cells
@@ -397,7 +404,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -438,7 +445,7 @@ describe('PaintingPhase', () => {
         }),
     )
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -482,7 +489,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -542,7 +549,7 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -577,7 +584,7 @@ describe('PaintingPhase', () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -593,7 +600,7 @@ describe('PaintingPhase', () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
 
     act(() => {
@@ -614,7 +621,7 @@ describe('PaintingPhase', () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
     await user.click(await screen.findByRole('button', { name: 'Select all' }))
 
@@ -634,7 +641,9 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={datesOnlyPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={datesOnlyPoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     const cells = await screen.findAllByRole('button', { pressed: false })
     expect(cells).toHaveLength(2)
@@ -664,7 +673,9 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={singleSlotTimedPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={singleSlotTimedPoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     expect(await screen.findByText('Meeting time: 6:00–7:00 PM')).toBeInTheDocument()
     // The grid still collapses to a plain per-date toggle, same as a dates-only poll — the
@@ -679,7 +690,9 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={datesOnlyPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={datesOnlyPoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     await screen.findByRole('button', { name: 'Thu, Sep 4' })
     expect(screen.queryByText(/meeting time/i)).not.toBeInTheDocument()
@@ -692,7 +705,9 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={singleDatePoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={singleDatePoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     expect(await screen.findByText('Date: Thu, Sep 4')).toBeInTheDocument()
     expect(screen.queryByRole('rowheader')).not.toBeInTheDocument()
@@ -705,7 +720,14 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={singleDateSingleSlotPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase
+        isSignedIn={false}
+        poll={singleDateSingleSlotPoll}
+        sessionId="amber-harbor"
+        userId="quiet-falcon"
+      />,
+    )
 
     expect(await screen.findByText('Meeting time: Thu, Sep 4, 6:00–7:00 PM')).toBeInTheDocument()
     expect(screen.queryByText(/^Date:/)).not.toBeInTheDocument()
@@ -715,7 +737,7 @@ describe('PaintingPhase', () => {
     jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     // The header now *displays* an abbreviation (`8a` plus a `+1` marker) and carries the full
     // converted range as its accessible name, so read it by role rather than by visible text.
@@ -729,7 +751,7 @@ describe('PaintingPhase', () => {
     jest.mocked(detectViewerTimezone).mockReturnValueOnce('Asia/Tokyo')
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     expect(await screen.findByText('+1 means the next day in your time zone.')).toBeInTheDocument()
   })
@@ -737,7 +759,7 @@ describe('PaintingPhase', () => {
   it('omits the day-offset legend when every column is on the same day', async () => {
     mockEmptyAvailability()
 
-    renderWithClient(<PaintingPhase poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
     await screen.findAllByRole('button', { pressed: false })
     expect(screen.queryByText(/in your time zone/)).not.toBeInTheDocument()
@@ -751,7 +773,9 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={singleSlotTimedPoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={singleSlotTimedPoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     expect(await screen.findByText('Meeting time: 8:00–9:00 AM (next day for you)')).toBeInTheDocument()
   })
@@ -780,11 +804,252 @@ describe('PaintingPhase', () => {
       expiration: 1725453600,
     })
 
-    renderWithClient(<PaintingPhase poll={overridePoll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    renderWithClient(
+      <PaintingPhase isSignedIn={false} poll={overridePoll} sessionId="amber-harbor" userId="quiet-falcon" />,
+    )
 
     // Union of the two dates' windows is two columns (9-10am, 11am-12pm). Each date only has a
     // real slot for one of them, so there are exactly 2 tappable buttons, not 4.
     const cells = await screen.findAllByRole('button', { pressed: false })
     expect(cells).toHaveLength(2)
+  })
+
+  describe('calendar', () => {
+    const redirectTo = jest.fn()
+    const emptyGrid: AvailabilityRecord = {
+      userId: 'quiet-falcon',
+      free: [
+        [false, false, false],
+        [false, false, false],
+      ],
+      expiration: 1725453600,
+    }
+
+    beforeAll(() => {
+      jest.mocked(fetchCalendarState).mockResolvedValue({ lastSyncedAt: 1_754_006_280, status: 'connected' })
+      jest
+        .mocked(syncCalendar)
+        .mockResolvedValue({ applied: true, availability: emptyGrid, lastSyncedAt: 1_754_006_400, markedBusyCount: 2 })
+      jest.mocked(connectCalendar).mockResolvedValue({ alreadyConnected: false, authUrl: 'https://auth' })
+    })
+
+    function renderSignedIn(): ReturnType<typeof renderWithClient> {
+      return renderWithClient(
+        <PaintingPhase isSignedIn poll={poll} redirectTo={redirectTo} sessionId="amber-harbor" userId="quiet-falcon" />,
+      )
+    }
+
+    it('should not report a count when the server skipped the check', async () => {
+      mockEmptyAvailability()
+      jest.mocked(syncCalendar).mockResolvedValueOnce({
+        applied: false,
+        availability: emptyGrid,
+        lastSyncedAt: 1_754_006_400,
+        markedBusyCount: 0,
+      })
+
+      renderSignedIn()
+
+      // applied: false means the server did nothing, so its zero says "not checked", not "clear".
+      // Claiming the calendar is clear here would be false for anyone whose earlier check did mark hours.
+      expect(await screen.findByText(/^Checked /)).toBeInTheDocument()
+      expect(screen.queryByText(/nothing on your calendar conflicts/)).not.toBeInTheDocument()
+    })
+
+    it('should render no strip when signed out', async () => {
+      mockEmptyAvailability()
+
+      renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+      await screen.findAllByRole('button', { pressed: false })
+      expect(screen.queryByText(/google calendar/i)).not.toBeInTheDocument()
+      expect(fetchCalendarState).not.toHaveBeenCalled()
+    })
+
+    it('should check unforced on mount when connected', async () => {
+      mockEmptyAvailability()
+
+      renderSignedIn()
+
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', false))
+      await screen.findByRole('button', { name: 'Check again' })
+    })
+
+    it('should check only once per mount', async () => {
+      mockEmptyAvailability()
+
+      renderSignedIn()
+
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalled())
+      await screen.findByRole('button', { name: 'Check again' })
+      expect(syncCalendar).toHaveBeenCalledTimes(1)
+    })
+
+    it('should not check on mount when the calendar is not connected', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+
+      renderSignedIn()
+
+      await screen.findByRole('button', { name: 'Connect' })
+      expect(syncCalendar).not.toHaveBeenCalled()
+    })
+
+    it('should report how many hours the check marked busy', async () => {
+      mockEmptyAvailability()
+
+      renderSignedIn()
+
+      expect(await screen.findByText(/marked 2 hours busy/)).toBeInTheDocument()
+    })
+
+    it('should force a check when Check again is pressed', async () => {
+      mockEmptyAvailability()
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Check again' }))
+
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', true))
+      await screen.findByRole('button', { name: 'Check again' })
+    })
+
+    it('should refresh the overlap after a check, since marked hours change it for everyone', async () => {
+      mockEmptyAvailability()
+
+      const { queryClient } = renderSignedIn()
+      const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries')
+      await screen.findByRole('button', { name: 'Check again' })
+
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['overlap', 'amber-harbor'] })
+    })
+
+    it('should drain pending paints before the check rewrites the record', async () => {
+      mockEmptyAvailability()
+      jest.mocked(patchAvailability).mockResolvedValueOnce(emptyGrid)
+
+      renderSignedIn()
+      const cells = await screen.findAllByRole('button', { pressed: false })
+      await screen.findByRole('button', { name: 'Check again' })
+
+      act(() => {
+        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+
+      // Well inside the 1250ms debounce: without the flush, this paint would still be queued when
+      // the check overwrites the record, and the record it returns would discard it.
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(screen.getByRole('button', { name: 'Check again' }))
+
+      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
+        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+      })
+      await screen.findByRole('button', { name: 'Check again' })
+    })
+
+    it('should not revert a cell painted while the check was in flight', async () => {
+      mockEmptyAvailability()
+      jest.mocked(patchAvailability).mockResolvedValueOnce(emptyGrid)
+      let resolveSync: (value: CalendarSyncResult) => void = () => {}
+      jest.mocked(syncCalendar).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSync = resolve
+          }),
+      )
+
+      renderSignedIn()
+      const cells = await screen.findAllByRole('button', { pressed: false })
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalled())
+
+      act(() => {
+        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+      act(() => {
+        jest.advanceTimersByTime(50)
+      })
+      expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
+
+      // The check's record predates that paint. Writing it would blank the cell the person just
+      // filled in, and their own PATCH is still pending to reconcile it.
+      await act(async () => {
+        resolveSync({ applied: true, availability: emptyGrid, lastSyncedAt: 1_754_006_400, markedBusyCount: 0 })
+      })
+
+      expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('should apply the checked record when nothing was painted while it was in flight', async () => {
+      mockEmptyAvailability()
+      jest.mocked(syncCalendar).mockResolvedValueOnce({
+        applied: true,
+        availability: {
+          userId: 'quiet-falcon',
+          free: [
+            [true, false, false],
+            [false, false, false],
+          ],
+          expiration: 1725453600,
+        },
+        lastSyncedAt: 1_754_006_400,
+        markedBusyCount: 2,
+      })
+
+      renderSignedIn()
+
+      expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
+    })
+
+    it('should store the return path and redirect when connecting', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+      sessionStorage.clear()
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith('https://auth'))
+      expect(sessionStorage.getItem('pat_calendar_return')).toEqual('/')
+    })
+
+    it('should not redirect when the calendar is already connected', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+      jest.mocked(connectCalendar).mockResolvedValueOnce({ alreadyConnected: true })
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+
+      await waitFor(() => expect(connectCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon'))
+      // No consent screen to send them to: the refreshed calendar state is what moves the strip.
+      await screen.findByRole('button', { name: 'Check again' })
+      expect(redirectTo).not.toHaveBeenCalled()
+    })
+
+    it('should hide the invitation once it is dismissed', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Not now' }))
+
+      expect(screen.queryByText(/google calendar/i)).not.toBeInTheDocument()
+    })
+
+    it('should say the check failed and that the grid is untouched', async () => {
+      mockEmptyAvailability()
+      jest.mocked(syncCalendar).mockRejectedValueOnce(new Error('network error'))
+
+      renderSignedIn()
+
+      expect(await screen.findByText("We couldn't reach Google Calendar")).toBeInTheDocument()
+      expect(screen.getByText('Nothing on your grid changed.')).toBeInTheDocument()
+      expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
+    })
   })
 })

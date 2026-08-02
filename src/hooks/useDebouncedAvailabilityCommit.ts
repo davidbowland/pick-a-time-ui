@@ -11,7 +11,7 @@ const cellKey = (cell: AvailabilityCell): string => `${cell.dateIndex}:${cell.sl
 export function useDebouncedAvailabilityCommit(
   onFlush: (cells: AvailabilityCell[]) => void,
   delayMs: number,
-): (cells: AvailabilityCell[]) => void {
+): { commit: (cells: AvailabilityCell[]) => void; flush: () => void } {
   const pendingRef = useRef<Map<string, AvailabilityCell>>(new Map())
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Callers (e.g. PaintingPhase) pass an inline, non-memoized onFlush that gets a new identity on
@@ -33,7 +33,7 @@ export function useDebouncedAvailabilityCommit(
 
   useEffect(() => () => flush(), [flush])
 
-  return useCallback(
+  const commit = useCallback(
     (cells: AvailabilityCell[]) => {
       for (const cell of cells) pendingRef.current.set(cellKey(cell), cell)
       clearTimeout(timerRef.current)
@@ -41,4 +41,8 @@ export function useDebouncedAvailabilityCommit(
     },
     [flush, delayMs],
   )
+
+  // `flush` is exposed so a calendar check can drain pending paints before it overwrites the
+  // record server-side; without it a check landing mid-batch discards up to `delayMs` of painting.
+  return { commit, flush }
 }

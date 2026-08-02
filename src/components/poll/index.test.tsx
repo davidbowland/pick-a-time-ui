@@ -48,7 +48,7 @@ describe('Poll', () => {
       ],
     ],
   }
-  const existingUser: User = { userId: 'quiet-falcon', name: 'Quiet Falcon', calendarStatus: 'not_connected' }
+  const existingUser: User = { userId: 'quiet-falcon', name: 'Quiet Falcon' }
   const config = {
     maxPollDates: 90,
     pollNameMaxLength: 100,
@@ -182,7 +182,7 @@ describe('Poll', () => {
     // a heat-grid cell naming this user is activated.
     // The free user is deliberately NOT the signed-in viewer: the viewer renders as "You"
     // (covered in heat-grid.test.tsx), and this test is about real names being forwarded.
-    const otherUser: User = { userId: 'mellow-heron', name: 'Mellow Heron', calendarStatus: 'not_connected' }
+    const otherUser: User = { userId: 'mellow-heron', name: 'Mellow Heron' }
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
     // Sticky (not -Once) mocks: opening the overlap tab invalidates and refetches poll and users.
     jest.mocked(fetchPoll).mockResolvedValue(poll)
@@ -269,7 +269,7 @@ describe('Poll', () => {
     // tests in this file use, since the whole bug was that a stale `users` list combined with a
     // cookie that never got read back would leave the phase machine stuck forever.
     window.history.replaceState(null, '', '/')
-    const newUser: User = { userId: 'bright-heron', name: null, calendarStatus: 'not_connected' }
+    const newUser: User = { userId: 'bright-heron', name: null }
     let currentUserId: string | undefined
     const setUserId = jest.fn((id: string) => {
       currentUserId = id
@@ -448,7 +448,7 @@ describe('Poll', () => {
     // re-join round trip, so without an explicit reset a switched user inherits the previous
     // voter's "The overlap" tab instead of starting on their own hours.
     window.history.replaceState(null, '', '/')
-    const otherUser: User = { userId: 'bold-otter', name: 'Bold Otter', calendarStatus: 'not_connected' }
+    const otherUser: User = { userId: 'bold-otter', name: 'Bold Otter' }
     // Unlike the closure-variable mocks above, this flow needs the cookie hook to be genuinely
     // stateful: after "Continue" the refetched users list is structurally identical, so React
     // Query triggers no re-render — only the hook's own state change (as in the real hook)

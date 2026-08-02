@@ -38,13 +38,25 @@ const config = {
     '^@types$': '<rootDir>/src/types',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
   },
-  modulePathIgnorePatterns: ['<rootDir>/\\.claude'],
+  // Also excluded from the module crawler, not just test discovery: each worktree carries its own
+  // `__mocks__/file-mock.js`, and jest's haste map reports every one as a naming collision.
+  modulePathIgnorePatterns: ['<rootDir>/\\.claude', '<rootDir>/\\.worktrees/'],
   setupFiles: ['<rootDir>/jest.polyfills.js', '<rootDir>/jest.setup-test-env.js'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     customExportConditions: [''],
   },
-  testPathIgnorePatterns: ['node_modules', '\\.cache', '<rootDir>.*/out', '<rootDir>/\\.claude'],
+  // `.worktrees/` holds checkouts of other branches. Jest does not read .gitignore, so without it
+  // Jest collects their test files too, running this branch's `src` against another branch's
+  // expectations. That also fails the husky pre-commit hook spuriously, and lint-staged responds by
+  // stashing the entire repo -- which can destroy a concurrent session's uncommitted work.
+  testPathIgnorePatterns: [
+    'node_modules',
+    '\\.cache',
+    '<rootDir>.*/out',
+    '<rootDir>/\\.claude',
+    '<rootDir>/\\.worktrees/',
+  ],
 }
 
 // next/jest prepends its own transformIgnorePatterns that block all node_modules.
