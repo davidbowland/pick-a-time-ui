@@ -42,10 +42,16 @@ const config = {
   // `__mocks__/file-mock.js`, and jest's haste map reports every one as a naming collision.
   modulePathIgnorePatterns: ['<rootDir>/\\.claude', '<rootDir>/\\.worktrees/'],
   setupFiles: ['<rootDir>/jest.polyfills.js', '<rootDir>/jest.setup-test-env.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup-after-env.js'],
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     customExportConditions: [''],
   },
+  // Jest's 5000ms default is a wall-clock budget, not a measure of the work a test does. The
+  // typing-heavy `userEvent` tests re-render on every keystroke and run well past it whenever the
+  // machine is busy, failing with "Exceeded timeout of 5000 ms" for no reason of their own. See
+  // jest.setup-after-env.js, which raises Testing Library's matching 1000ms async budget.
+  testTimeout: 30_000,
   // `.worktrees/` holds checkouts of other branches. Jest does not read .gitignore, so without it
   // Jest collects their test files too, running this branch's `src` against another branch's
   // expectations. That also fails the husky pre-commit hook spuriously, and lint-staged responds by
