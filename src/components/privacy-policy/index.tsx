@@ -98,6 +98,39 @@ const PrivacyPolicy = (): React.ReactNode => {
         </p>
       </Section>
 
+      <Section title="Google User Data">
+        <p>
+          Everything we receive from Google does only the two jobs described above: it recognizes you when you sign in,
+          and it marks you busy where your calendar says you&apos;re booked. Nothing else, and nobody else.
+        </p>
+        {/*
+          Google's OAuth reviewers look for this sentence close to verbatim -- it is the affirmative Limited Use
+          statement their policy requires, not our own phrasing. Rewriting it to match the plainer voice of the rest of
+          this page is what would fail the app's sensitive-scope verification, so leave the wording alone.
+        */}
+        <p>
+          Pick a Time&apos;s use and transfer of information received from Google APIs to any other app will adhere to
+          the{' '}
+          <Link
+            className="text-[var(--accent)] underline hover:text-[var(--accent-soft)]"
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+          >
+            Google API Services User Data Policy
+          </Link>
+          , including the Limited Use requirements.
+        </p>
+        <p>
+          Disconnect your calendar anytime from the menu by your name. You can also revoke our access from your{' '}
+          <Link
+            className="text-[var(--accent)] underline hover:text-[var(--accent-soft)]"
+            href="https://myaccount.google.com/permissions"
+          >
+            Google account permissions page
+          </Link>
+          , which cuts us off at Google&apos;s end whether or not you disconnect here.
+        </p>
+      </Section>
+
       <Section title="Your Rights">
         <p>
           Depending on where you live, you may have legal rights over your personal data — such as the right to access,

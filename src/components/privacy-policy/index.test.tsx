@@ -70,6 +70,31 @@ describe('provacy-policy component', () => {
     expect(screen.getByText(/can.t tell which of them came from your calendar/i)).toBeInTheDocument()
   })
 
+  it('should carry the Limited Use disclosure in the wording Google looks for', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/including the Limited Use requirements/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Google API Services User Data Policy/i })).toHaveAttribute(
+      'href',
+      'https://developers.google.com/terms/api-services-user-data-policy',
+    )
+  })
+
+  it('should say Google data does nothing beyond sign-in and marking you busy', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/nothing else, and nobody else/i)).toBeInTheDocument()
+  })
+
+  it('should point at the Google page that revokes our access', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByRole('link', { name: /Google account permissions page/i })).toHaveAttribute(
+      'href',
+      'https://myaccount.google.com/permissions',
+    )
+  })
+
   it('should carry the August 2026 effective date', () => {
     render(<PrivacyPolicy />)
 
