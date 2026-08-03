@@ -40,9 +40,13 @@ export const CreateCard = ({ children }: { children: React.ReactNode }): React.R
 export const CreateCardHeader = (): React.ReactNode => (
   <div className="flex flex-col gap-2">
     <EyebrowTag fixedAccent>New poll</EyebrowTag>
-    <h2 className="text-2xl text-[var(--bone)]" style={{ fontFamily: 'var(--font-display)' }}>
+    {/*
+      This card only ever renders inside the create scene, whose "Pick your dates." heading it sits
+      under -- so it is a level below, not a sibling. Same styling either way.
+    */}
+    <h3 className="text-2xl text-[var(--bone)]" style={{ fontFamily: 'var(--font-display)' }}>
       Set it up
-    </h2>
+    </h3>
   </div>
 )
 

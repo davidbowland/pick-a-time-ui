@@ -10,6 +10,19 @@ describe('illustrative story scenes', () => {
     expect(screen.getByRole('heading', { name: /find the minute/i })).toBeInTheDocument()
   })
 
+  it('HeroScene is the page heading, so the homepage has an h1 at all', () => {
+    render(<HeroScene />)
+    expect(screen.getByRole('heading', { level: 1, name: /find the minute/i })).toBeInTheDocument()
+  })
+
+  it('every other scene sits a level below the hero', () => {
+    for (const Scene of [IdentityScene, PaintingScene, ResultsScene, ShareScene]) {
+      const { unmount } = render(<Scene />)
+      expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument()
+      unmount()
+    }
+  })
+
   it('HeroScene renders an action slot when given one', () => {
     render(<HeroScene action={<button type="button">Start</button>} />)
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
@@ -56,7 +69,9 @@ describe('illustrative story scenes', () => {
     for (const Scene of reversedScenes) {
       const { container, unmount } = render(<Scene />)
       const visualWrapper = container.querySelector('[inert]')?.parentElement
-      const copyWrapper = screen.getByRole('heading', { level: 2 }).parentElement
+      // Unlevelled on purpose: the hero's heading is an h1 and the rest are h2s, and this test is
+      // about which column the visual lands in, not about the outline.
+      const copyWrapper = screen.getByRole('heading').parentElement
       expect(visualWrapper).toHaveClass('md:order-first')
       expect(copyWrapper).toHaveClass('md:order-last')
       unmount()
@@ -65,7 +80,9 @@ describe('illustrative story scenes', () => {
     for (const Scene of standardScenes) {
       const { container, unmount } = render(<Scene />)
       const visualWrapper = container.querySelector('[inert]')?.parentElement
-      const copyWrapper = screen.getByRole('heading', { level: 2 }).parentElement
+      // Unlevelled on purpose: the hero's heading is an h1 and the rest are h2s, and this test is
+      // about which column the visual lands in, not about the outline.
+      const copyWrapper = screen.getByRole('heading').parentElement
       expect(visualWrapper).not.toHaveClass('md:order-first')
       expect(copyWrapper).not.toHaveClass('md:order-last')
       unmount()

@@ -13,6 +13,10 @@ const SceneLayout = ({
   visual,
   action,
   reverse = false,
+  // Every scene looks the same, but only one of them is the page's subject. The hero passes 'h1'
+  // so the document has a top-level heading at all; the rest stay siblings beneath it. Styling
+  // lives entirely in the className below, so the level is free to change without moving a pixel.
+  headingLevel: Heading = 'h2',
 }: {
   eyebrow: string
   heading: string
@@ -20,6 +24,7 @@ const SceneLayout = ({
   visual: React.ReactNode
   action?: React.ReactNode
   reverse?: boolean
+  headingLevel?: 'h1' | 'h2'
 }): React.ReactNode => (
   // `grid-cols-1` (rather than bare `grid`) gives the mobile track an explicit `minmax(0, 1fr)`,
   // so it can't grow past the viewport to fit a descendant's un-wrapped `truncate` text
@@ -29,9 +34,9 @@ const SceneLayout = ({
   <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-12 px-5 md:grid-cols-2 md:items-center md:gap-20">
     <div className={reverse ? 'md:order-last' : undefined}>
       <EyebrowTag>{eyebrow}</EyebrowTag>
-      <h2 className="mt-4 text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium text-[var(--copy-color,var(--bone))]">
+      <Heading className="mt-4 text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium text-[var(--copy-color,var(--bone))]">
         {heading}
-      </h2>
+      </Heading>
       <p className="mt-4 max-w-[46ch] text-[1.08rem] leading-relaxed text-[var(--copy-color,var(--bone))]/75">{copy}</p>
       {action && <div className="mt-6">{action}</div>}
     </div>
@@ -225,6 +230,7 @@ export const HeroScene = ({ action }: { action?: React.ReactNode } = {}): React.
     copy="Start a poll. Send one link. Watch the times fill in as people mark when they're free. No downloads, no logins needed."
     eyebrow="No cost. No account."
     heading="Find the minute everybody's free."
+    headingLevel="h1"
     visual={
       <PhoneMock>
         <div className="flex flex-col gap-3 px-5 pb-6">
