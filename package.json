@@ -18,7 +18,7 @@
   "scripts": {
     "build": "npm run clean && next build",
     "postbuild": "next-export-optimize-images && node scripts/generate-dynamic-pages.js && next-sitemap",
-    "clean": "rm -rf .next coverage out && npm ci --legacy-peer-deps",
+    "clean": "rm -rf .next coverage out && npm ci",
     "deploy": "DEVELOPMENT=true npm run build && ./scripts/deploy.sh",
     "lint": "prettier --write . && eslint --fix .",
     "prepare": "husky || true",
