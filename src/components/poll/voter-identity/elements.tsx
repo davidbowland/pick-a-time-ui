@@ -91,7 +91,7 @@ export const NameEditForm = ({
             // Guarded the same way the Cancel button already is (disabled below while isSaving):
             // a save already in flight has to resolve first. Without this, Escape could show an
             // apparently-successful cancel (old name, form closed) moments before the in-flight
-            // PATCH completes anyway and invalidateQueries silently reinstates the "cancelled" edit.
+            // PATCH completes anyway and invalidateQueries silently reinstates the "canceled" edit.
             if (e.key === 'Escape' && !isSaving) onCancel()
           }}
           ref={inputRef}

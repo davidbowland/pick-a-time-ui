@@ -384,7 +384,7 @@ describe('HeatGrid labels', () => {
     ],
   ]
 
-  const renderLabelled = (slotLabels: { dayOffset: number; label: string }[]): ReturnType<typeof render> =>
+  const renderLabeled = (slotLabels: { dayOffset: number; label: string }[]): ReturnType<typeof render> =>
     renderHeatGrid({
       cells: twoColumnCells,
       columns: twoColumns,
@@ -393,7 +393,7 @@ describe('HeatGrid labels', () => {
     })
 
   it('shows the abbreviated column label as the visible header text', () => {
-    renderLabelled(shortLabels)
+    renderLabeled(shortLabels)
     expect(screen.getByText('9a')).toBeInTheDocument()
   })
 
@@ -401,12 +401,12 @@ describe('HeatGrid labels', () => {
   // would otherwise be read out verbatim as "nine a". The aria-label keeps the abbreviation a
   // purely visual economy.
   it('names each column header with the full time range rather than the abbreviation', () => {
-    renderLabelled(shortLabels)
+    renderLabeled(shortLabels)
     expect(screen.getByRole('columnheader', { name: '9:00–10:00 AM' })).toBeInTheDocument()
   })
 
   it('marks a column that falls on the next day for the viewer', () => {
-    renderLabelled([
+    renderLabeled([
       { dayOffset: 1, label: '1a' },
       { dayOffset: 0, label: '2a' },
     ])
@@ -414,7 +414,7 @@ describe('HeatGrid labels', () => {
   })
 
   it('marks a column that falls on the previous day for the viewer', () => {
-    renderLabelled([
+    renderLabeled([
       { dayOffset: -1, label: '11p' },
       { dayOffset: 0, label: '12a' },
     ])
@@ -422,7 +422,7 @@ describe('HeatGrid labels', () => {
   })
 
   it('keeps the full unabbreviated time range in each cell label', () => {
-    renderLabelled(shortLabels)
+    renderLabeled(shortLabels)
     expect(screen.getByRole('button', { name: 'Thu, Sep 4, 9:00–10:00 AM, 2 of 2 free' })).toBeInTheDocument()
   })
 

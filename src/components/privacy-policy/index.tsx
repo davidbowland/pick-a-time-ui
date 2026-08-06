@@ -47,7 +47,7 @@ const PrivacyPolicy = (): React.ReactNode => {
         </p>
         <p>
           When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot. Google receives
-          the signals it needs to make that judgement and handles them under its own privacy policy, which permits it to
+          the signals it needs to make that judgment and handles them under its own privacy policy, which permits it to
           use them to improve reCAPTCHA and general security.
         </p>
       </Section>

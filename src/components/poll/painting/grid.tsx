@@ -191,7 +191,7 @@ const PaintGrid = ({
                     // full range, day-offset wording included, stays here.
                     aria-label={slotAriaLabels[index]}
                     // whitespace-nowrap so a gap column's `9a–10` range can't wrap the sticky
-                    // header band to two lines while every neighbouring header stays on one.
+                    // header band to two lines while every neighboring header stays on one.
                     // overflow-hidden text-ellipsis for the case that leaves: a range label such
                     // as `11:30a–1p` is wider than the 3rem (48px at a 16px root) this column is
                     // budgeted, and the next header is opaque and at the same z-index, so it would

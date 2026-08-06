@@ -46,7 +46,7 @@ export function formatSlotRange(startMinute: number, endMinute: number): string 
 // narrower than the `9:00` it replaces, which is what pays for showing the marker on every
 // column (see buildGridSlotLabels). formatMinuteOfDay keeps the full form for prose.
 //
-// Deliberately NOT `Noon`/`Midnight`: on a row labelled `Tue Jul 28`, a first column reading
+// Deliberately NOT `Noon`/`Midnight`: on a row labeled `Tue Jul 28`, a first column reading
 // `Midnight` is 00:00 Tuesday while a final column reading `11p–Midnight` is 00:00 Wednesday —
 // one word, one row, 24 hours apart. `12a`/`12p` inherit the ordinary grid convention that a
 // clock time belongs to its row's date.

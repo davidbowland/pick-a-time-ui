@@ -862,7 +862,7 @@ describe('PollCreate', () => {
       const focusSpy = jest.spyOn(input, 'focus')
       act(() => focusFn?.())
       expect(input).toHaveFocus()
-      // preventScroll keeps the hero Start's smooth scroll from being cancelled by the focus.
+      // preventScroll keeps the hero Start's smooth scroll from being canceled by the focus.
       expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
     })
 

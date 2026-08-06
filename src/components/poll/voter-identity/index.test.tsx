@@ -290,7 +290,7 @@ describe('VoterIdentityControl', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Edit name' })).toHaveFocus())
   })
 
-  it('moves focus to the Edit name button after cancelling with Escape', async () => {
+  it('moves focus to the Edit name button after canceling with Escape', async () => {
     renderWithClient()
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit name' }))

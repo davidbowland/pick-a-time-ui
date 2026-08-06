@@ -99,7 +99,7 @@ describe('useScrollProgress', () => {
       nextFrameId += 1
       pendingFrames.add(nextFrameId)
       // Deliberately never invoke the callback, so the frame stays "in flight"
-      // until it is either cancelled or the test ends.
+      // until it is either canceled or the test ends.
       return nextFrameId
     }) as typeof requestAnimationFrame
     window.cancelAnimationFrame = jest.fn((id: number) => {
@@ -120,7 +120,7 @@ describe('useScrollProgress', () => {
     expect(window.requestAnimationFrame).toHaveBeenCalledTimes(1)
     expect(pendingFrames.size).toBe(1)
 
-    // Simulate the re-render race: the effect tears down (cancelling the
+    // Simulate the re-render race: the effect tears down (canceling the
     // in-flight frame, which never gets a chance to reset tickingRef itself)
     // and rebuilds before the pending frame fires.
     rerender({ getDocument: (): Document => document })

@@ -149,7 +149,7 @@ const PollCreate = ({
   // back to the poll-name field when there's nothing to skip (the hero handed over a blank name)
   // or nowhere to skip to (signed in, so no voter-name field renders). Reads the refs at call
   // time, so the handler registers once and still sees the current name and fields.
-  // `preventScroll` keeps the focus from cancelling that smooth scroll (the caller focuses
+  // `preventScroll` keeps the focus from canceling that smooth scroll (the caller focuses
   // synchronously so iOS still opens the keyboard).
   useEffect(() => {
     registerFocusName?.(() => {
@@ -189,7 +189,7 @@ const PollCreate = ({
   }, [])
 
   // reCAPTCHA v3 scores the first, cold `execute` of a page load low (0.2–0.4) because it has
-  // gathered almost no behavioural signal yet; the next execute, against a warmed session, scores
+  // gathered almost no behavioral signal yet; the next execute, against a warmed session, scores
   // ~0.8. Fire one throwaway warm-up here so the user's real submission is never the cold first
   // token. Signed-out only (the signed-in path skips reCAPTCHA), once per mount, and best-effort —
   // a failed warm-up must never block or surface to the user.

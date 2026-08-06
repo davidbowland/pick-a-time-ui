@@ -268,7 +268,7 @@ describe('AppBar', () => {
     await waitFor(() => expect(disconnectCalendar).toHaveBeenCalled())
   })
 
-  it('should not disconnect when cancelled', async () => {
+  it('should not disconnect when canceled', async () => {
     setupConnected()
 
     renderAppBar()

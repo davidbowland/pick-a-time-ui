@@ -70,7 +70,7 @@ html.dark {
   --primary-foreground: var(--ink);
   --color-primary-foreground: var(--ink);
 
-  /* Default neutral scale, tinted toward ink rather than pure grey */
+  /* Default neutral scale, tinted toward ink rather than pure gray */
   --default-50: #1a1a26;
   --color-default-50: #1a1a26;
   --default-100: #20202e;
