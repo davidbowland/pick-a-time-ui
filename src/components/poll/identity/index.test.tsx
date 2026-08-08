@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ApiError } from 'aws-amplify/api'
 import React from 'react'
 
 import IdentityPhase, { IdentityPhaseProps } from './index'
 import { useAuthContext } from '@components/auth-context'
-import { createUser, fetchConfig, patchUser } from '@services/api'
+import { ApiError, createUser, fetchConfig, patchUser } from '@services/api'
 import '@testing-library/jest-dom'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -107,10 +106,11 @@ describe('IdentityPhase', () => {
 
   it('should show a full-group error message on 400', async () => {
     setup()
-    const error = Object.assign(new Error('full'), {
-      response: { statusCode: 400, headers: {}, body: JSON.stringify({ message: 'This group is full.' }) },
+    const error = new ApiError('full', {
+      body: JSON.stringify({ message: 'This group is full.' }),
+      headers: {},
+      statusCode: 400,
     })
-    Object.setPrototypeOf(error, ApiError.prototype)
     jest.mocked(createUser).mockRejectedValueOnce(error)
 
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })

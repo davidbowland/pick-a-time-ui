@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ApiError } from 'aws-amplify/api'
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import {
@@ -13,7 +12,7 @@ import {
 import { useAuthContext } from '@components/auth-context'
 import { PillButton } from '@components/ui/pill-button'
 import { VoterNameField } from '@components/ui/voter-name-field'
-import { createUser, fetchConfig, parseApiMessage, patchUser } from '@services/api'
+import { ApiError, createUser, fetchConfig, parseApiMessage, patchUser } from '@services/api'
 import { User } from '@types'
 import { displayName } from '@utils/users'
 
@@ -70,7 +69,7 @@ const IdentityPhase = ({ sessionId, users, onUserSelected, lastUsedUserId }: Ide
     },
     onSuccess: (newUser) => onUserSelected(newUser.userId),
     onError: (err: unknown) => {
-      if (err instanceof ApiError && err.response?.statusCode === 400) {
+      if (err instanceof ApiError && err.response.statusCode === 400) {
         setError(parseApiMessage(err.response.body, 'This group is full.'))
         return
       }

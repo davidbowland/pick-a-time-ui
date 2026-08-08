@@ -1,6 +1,5 @@
 import { CalendarDate, getLocalTimeZone, today as calendarToday } from '@internationalized/date'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ApiError } from 'aws-amplify/api'
 import { useRouter } from 'next/router'
 import React, { useEffect, useId, useRef, useState } from 'react'
 
@@ -27,7 +26,15 @@ import FeedbackMessage from '@components/feedback-message'
 import { PillButton } from '@components/ui/pill-button'
 import { VoterNameField } from '@components/ui/voter-name-field'
 import { setSessionCookie } from '@hooks/useSessionCookie'
-import { createPoll, createPollAuthed, createUser, fetchConfig, parseApiMessage, patchUser } from '@services/api'
+import {
+  ApiError,
+  createPoll,
+  createPollAuthed,
+  createUser,
+  fetchConfig,
+  parseApiMessage,
+  patchUser,
+} from '@services/api'
 import { NewPollRequest } from '@types'
 import { isWeekendDate } from '@utils/dates'
 
@@ -298,11 +305,11 @@ const PollCreate = ({
       router.push(target)
     },
     onError: (error: unknown) => {
-      if (error instanceof ApiError && error.response?.statusCode === 403) {
+      if (error instanceof ApiError && error.response.statusCode === 403) {
         setErrorMessage("Our security check couldn't verify your browser. Please try again.")
         return
       }
-      if (error instanceof ApiError && error.response?.statusCode === 400) {
+      if (error instanceof ApiError && error.response.statusCode === 400) {
         setErrorMessage(parseApiMessage(error.response.body, 'Something went wrong setting up your poll. Try again.'))
         return
       }

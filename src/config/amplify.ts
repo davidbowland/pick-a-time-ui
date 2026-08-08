@@ -4,11 +4,10 @@ import { Amplify } from 'aws-amplify'
 import 'aws-amplify/auth/enable-oauth-listener'
 
 const origin = process.env.NEXT_PUBLIC_ORIGIN
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
-// API endpoint names used by services/api.ts
-export const apiName = 'PickATimeAPI'
-export const apiNameUnauthenticated = 'PickATimeAPIUnauthenticated'
+// Every request in services/api.ts hangs off this. Amplify's REST client is deliberately not
+// configured here -- see the comment at the top of services/api.ts.
+export const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
 
 Amplify.configure({
   Auth: {
@@ -24,18 +23,6 @@ Amplify.configure({
           responseType: 'code',
           providers: ['Google'],
         },
-      },
-    },
-  },
-  API: {
-    REST: {
-      [apiName]: {
-        endpoint: baseUrl!,
-        region: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID.split('_')[0],
-      },
-      [apiNameUnauthenticated]: {
-        endpoint: baseUrl!,
-        region: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID.split('_')[0],
       },
     },
   },

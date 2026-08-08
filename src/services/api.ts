@@ -1,7 +1,20 @@
-import { ApiError, del, get, patch, post } from 'aws-amplify/api'
+// Requests go through `fetch`, not Amplify's REST client (`aws-amplify/api`), on purpose.
+//
+// 1. Amplify v6 retries every failed request up to three times -- on a network error, a 429, or a
+//    500/502/503/504 -- with no way to opt out per call. A gateway timeout on a request the server
+//    did in fact process therefore replays it: `POST /sessions` creates a second poll, and
+//    `POST /sessions/{id}/users` adds phantom voters to a poll that then reads as "full". Amplify
+//    v5 never retried, so upgrading added that replay silently. A failed write must surface to the
+//    person who made it, not be repeated behind their back.
+// 2. The REST client was earning nothing here. There is no identity pool, so it never resolves
+//    credentials and never signs anything with SigV4; the Cognito bearer token is attached by hand
+//    below. What remained was joining a base URL to a path -- at the cost of typing bodies as
+//    `DocumentType` (an `any` escape hatch) and casting every response.
+//
+// Amplify still owns auth (`aws-amplify/auth`): the Cognito session and the OAuth redirect flow.
 import { fetchAuthSession } from 'aws-amplify/auth'
 
-import { apiName, apiNameUnauthenticated } from '@config/amplify'
+import { baseUrl } from '@config/amplify'
 import {
   AvailabilityPatchRequest,
   AvailabilityRecord,
@@ -14,7 +27,27 @@ import {
   User,
 } from '@types'
 
-type AnyBody = any
+// --- Errors ---
+
+export interface ApiErrorResponse {
+  body: string
+  headers: Record<string, string>
+  statusCode: number
+}
+
+/**
+ * Thrown for any non-2xx response. `response` carries the raw status and body so callers can
+ * branch on the status and read the API's `message`/`errorCode` fields out of the body.
+ */
+export class ApiError extends Error {
+  readonly response: ApiErrorResponse
+
+  constructor(message: string, response: ApiErrorResponse) {
+    super(message)
+    this.name = 'ApiError'
+    this.response = response
+  }
+}
 
 // --- Auth ---
 
@@ -29,54 +62,52 @@ async function authHeaders(): Promise<Record<string, string>> {
   return {}
 }
 
-function endpointFor(authenticated: boolean): string {
-  return authenticated ? apiName : apiNameUnauthenticated
-}
-
 // --- Helpers ---
 
-async function apiGet<T>(
-  path: string,
-  queryParams?: Record<string, string>,
-  headers?: Record<string, string>,
-): Promise<T> {
-  const { body } = await get({ apiName: apiNameUnauthenticated, path, options: { headers, queryParams } }).response
-  return body.json() as Promise<T>
+interface RequestOptions {
+  body?: unknown
+  headers?: Record<string, string>
 }
 
-async function apiGetAuthed<T>(path: string): Promise<T> {
-  const { body } = await get({ apiName, path, options: { headers: await authHeaders() } }).response
-  return body.json() as Promise<T>
+async function send(method: string, path: string, { body, headers = {} }: RequestOptions = {}): Promise<Response> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined ? headers : { ...headers, 'Content-Type': 'application/json' },
+    method,
+  })
+  if (!response.ok) {
+    throw new ApiError(`${method} ${path} responded with ${response.status}`, {
+      body: await response.text(),
+      headers: Object.fromEntries(response.headers),
+      statusCode: response.status,
+    })
+  }
+  return response
 }
 
-async function apiDel(path: string): Promise<void> {
-  // 204 No Content -- there is no body to parse, and calling body.json() on one throws.
-  await del({ apiName, path, options: { headers: await authHeaders() } }).response
+async function sendJson<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
+  const response = await send(method, path, options)
+  return response.json() as Promise<T>
 }
 
-async function apiPost<T>(
+const apiGet = <T>(path: string): Promise<T> => sendJson<T>('GET', path)
+
+const apiGetAuthed = async <T>(path: string): Promise<T> => sendJson<T>('GET', path, { headers: await authHeaders() })
+
+// 204 No Content -- there is no body to parse, and calling response.json() on one throws.
+const apiDel = async (path: string): Promise<void> => {
+  await send('DELETE', path, { headers: await authHeaders() })
+}
+
+async function apiSend<T>(
+  method: 'PATCH' | 'POST',
   path: string,
   authenticated: boolean,
-  reqBody?: AnyBody,
+  body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const headers = authenticated ? { ...(await authHeaders()), ...extraHeaders } : extraHeaders
-  const { body } = await post({
-    apiName: endpointFor(authenticated),
-    path,
-    options: { headers, body: reqBody },
-  }).response
-  return body.json() as Promise<T>
-}
-
-async function apiPatch<T>(path: string, authenticated: boolean, reqBody?: AnyBody): Promise<T> {
-  const headers = authenticated ? await authHeaders() : undefined
-  const { body } = await patch({
-    apiName: endpointFor(authenticated),
-    path,
-    options: { headers, body: reqBody },
-  }).response
-  return body.json() as Promise<T>
+  return sendJson<T>(method, path, { body, headers })
 }
 
 // --- Public API ---
@@ -84,10 +115,10 @@ async function apiPatch<T>(path: string, authenticated: boolean, reqBody?: AnyBo
 export const fetchConfig = (): Promise<ConfigData> => apiGet('/config')
 
 export const createPoll = (poll: NewPollRequest, token: string): Promise<{ sessionId: string }> =>
-  apiPost('/sessions', false, poll, { 'x-recaptcha-token': token })
+  apiSend('POST', '/sessions', false, poll, { 'x-recaptcha-token': token })
 
 export const createPollAuthed = (poll: NewPollRequest): Promise<{ sessionId: string }> =>
-  apiPost('/sessions/authed', true, poll)
+  apiSend('POST', '/sessions/authed', true, poll)
 
 export const fetchPoll = (sessionId: string): Promise<PollData> => apiGet(`/sessions/${encodeURIComponent(sessionId)}`)
 
@@ -97,33 +128,32 @@ export const fetchUsers = (sessionId: string): Promise<User[]> =>
 export const createUser = async (sessionId: string, authenticated: boolean): Promise<User> => {
   const encodedId = encodeURIComponent(sessionId)
   if (!authenticated) {
-    return apiPost(`/sessions/${encodedId}/users`, false, {})
+    return apiSend('POST', `/sessions/${encodedId}/users`, false, {})
   }
   try {
-    return await apiPost<User>(`/sessions/${encodedId}/users/authed`, true, {})
+    return await apiSend<User>('POST', `/sessions/${encodedId}/users/authed`, true, {})
   } catch (err) {
-    if (err instanceof ApiError && err.response) {
+    if (err instanceof ApiError) {
       if (err.response.statusCode === 401) {
         try {
           await fetchAuthSession({ forceRefresh: true })
         } catch {
-          return apiPost(`/sessions/${encodedId}/users`, false, {})
+          return apiSend('POST', `/sessions/${encodedId}/users`, false, {})
         }
         try {
-          return await apiPost<User>(`/sessions/${encodedId}/users/authed`, true, {})
+          return await apiSend<User>('POST', `/sessions/${encodedId}/users/authed`, true, {})
         } catch (retryErr) {
           if (
             retryErr instanceof ApiError &&
-            retryErr.response &&
             (retryErr.response.statusCode === 401 || retryErr.response.statusCode === 403)
           ) {
-            return apiPost(`/sessions/${encodedId}/users`, false, {})
+            return apiSend('POST', `/sessions/${encodedId}/users`, false, {})
           }
           throw retryErr
         }
       }
       if (err.response.statusCode === 403) {
-        return apiPost(`/sessions/${encodedId}/users`, false, {})
+        return apiSend('POST', `/sessions/${encodedId}/users`, false, {})
       }
     }
     throw err
@@ -136,7 +166,12 @@ export const patchUser = (
   operations: PatchOperation[],
   authenticated: boolean,
 ): Promise<User> =>
-  apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}`, authenticated, operations)
+  apiSend(
+    'PATCH',
+    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}`,
+    authenticated,
+    operations,
+  )
 
 export const fetchAvailability = (sessionId: string, userId: string): Promise<AvailabilityRecord> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`)
@@ -146,7 +181,12 @@ export const patchAvailability = (
   userId: string,
   body: AvailabilityPatchRequest,
 ): Promise<AvailabilityRecord> =>
-  apiPatch(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`, false, body)
+  apiSend(
+    'PATCH',
+    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`,
+    false,
+    body,
+  )
 
 export interface CalendarState {
   status: 'not_connected' | 'connected' | 'error'
@@ -164,12 +204,21 @@ export const connectCalendar = (
   sessionId: string,
   userId: string,
 ): Promise<{ alreadyConnected: boolean; authUrl?: string }> =>
-  apiPost(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/connect`, true)
+  apiSend(
+    'POST',
+    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/connect`,
+    true,
+  )
 
 export const syncCalendar = (sessionId: string, userId: string, force: boolean): Promise<CalendarSyncResult> =>
-  apiPost(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/sync`, true, {
-    force,
-  })
+  apiSend(
+    'POST',
+    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/calendar/sync`,
+    true,
+    {
+      force,
+    },
+  )
 
 // No arguments: a calendar connection belongs to a Google account, not a poll, and the JWT
 // identifies it. Disconnecting therefore works with no poll in context.
@@ -206,7 +255,7 @@ export function parseApiMessage(body: string | undefined, fallback: string): str
 }
 
 export function hasErrorCode(err: unknown, code: ErrorCode): boolean {
-  if (err instanceof ApiError && err.response) {
+  if (err instanceof ApiError) {
     if (err.response.statusCode !== 400 || !err.response.body) return false
     return parseBodyField(err.response.body, 'errorCode') === code
   }

@@ -1,13 +1,12 @@
 import { CalendarDate } from '@internationalized/date'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ApiError } from 'aws-amplify/api'
 import { useRouter } from 'next/router'
 import React from 'react'
 
 import PollCreate from './index'
 import { useAuthContext } from '@components/auth-context'
 import { setSessionCookie } from '@hooks/useSessionCookie'
-import { createPoll, createPollAuthed, createUser, fetchConfig, patchUser } from '@services/api'
+import { ApiError, createPoll, createPollAuthed, createUser, fetchConfig, patchUser } from '@services/api'
 import '@testing-library/jest-dom'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -662,14 +661,11 @@ describe('PollCreate', () => {
 
   it('should surface the api message when poll creation fails with a 400', async () => {
     setup()
-    const error = Object.assign(new Error('bad request'), {
-      response: {
-        statusCode: 400,
-        headers: {},
-        body: JSON.stringify({ message: 'One of those dates has already passed.' }),
-      },
+    const error = new ApiError('bad request', {
+      body: JSON.stringify({ message: 'One of those dates has already passed.' }),
+      headers: {},
+      statusCode: 400,
     })
-    Object.setPrototypeOf(error, ApiError.prototype)
     jest.mocked(createPoll).mockRejectedValueOnce(error)
 
     renderWithClient()
@@ -685,8 +681,7 @@ describe('PollCreate', () => {
 
   it('should show the security-check message when poll creation fails with a 403 (recaptcha)', async () => {
     setup()
-    const error = Object.assign(new Error('forbidden'), { response: { statusCode: 403, headers: {}, body: '' } })
-    Object.setPrototypeOf(error, ApiError.prototype)
+    const error = new ApiError('forbidden', { body: '', headers: {}, statusCode: 403 })
     jest.mocked(createPoll).mockRejectedValueOnce(error)
 
     renderWithClient()
