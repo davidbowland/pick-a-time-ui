@@ -52,10 +52,14 @@ const config = {
   // machine is busy, failing with "Exceeded timeout of 5000 ms" for no reason of their own. See
   // jest.setup-after-env.js, which raises Testing Library's matching 1000ms async budget.
   testTimeout: 30_000,
-  // `.worktrees/` holds checkouts of other branches. Jest does not read .gitignore, so without it
-  // Jest collects their test files too, running this branch's `src` against another branch's
-  // expectations. That also fails the husky pre-commit hook spuriously, and lint-staged responds by
-  // stashing the entire repo -- which can destroy a concurrent session's uncommitted work.
+  // `.worktrees/` holds checkouts of other branches. Jest does not read .gitignore, so without the
+  // entry below Jest collects their test files too, running this branch's `src` against another
+  // branch's expectations, which fails the husky pre-commit hook spuriously. Keep it even when no
+  // worktree is on disk -- the parallel-agent workflow creates them on demand.
+  //
+  // Separately, and regardless of this entry: lint-staged stashes the working tree before it runs
+  // any task, not in response to a failure, so every commit briefly rewrites files a concurrent
+  // session may be editing. That is a reason to avoid concurrent sessions, not to skip the hook.
   testPathIgnorePatterns: [
     'node_modules',
     '\\.cache',
