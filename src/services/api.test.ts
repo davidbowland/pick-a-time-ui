@@ -253,16 +253,38 @@ describe('API service', () => {
       expect(result).toEqual(newUser)
     })
 
-    it('should fall back to /users when the token refresh itself fails', async () => {
+    it('should fall back to /users when the auth chunk cannot be loaded for the refresh', async () => {
       mockFetch.mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(jsonResponse(newUser))
-      // The first call reads the (still valid) session for the initial request; the second is the
-      // forced refresh that fails.
-      jest.mocked(getIdToken).mockResolvedValueOnce('mock-jwt-token').mockRejectedValueOnce(new Error('Refresh failed'))
+      // getIdToken rejects only when the dynamic import fails -- a refresh that fails resolves to
+      // null instead (see the test below). The first call reads the still-valid session for the
+      // initial request; the second is the forced refresh, which cannot load the chunk.
+      jest.mocked(getIdToken).mockResolvedValueOnce('mock-jwt-token').mockRejectedValueOnce(new Error('chunk failed'))
 
       const result = await createUser(sessionId, true)
 
       expect(mockFetch).toHaveBeenCalledTimes(2)
       expect(mockFetch).toHaveBeenNthCalledWith(2, `${baseUrl}/sessions/${sessionId}/users`, expect.anything())
+      expect(result).toEqual(newUser)
+    })
+
+    // The refresh-failed path proper: getIdToken swallows a dead or unreachable session and returns
+    // null, so the retry goes out with no Authorization header, earns a second 401, and only then
+    // falls back. One extra round trip versus the old behavior, same destination.
+    it('should fall back to /users when the refresh yields no token', async () => {
+      mockFetch
+        .mockResolvedValueOnce(unauthorized())
+        .mockResolvedValueOnce(unauthorized())
+        .mockResolvedValueOnce(jsonResponse(newUser))
+      jest
+        .mocked(getIdToken)
+        .mockResolvedValueOnce('mock-jwt-token')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+
+      const result = await createUser(sessionId, true)
+
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+      expect(mockFetch).toHaveBeenNthCalledWith(3, `${baseUrl}/sessions/${sessionId}/users`, expect.anything())
       expect(result).toEqual(newUser)
     })
 

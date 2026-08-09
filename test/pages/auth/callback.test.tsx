@@ -57,6 +57,23 @@ describe('AuthCallback page', () => {
     expect(assign).toHaveBeenCalledWith('/')
   })
 
+  // `//evil.com` is what window.location.pathname reports for `https://host//evil.com`, and
+  // location.assign treats a protocol-relative path as another origin. router.replace used to
+  // reject that for us, so the full-document navigation has to check it itself or a successful
+  // sign-in hands the person to an attacker's site.
+  it.each([
+    ['//evil.com', 'a protocol-relative path'],
+    ['https://evil.com/', 'an absolute URL'],
+    ['javascript:alert(1)', 'a script URL'],
+  ])('sends people home rather than to %s (%s)', (stored) => {
+    sessionStorage.setItem('pat_auth_return', stored)
+    renderCallback()
+
+    act(() => hubCallback()({ payload: { event: 'signedIn' } }))
+
+    expect(assign).toHaveBeenCalledWith('/')
+  })
+
   // AuthProvider lives in _app and does not remount across a client-side transition. The useAuth
   // instance mounted on this page took the early exit -- the session flag was still false, because
   // this is the sign-in that sets it -- so a router.replace would carry a `user: null` provider all

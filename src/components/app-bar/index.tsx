@@ -28,8 +28,13 @@ const AppBar = ({ sessionId, now }: AppBarProps): React.ReactNode => {
   const handleSignOutClick = (): void => {
     // Clears the cookie only — it does NOT update any `useSessionCookie` hook's in-memory
     // `userId` state elsewhere in the tree (e.g. in `Poll`). Safe only because `handleSignOut()`
-    // immediately triggers a full-page Cognito redirect that unmounts everything; if sign-out is
-    // ever changed to not navigate away, this will need to reconcile that in-memory state too.
+    // triggers a full-page Cognito redirect that unmounts everything; if sign-out is ever changed
+    // to not navigate away, this will need to reconcile that in-memory state too.
+    //
+    // "Triggers" is now one microtask later than it reads: handleSignOut awaits the lazy Amplify
+    // chunk first. Still safe, because this button only renders once isSignedIn is true, which
+    // required that same chunk to have already loaded — the loader memo is warm and resolves
+    // without a fetch.
     if (sessionId) clearSessionCookie(sessionId)
     handleSignOut()
   }

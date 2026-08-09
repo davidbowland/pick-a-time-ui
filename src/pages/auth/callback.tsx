@@ -28,13 +28,23 @@ const AuthCallback = (): React.ReactNode => {
     // We wait for the Hub 'signedIn' event to confirm the exchange is complete
     // before redirecting, so we don't navigate away and lose the code.
     //
-    // A full-document navigation, not router.replace. AuthProvider lives in _app and does not
-    // remount across a client-side transition, so the useAuth instance that returned early on this
-    // page -- the session flag was false when it mounted, because this is the sign-in that sets it
-    // -- would stay mounted with user: null all the way to the destination, and the app bar would
-    // offer to sign in someone who just did.
+    // A full-document navigation, not router.replace: AuthProvider lives in _app and does not
+    // remount across a client-side transition, so a useAuth instance that resolved to signed-out on
+    // this page would stay mounted with user: null all the way to the destination, and the app bar
+    // would offer to sign in someone who just did. Reloading the document is what guarantees a
+    // fresh AuthProvider, independent of whether this page's useAuth happened to subscribe to Hub.
+    //
+    // The path must be validated, and location.assign is why. router.replace used to reject a
+    // cross-origin target for us -- Next's parseRelativeUrl throws on one -- so swapping in a full
+    // navigation removed that check. window.location.pathname on `https://host//evil.com` is the
+    // protocol-relative string `//evil.com`, which location.assign happily treats as another
+    // origin. Without this guard, a link to a path that 404s here becomes an open redirect that
+    // fires only after a real, successful sign-in.
+    const safeReturnPath = (stored: string | null): string =>
+      stored?.startsWith('/') && !stored.startsWith('//') ? stored : '/'
+
     const redirect = () => {
-      const returnTo = sessionStorage.getItem('pat_auth_return') ?? '/'
+      const returnTo = safeReturnPath(sessionStorage.getItem('pat_auth_return'))
       sessionStorage.removeItem('pat_auth_return')
       window.location.assign(returnTo)
     }
