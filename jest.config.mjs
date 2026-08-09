@@ -15,7 +15,6 @@ const config = {
     'pages/_app.tsx',
     'pages/_document.tsx',
     'pages/auth/*',
-    'hooks/useAuth.ts',
     'components/auth-context/*',
   ],
   coverageThreshold: {
