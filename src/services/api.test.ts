@@ -20,7 +20,7 @@ import {
 } from './api'
 
 jest.mock('aws-amplify/auth')
-jest.mock('@config/amplify', () => ({
+jest.mock('@config/api', () => ({
   baseUrl: 'http://localhost/v1',
 }))
 

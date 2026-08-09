@@ -14,7 +14,7 @@
 // Amplify still owns auth (`aws-amplify/auth`): the Cognito session and the OAuth redirect flow.
 import { fetchAuthSession } from 'aws-amplify/auth'
 
-import { baseUrl } from '@config/amplify'
+import { baseUrl } from '@config/api'
 import {
   AvailabilityPatchRequest,
   AvailabilityRecord,
