@@ -17,8 +17,13 @@ export const EditNameButton = ({
 }): React.ReactNode => (
   // A disabled control with no stated reason reads as broken, and this one is disabled longest for
   // exactly the people it inconveniences most: a signed-in voter waits on the deferred Amplify
-  // chunk plus a Cognito round trip, while a signed-out one clears in a single frame. The title
-  // gives that wait a reason on hover and on focus.
+  // chunk plus a Cognito round trip, while a signed-out one clears in a single frame.
+  //
+  // The title reaches hover only. A disabled button leaves the tab order, so it can never take
+  // focus, and most screen readers do not announce `title` in any case. Reaching keyboard and
+  // screen-reader users means aria-disabled plus a no-op handler and an aria-describedby target,
+  // keeping the control focusable -- worth doing if this wait ever grows, and not worth an
+  // inert-but-focusable button while it is one already-warm chunk fetch.
   <button
     aria-label="Edit name"
     className={ACTION_BUTTON_CLASS}

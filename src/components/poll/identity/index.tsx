@@ -141,9 +141,13 @@ const IdentityPhase = ({ sessionId, users, onUserSelected, lastUsedUserId }: Ide
         />
       )}
       {error && <ErrorMessage message={error} />}
+      {/* isAuthLoading disables rather than joining isLoading, which would show "Joining..." on the
+          primary CTA from first paint while nobody is joining anything -- we are only working out
+          who you are. Deferring Amplify behind a dynamic import is what made that window long
+          enough for a signed-in visitor to read it. Same reasoning as the Create poll button. */}
       <PillButton
-        isDisabled={!createNew && !selected}
-        isLoading={createMutation.isPending || isAuthLoading}
+        isDisabled={(!createNew && !selected) || isAuthLoading}
+        isLoading={createMutation.isPending}
         label="Continue"
         loadingLabel="Joining..."
         onPress={handleConfirm}

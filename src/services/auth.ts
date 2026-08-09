@@ -44,8 +44,14 @@ const storageKeys = (storage: Storage): string[] =>
  * out permanently. And if signOut() rejects after we have cleared the flag, rule 2 is what notices
  * the tokens are still there.
  *
- * Rule 2 may be deleted once pre-change sessions have aged past the Cognito refresh-token lifetime.
- * Before deleting it, check that nothing has started clearing the flag on a *transient* failure --
+ * Rule 2 is deletable only when BOTH of its jobs are obsolete, and only the first one ages out.
+ * First: pre-change sessions must have aged past the Cognito refresh-token lifetime. Second, and
+ * permanent: handleSignOut clears the flag before awaiting the auth chunk, because signOut()
+ * navigates away and nothing after it runs -- so a signOut() that never happens leaves the flag
+ * false with valid tokens on disk, and rule 2 is the only thing that notices. Deleting rule 2 means
+ * moving that clear to after a confirmed sign-out first.
+ *
+ * Before deleting it, also check that nothing has started clearing the flag on a *transient* failure --
  * see getIdToken. Rule 2 currently masks that class of mistake, so removing it would turn one into
  * a permanent sign-out rather than a wasted round trip.
  *

@@ -40,8 +40,12 @@ const AuthCallback = (): React.ReactNode => {
     // protocol-relative string `//evil.com`, which location.assign happily treats as another
     // origin. Without this guard, a link to a path that 404s here becomes an open redirect that
     // fires only after a real, successful sign-in.
-    const safeReturnPath = (stored: string | null): string =>
-      stored?.startsWith('/') && !stored.startsWith('//') ? stored : '/'
+    // Rejects `//host` and `/\host` alike. Per the URL spec, `\` and `/` are interchangeable in
+    // relative-slash state for special schemes, so `/\evil.com` reaches evil.com just as `//` does.
+    // Today's writer -- location.pathname + location.search -- cannot produce a literal backslash,
+    // but sessionStorage is writable by anything same-origin, and covering the whole class costs
+    // one character more than covering the half of it we happen to be able to produce.
+    const safeReturnPath = (stored: string | null): string => (stored && /^\/(?![/\\])/.test(stored) ? stored : '/')
 
     const redirect = () => {
       const returnTo = safeReturnPath(sessionStorage.getItem('pat_auth_return'))

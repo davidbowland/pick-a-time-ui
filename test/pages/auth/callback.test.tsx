@@ -63,6 +63,7 @@ describe('AuthCallback page', () => {
   // sign-in hands the person to an attacker's site.
   it.each([
     ['//evil.com', 'a protocol-relative path'],
+    ['/\\evil.com', 'a backslash the URL parser treats as a second slash'],
     ['https://evil.com/', 'an absolute URL'],
     ['javascript:alert(1)', 'a script URL'],
   ])('sends people home rather than to %s (%s)', (stored) => {

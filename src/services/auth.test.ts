@@ -82,6 +82,26 @@ describe('hasStoredSession', () => {
   it('returns false when storage is unavailable', () => {
     expect(hasStoredSession(null)).toBe(false)
   })
+
+  // The failure this module is built around: in some privacy modes reading the `localStorage`
+  // property throws, before any method is called. The restore is in a finally because a failing
+  // assertion would otherwise leak the throwing getter into every later test in this file, turning
+  // one red test into a cascade.
+  it('returns false when the localStorage property access itself throws', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('SecurityError')
+      },
+    })
+
+    try {
+      expect(hasStoredSession()).toBe(false)
+    } finally {
+      Object.defineProperty(window, 'localStorage', original!)
+    }
+  })
 })
 
 describe('markSessionStored', () => {
@@ -185,20 +205,6 @@ describe('getIdToken', () => {
 
     await expect(getIdToken({ loader: () => Promise.reject(new Error('offline')) })).rejects.toThrow('offline')
     expect(hasStoredSession()).toBe(true)
-  })
-
-  it('reports signed out when the localStorage property access itself throws', () => {
-    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
-    Object.defineProperty(window, 'localStorage', {
-      configurable: true,
-      get: () => {
-        throw new Error('SecurityError')
-      },
-    })
-
-    expect(hasStoredSession()).toBe(false)
-
-    Object.defineProperty(window, 'localStorage', original!)
   })
 })
 
