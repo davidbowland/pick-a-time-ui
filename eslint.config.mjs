@@ -88,6 +88,34 @@ export default tseslint.config(
     },
   },
 
+  // 3b) aws-amplify is 78 KB gzip and must not re-enter the landing page's static module graph.
+  //     config/amplify.ts is the one module that may import it: it runs Amplify.configure and then
+  //     re-exports the auth surface, so the two cannot come apart. Everything else reaches that
+  //     surface through the memoized dynamic import in services/auth.ts.
+  //
+  //     This rule exists because the mistake is invisible. A static import here costs nothing at
+  //     runtime, breaks no test, and fails no typecheck -- it just quietly puts the Cognito client
+  //     back in every page's chunk. That is exactly what an `import '@config/amplify'` in _app.tsx
+  //     did until it was removed, with every runtime guard around it working perfectly.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/config/amplify.ts', 'src/config/amplify.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['aws-amplify', 'aws-amplify/*'],
+              message:
+                'Import from @config/amplify (which configures Amplify first), and reach it through @services/auth so it stays out of the static bundle.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // 4) Node scripts / config files may use CommonJS require() and Node globals
   //    (process, __dirname, etc). This repo's Next config is next.config.mjs
   //    (ESM), not next.config.js -- listed explicitly alongside the kit default.
