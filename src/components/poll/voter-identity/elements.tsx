@@ -7,13 +7,22 @@ import { FOCUS_RING } from '@components/ui/focus-ring'
 const ACTION_BUTTON_CLASS = `flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hair)] bg-[var(--bone)]/[0.05] text-[var(--slate)] hover:bg-[var(--bone)]/[0.1] disabled:opacity-40 ${FOCUS_RING}`
 
 export const EditNameButton = ({
+  disabled,
   onPress,
   ref,
 }: {
+  disabled?: boolean
   onPress: () => void
   ref?: React.Ref<HTMLButtonElement>
 }): React.ReactNode => (
-  <button aria-label="Edit name" className={ACTION_BUTTON_CLASS} onClick={onPress} ref={ref} type="button">
+  <button
+    aria-label="Edit name"
+    className={ACTION_BUTTON_CLASS}
+    disabled={disabled}
+    onClick={onPress}
+    ref={ref}
+    type="button"
+  >
     <Pencil className="h-3.5 w-3.5" />
   </button>
 )

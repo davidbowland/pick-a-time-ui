@@ -29,7 +29,14 @@ function renderWithClient(props: Partial<VoterIdentityControlProps> = {}): { que
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <VoterIdentityControl isSignedIn={false} onNotYou={jest.fn()} sessionId="amber-harbor" user={user} {...props} />
+      <VoterIdentityControl
+        isAuthLoading={false}
+        isSignedIn={false}
+        onNotYou={jest.fn()}
+        sessionId="amber-harbor"
+        user={user}
+        {...props}
+      />
     </QueryClientProvider>,
   )
   return { queryClient }
@@ -45,7 +52,14 @@ function renderWithClientAndOutsideFocusTarget(props: Partial<VoterIdentityContr
   render(
     <QueryClientProvider client={queryClient}>
       <button type="button">Elsewhere</button>
-      <VoterIdentityControl isSignedIn={false} onNotYou={jest.fn()} sessionId="amber-harbor" user={user} {...props} />
+      <VoterIdentityControl
+        isAuthLoading={false}
+        isSignedIn={false}
+        onNotYou={jest.fn()}
+        sessionId="amber-harbor"
+        user={user}
+        {...props}
+      />
     </QueryClientProvider>,
   )
   return { queryClient }
@@ -312,5 +326,23 @@ describe('VoterIdentityControl', () => {
 
     await waitFor(() => expect(patchUser).toHaveBeenCalled())
     expect(screen.getByRole('button', { name: 'Edit name' })).not.toHaveFocus()
+  })
+
+  it('does not offer renaming while auth is still resolving', () => {
+    renderWithClient({ isAuthLoading: true })
+
+    expect(screen.getByRole('button', { name: 'Edit name' })).toBeDisabled()
+  })
+
+  // The fourth patchUser argument is the authenticated flag. Renaming before auth resolves would
+  // send `false` for someone who is actually signed in.
+  it('cannot start a rename that would patch with a stale signed-in state', async () => {
+    renderWithClientAndOutsideFocusTarget({ isAuthLoading: true })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit name' }))
+    await userEvent.click(screen.getByText('Elsewhere'))
+
+    expect(screen.queryByDisplayValue('Quiet Falcon')).not.toBeInTheDocument()
+    expect(patchUser).not.toHaveBeenCalled()
   })
 })

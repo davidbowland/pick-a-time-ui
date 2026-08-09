@@ -44,7 +44,7 @@ export interface PollProps {
 const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
   const queryClient = useQueryClient()
   const { userId, setUserId, clearUserId } = useSessionCookie(sessionId)
-  const { isSignedIn } = useAuthContext()
+  const { isLoading: isAuthLoading, isSignedIn } = useAuthContext()
   const queryParamId = useMemo(() => consumeQueryParamId(), [])
   const [tab, setTab] = useState<'painting' | 'results'>('painting')
   const [lastUsedUserId, setLastUsedUserId] = useState<string | undefined>(undefined)
@@ -169,6 +169,7 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
             </div>
             {currentUser && (
               <VoterIdentityControl
+                isAuthLoading={isAuthLoading}
                 isSignedIn={isSignedIn}
                 onNotYou={handleNotYou}
                 sessionId={sessionId}

@@ -10,6 +10,10 @@ export interface VoterIdentityControlProps {
   user: User
   sessionId: string
   isSignedIn: boolean
+  // True while useAuth is still resolving, when `isSignedIn` is false for everyone — including
+  // people who are in fact signed in. It is the fourth argument to patchUser below, so a rename
+  // started in that window would go out unauthenticated.
+  isAuthLoading: boolean
   onNotYou: () => void
 }
 
@@ -19,6 +23,7 @@ const VoterIdentityControl = ({
   user,
   sessionId,
   isSignedIn,
+  isAuthLoading,
   onNotYou,
 }: VoterIdentityControlProps): React.ReactNode => {
   const queryClient = useQueryClient()
@@ -102,7 +107,10 @@ const VoterIdentityControl = ({
       <span className="truncate">
         Voting as <span className="max-w-[10rem] font-semibold text-[var(--bone)]">{currentName}</span>
       </span>
-      <EditNameButton onPress={handleEditClick} ref={editButtonRef} />
+      {/* Entry is blocked, not the save: the save fires on blur, so refusing it there would throw
+          away a name the voter had already typed with nothing to show for it. Holding the Edit
+          button for the moment auth takes to resolve costs the voter nothing they can lose. */}
+      <EditNameButton disabled={isAuthLoading} onPress={handleEditClick} ref={editButtonRef} />
       {!isSignedIn && <NotYouButton onPress={onNotYou} />}
     </div>
   )
