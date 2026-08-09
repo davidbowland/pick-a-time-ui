@@ -336,13 +336,20 @@ describe('VoterIdentityControl', () => {
 
   // The fourth patchUser argument is the authenticated flag. Renaming before auth resolves would
   // send `false` for someone who is actually signed in.
+  //
+  // The form-never-opened assertion has to come BEFORE the click-away, and that ordering is the
+  // whole test. Asserted afterwards, both expectations hold on the unfixed build too -- clicking
+  // Edit and clicking away without typing hits handleBlur's unchanged-draft branch, which closes
+  // the form and skips patchUser regardless of whether the button was disabled. See
+  // 'does not save on blur when the draft is unchanged' for that same interaction passing with
+  // isAuthLoading false.
   it('cannot start a rename that would patch with a stale signed-in state', async () => {
     renderWithClientAndOutsideFocusTarget({ isAuthLoading: true })
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit name' }))
-    await userEvent.click(screen.getByText('Elsewhere'))
-
     expect(screen.queryByDisplayValue('Quiet Falcon')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Elsewhere'))
     expect(patchUser).not.toHaveBeenCalled()
   })
 })

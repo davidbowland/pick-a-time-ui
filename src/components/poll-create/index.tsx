@@ -605,8 +605,15 @@ const PollCreate = ({
               <p className="text-sm font-bold text-[var(--bone)]">{name.trim() || 'No name yet'}</p>
               <p className="text-xs text-[var(--slate)]">{daysTimesSummary}</p>
             </div>
+            {/* isAuthLoading disables rather than joining isLoading, which would swap the label to
+                "Starting..." -- nothing is starting while we are only checking who you are, and the
+                word implies the poll is already being created. It belongs here and not just on the
+                reCAPTCHA guards above: handleSubmit feeds isSignedIn to createPollAuthed/createPoll,
+                createUser, and patchUser, so submitting before auth resolves files a signed-in
+                person's poll anonymously and gives them an anonymous user record, which cannot be
+                attached to their account afterwards. */}
             <PillButton
-              isDisabled={!config}
+              isDisabled={!config || isAuthLoading}
               isLoading={isLoading}
               label="Create poll"
               loadingLabel="Starting..."

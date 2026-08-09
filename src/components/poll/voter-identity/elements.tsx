@@ -15,12 +15,17 @@ export const EditNameButton = ({
   onPress: () => void
   ref?: React.Ref<HTMLButtonElement>
 }): React.ReactNode => (
+  // A disabled control with no stated reason reads as broken, and this one is disabled longest for
+  // exactly the people it inconveniences most: a signed-in voter waits on the deferred Amplify
+  // chunk plus a Cognito round trip, while a signed-out one clears in a single frame. The title
+  // gives that wait a reason on hover and on focus.
   <button
     aria-label="Edit name"
     className={ACTION_BUTTON_CLASS}
     disabled={disabled}
     onClick={onPress}
     ref={ref}
+    title={disabled ? 'Checking your sign-in…' : undefined}
     type="button"
   >
     <Pencil className="h-3.5 w-3.5" />
