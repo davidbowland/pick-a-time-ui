@@ -10,6 +10,9 @@ const config = {
   coverageDirectory: 'coverage',
   coveragePathIgnorePatterns: [
     '.*\\.d\\.ts',
+    // collectCoverageFrom is ['src/**/*'] with no extension guard, so the checked-in font binaries
+    // would make every run print "Failed to collect coverage from ...woff2" to stderr.
+    '\\.woff2$',
     'config/*',
     'types.ts',
     'pages/_app.tsx',
@@ -27,7 +30,6 @@ const config = {
       '<rootDir>/__mocks__/file-mock.js',
     '^@components/(.*)$': '<rootDir>/src/components/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
-    '^@fontsource(-variable)?/(.*)$': '<rootDir>/__mocks__/file-mock.js',
     '^@heroui/react$': '<rootDir>/node_modules/@heroui/react/dist/index.js',
     '^@heroui/styles$': '<rootDir>/node_modules/@heroui/styles/dist/index.js',
     '^@hooks/(.*)$': '<rootDir>/src/hooks/$1',

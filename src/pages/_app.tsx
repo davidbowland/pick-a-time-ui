@@ -1,8 +1,7 @@
-import '@fontsource-variable/fraunces'
-import '@fontsource-variable/plus-jakarta-sans'
 import { ToastProvider } from '@heroui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AppProps } from 'next/app'
+import localFont from 'next/font/local'
 import React, { useEffect, useState } from 'react'
 
 // Deliberately no `import '@config/amplify'` here. It was a static import from the app shell, which
@@ -13,6 +12,34 @@ import React, { useEffect, useState } from 'react'
 // land on.
 import '@assets/css/index.css'
 import { AuthProvider } from '@components/auth-context'
+
+// These two faces used to arrive as Fontsource side-effect imports, which put their @font-face rules
+// inside the render-blocking stylesheet -- so the browser could not discover the woff2 files until
+// that CSS had downloaded and parsed, a fully serial extra round trip. next/font emits
+// `<link rel="preload" as="font">` into the prerendered HTML instead, so they download in parallel.
+//
+// `fallback` is not optional. next/font's style.fontFamily is `<face>, <adjusted-fallback>`, where
+// the adjusted fallback is a local("Times New Roman"/"Arial") face carrying size-adjust metrics --
+// and no trailing generic. Without these arrays a machine with neither font installed would fall
+// through to the browser default instead of serif/sans-serif, which is what index.css declared
+// before this moved.
+const fraunces = localFont({
+  adjustFontFallback: 'Times New Roman',
+  display: 'swap',
+  fallback: ['Georgia', 'serif'],
+  preload: true,
+  src: '../assets/fonts/fraunces-latin-wght-normal.woff2',
+  weight: '100 900',
+})
+
+const plusJakartaSans = localFont({
+  adjustFontFallback: 'Arial',
+  display: 'swap',
+  fallback: ['Helvetica', 'sans-serif'],
+  preload: true,
+  src: '../assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2',
+  weight: '200 800',
+})
 
 export default function App({ Component, pageProps }: AppProps) {
   const [queryClient] = useState(
@@ -33,6 +60,20 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* At :root, not on the wrapper div below: HeroUI's ToastProvider portals outside that
+          wrapper and would otherwise render in the browser default font. next/font's own
+          `variable:` option cannot do this -- it defines the variable inside a generated class that
+          has to be attached to an element, and the only element high enough is <html>, which _app
+          cannot reach in the Pages Router. */}
+      {/* eslint-disable-next-line react/no-unknown-property -- `jsx` and `global` are styled-jsx's
+          own attributes, compiled away by the Next-bundled babel plugin; the rule only knows the
+          DOM's property list. */}
+      <style global jsx>{`
+        :root {
+          --font-display: ${fraunces.style.fontFamily};
+          --font-body: ${plusJakartaSans.style.fontFamily};
+        }
+      `}</style>
       <AuthProvider>
         <div className="relative min-h-[100dvh] bg-[var(--ink)] text-foreground">
           <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
