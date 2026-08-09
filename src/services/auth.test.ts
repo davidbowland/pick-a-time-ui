@@ -138,6 +138,17 @@ describe('getIdToken', () => {
     expect(await getIdToken({ loader: async () => authModule() })).toBe('jwt')
   })
 
+  // Seeded with a Cognito key rather than the flag, so the assertion can only pass if getIdToken
+  // wrote the flag itself. Every other success case above pre-seeds it via markSessionStored, which
+  // means deleting getIdToken's own write would leave them all green.
+  it('sets the flag when a token resolves for a pre-existing Cognito session', async () => {
+    window.localStorage.clear()
+    window.localStorage.setItem('CognitoIdentityServiceProvider.abc.LastAuthUser', 'ada')
+
+    expect(await getIdToken({ loader: async () => authModule() })).toBe('jwt')
+    expect(window.localStorage.getItem(FLAG_KEY)).toBe('1')
+  })
+
   it('passes forceRefresh through', async () => {
     markSessionStored()
     const auth = authModule()
@@ -145,24 +156,49 @@ describe('getIdToken', () => {
     expect(auth.fetchAuthSession).toHaveBeenCalledWith({ forceRefresh: true })
   })
 
+  // clear() before every assertion on hasStoredSession being false: a sibling test seeds a
+  // CognitoIdentityServiceProvider key, and rule 2 reports true off that key alone.
   it('clears the flag when the session has no token', async () => {
+    window.localStorage.clear()
     markSessionStored()
     const auth = authModule({ fetchAuthSession: jest.fn().mockResolvedValue({ tokens: undefined }) })
+
     expect(await getIdToken({ loader: async () => auth })).toBe(null)
     expect(hasStoredSession()).toBe(false)
   })
 
-  it('clears the flag when the session rejects', async () => {
+  // Amplify rejects only for transient failures -- offline, 5xx, rate limit -- and preserves its
+  // own tokens through them. A dead session resolves with tokens: undefined instead (covered
+  // above). Clearing the flag here would sign people out for losing signal.
+  it('keeps the flag when the session rejects, because that means transient, not signed out', async () => {
+    window.localStorage.clear()
     markSessionStored()
-    const auth = authModule({ fetchAuthSession: jest.fn().mockRejectedValue(new Error('expired')) })
+    const auth = authModule({ fetchAuthSession: jest.fn().mockRejectedValue(new Error('network')) })
+
     expect(await getIdToken({ loader: async () => auth })).toBe(null)
-    expect(hasStoredSession()).toBe(false)
+    expect(hasStoredSession()).toBe(true)
   })
 
   it('leaves the flag alone when the import itself fails', async () => {
+    window.localStorage.clear()
     markSessionStored()
+
     await expect(getIdToken({ loader: () => Promise.reject(new Error('offline')) })).rejects.toThrow('offline')
     expect(hasStoredSession()).toBe(true)
+  })
+
+  it('reports signed out when the localStorage property access itself throws', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('SecurityError')
+      },
+    })
+
+    expect(hasStoredSession()).toBe(false)
+
+    Object.defineProperty(window, 'localStorage', original!)
   })
 })
 
@@ -190,14 +226,42 @@ describe('getSessionUser', () => {
     expect(await getSessionUser(async () => auth)).toEqual({ name: null })
   })
 
-  // The clear() matters: the test above seeded a CognitoIdentityServiceProvider key, and
-  // hasStoredSession's rule 2 would still report true off that key alone, passing this assertion
-  // for the wrong reason.
-  it('clears the flag and returns null when getCurrentUser rejects', async () => {
+  // The clear() matters throughout this describe: an earlier test seeded a
+  // CognitoIdentityServiceProvider key, and hasStoredSession's rule 2 would still report true off
+  // that key alone, passing these assertions for the wrong reason.
+  it('clears the flag when the session resolves without tokens', async () => {
     window.localStorage.clear()
     markSessionStored()
-    const auth = authModule({ getCurrentUser: jest.fn().mockRejectedValue(new Error('no user')) })
+    const auth = authModule({ fetchAuthSession: jest.fn().mockResolvedValue({ tokens: undefined }) })
+
     expect(await getSessionUser(async () => auth)).toBe(null)
     expect(hasStoredSession()).toBe(false)
+  })
+
+  it('keeps the flag when the session rejects, because that means transient, not signed out', async () => {
+    window.localStorage.clear()
+    markSessionStored()
+    const auth = authModule({ fetchAuthSession: jest.fn().mockRejectedValue(new Error('network')) })
+
+    expect(await getSessionUser(async () => auth)).toBe(null)
+    expect(hasStoredSession()).toBe(true)
+  })
+
+  it('propagates an import failure rather than reporting signed out', async () => {
+    window.localStorage.clear()
+    markSessionStored()
+
+    await expect(getSessionUser(() => Promise.reject(new Error('offline')))).rejects.toThrow('offline')
+    expect(hasStoredSession()).toBe(true)
+  })
+
+  it('returns a null name when the claim is not a string', async () => {
+    window.localStorage.clear()
+    markSessionStored()
+    const auth = authModule({
+      fetchAuthSession: jest.fn().mockResolvedValue({ tokens: { idToken: { payload: { name: 42 } } } }),
+    })
+
+    expect(await getSessionUser(async () => auth)).toEqual({ name: null })
   })
 })
