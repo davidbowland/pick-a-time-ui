@@ -65,9 +65,6 @@ export default function App({ Component, pageProps }: AppProps) {
           `variable:` option cannot do this -- it defines the variable inside a generated class that
           has to be attached to an element, and the only element high enough is <html>, which _app
           cannot reach in the Pages Router. */}
-      {/* eslint-disable-next-line react/no-unknown-property -- `jsx` and `global` are styled-jsx's
-          own attributes, compiled away by the Next-bundled babel plugin; the rule only knows the
-          DOM's property list. */}
       <style global jsx>{`
         :root {
           --font-display: ${fraunces.style.fontFamily};

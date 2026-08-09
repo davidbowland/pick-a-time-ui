@@ -81,6 +81,10 @@ export default tseslint.config(
         { argsIgnorePattern: '_', ignoreRestSiblings: true, varsIgnorePattern: '_' },
       ],
       'no-negated-condition': 'error',
+      // `jsx` and `global` are styled-jsx's own attributes on <style>, compiled away by the
+      // Next-bundled babel plugin. The rule only knows the DOM's property list, so without this it
+      // errors on the :root font-variable block in _app.tsx.
+      'react/no-unknown-property': ['error', { ignore: ['global', 'jsx'] }],
       'react/react-in-jsx-scope': 'off',
       'react/jsx-curly-brace-presence': ['error', { children: 'never', propElementValues: 'always', props: 'never' }],
       'react/jsx-sort-props': 'error',
