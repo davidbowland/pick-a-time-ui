@@ -100,4 +100,18 @@ describe('calendar-connected page', () => {
 
     expect(replace).toHaveBeenCalledWith('/')
   })
+
+  it('should exclude the page from search indexes', () => {
+    render(<CalendarConnected />)
+
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+  })
+
+  it('should exclude the page from search indexes before the router is ready', () => {
+    jest.mocked(useRouter).mockReturnValueOnce({ isReady: false, query: {}, replace } as never)
+
+    render(<CalendarConnected />)
+
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+  })
 })

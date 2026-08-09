@@ -46,6 +46,12 @@ describe('Poll page', () => {
     expect(Poll).not.toHaveBeenCalled()
   })
 
+  it('should exclude the page from search indexes', () => {
+    setup('/p/amber-harbor/')
+    render(<PollPage />)
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+  })
+
   it('should return blocking fallback with empty paths in development', () => {
     const originalEnv = process.env.NODE_ENV
     Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', configurable: true })

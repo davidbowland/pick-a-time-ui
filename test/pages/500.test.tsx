@@ -31,4 +31,9 @@ describe('500 error page', () => {
     render(<InternalServerError />)
     expect(screen.getByRole('link', { name: /go home/i })).toHaveAttribute('href', '/')
   })
+
+  it('should exclude the page from search indexes', () => {
+    render(<InternalServerError />)
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+  })
 })

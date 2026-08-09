@@ -53,6 +53,7 @@ const AuthCallback = (): React.ReactNode => {
     <>
       <Head>
         <title>{failed ? 'Sign-in failed' : 'Signing in…'} | Pick a Time</title>
+        <meta content="noindex, nofollow" name="robots" />
       </Head>
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <Mark className={failed ? undefined : 'animate-breathe'} size={56} />

@@ -57,17 +57,19 @@ type PollNameFieldProps = {
   value: string
   error?: string
   onChange: (value: string) => void
+  onFocus?: () => void
   maxLength?: number
 }
 
 export const PollNameField = React.forwardRef<HTMLInputElement, PollNameFieldProps>(
-  ({ value, error, onChange, maxLength }, ref): React.ReactNode => (
+  ({ value, error, onChange, onFocus, maxLength }, ref): React.ReactNode => (
     <TextField isInvalid={!!error}>
       <Label>Poll name</Label>
       <Input
         className="border border-[var(--slate)]/70 bg-[var(--bone)]/[0.04] text-[var(--bone)] placeholder:text-[var(--slate)]"
         maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
         placeholder="e.g. Movie night"
         ref={ref}
         value={value}

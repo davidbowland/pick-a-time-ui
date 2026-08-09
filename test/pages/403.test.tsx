@@ -31,4 +31,9 @@ describe('403 error page', () => {
     render(<Forbidden />)
     expect(screen.getByRole('link', { name: /go home/i })).toHaveAttribute('href', '/')
   })
+
+  it('should exclude the page from search indexes', () => {
+    render(<Forbidden />)
+    expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+  })
 })

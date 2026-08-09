@@ -65,4 +65,23 @@ describe('404 error page', () => {
     })
     await waitFor(() => expect(screen.getByRole('link', { name: /go home/i })).toHaveAttribute('href', '/'))
   })
+
+  it('should exclude the error page from search indexes', async () => {
+    await act(async () => {
+      render(<NotFound />)
+    })
+    await waitFor(() =>
+      expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow'),
+    )
+  })
+
+  it('should exclude the poll fallback from search indexes', async () => {
+    window.location.pathname = '/p/aeiou'
+    await act(async () => {
+      render(<NotFound />)
+    })
+    await waitFor(() =>
+      expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow'),
+    )
+  })
 })

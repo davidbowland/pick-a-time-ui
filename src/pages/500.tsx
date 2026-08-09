@@ -9,6 +9,7 @@ const InternalServerError = (): React.ReactNode => {
     <>
       <Head>
         <title>Something went wrong on our end | Pick a Time</title>
+        <meta content="noindex, nofollow" name="robots" />
       </Head>
       <AppBar />
       <div className="mx-auto mt-8 max-w-md px-4 text-center">

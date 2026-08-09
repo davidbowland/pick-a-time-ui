@@ -1,4 +1,53 @@
-@import '@heroui/styles';
+/* HeroUI ships one 410 KB stylesheet covering all ~60 of its components, and `@import
+   '@heroui/styles'` pulls in every byte. That single file was ~94% of our CSS bundle and the
+   page's only render-blocking request. We render about a third of those components, so this
+   reassembles the package's own layered entry point (see @heroui/styles/dist/index.css) with
+   only the component styles we actually use.
+
+   The layer order, the two base imports, and the trailing theme/utilities/variants imports must
+   stay as they are — they mirror the package and the cascade depends on the order. The component
+   list is the only part meant to change: adding a HeroUI component to the app means adding its
+   stylesheet here, and `heroui-styles.test.ts` fails if you forget. Within the component block,
+   shared primitives come first, exactly as the package orders them, so component styles can
+   override primitive defaults. */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@import '@heroui/styles/base/base.css' layer(base);
+@import '@heroui/styles/base/scrollbar.css' layer(base);
+
+/* Shared primitives — must come first */
+@import '@heroui/styles/components/close-button.css' layer(components);
+@import '@heroui/styles/components/description.css' layer(components);
+@import '@heroui/styles/components/field-error.css' layer(components);
+@import '@heroui/styles/components/label.css' layer(components);
+
+/* Components this app renders */
+@import '@heroui/styles/components/alert.css' layer(components);
+@import '@heroui/styles/components/alert-dialog.css' layer(components);
+@import '@heroui/styles/components/button.css' layer(components);
+@import '@heroui/styles/components/calendar.css' layer(components);
+@import '@heroui/styles/components/calendar-year-picker.css' layer(components);
+@import '@heroui/styles/components/dropdown.css' layer(components);
+@import '@heroui/styles/components/header.css' layer(components);
+@import '@heroui/styles/components/input.css' layer(components);
+@import '@heroui/styles/components/menu.css' layer(components);
+@import '@heroui/styles/components/menu-item.css' layer(components);
+@import '@heroui/styles/components/menu-section.css' layer(components);
+@import '@heroui/styles/components/modal.css' layer(components);
+@import '@heroui/styles/components/popover.css' layer(components);
+@import '@heroui/styles/components/radio.css' layer(components);
+@import '@heroui/styles/components/radio-group.css' layer(components);
+@import '@heroui/styles/components/separator.css' layer(components);
+@import '@heroui/styles/components/spinner.css' layer(components);
+@import '@heroui/styles/components/textfield.css' layer(components);
+@import '@heroui/styles/components/toast.css' layer(components);
+
+@import '@heroui/styles/themes/default';
+@import '@heroui/styles/utilities';
+@import '@heroui/styles/variants';
 
 :root {
   --font-display: 'Fraunces Variable', Georgia, serif;
@@ -143,12 +192,5 @@ html.dark {
 @media (prefers-reduced-motion: no-preference) {
   .animate-breathe {
     animation: pat-breathe 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-  }
-}
-
-/* Drawer override — keep right-side width */
-@layer components {
-  .drawer__dialog[data-placement='right'] {
-    @apply w-[min(80vw,48rem)] max-w-none;
   }
 }

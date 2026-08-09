@@ -185,15 +185,26 @@ const PollCreate = ({
     sectionRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
   }, [openSection])
 
+  // reCAPTCHA costs ~670 KiB of script and ~900 ms of CPU on a mid-range phone, and this form is
+  // embedded in the landing page — loading it on mount made every visitor pay that just to read
+  // the page. Hold it until the visitor shows create intent (touching either name field, or
+  // advancing a step), which is still several steps and many seconds ahead of the submit that
+  // actually needs a token. Signed-in visitors never load it at all: their submit path uses the
+  // authenticated endpoint and skips reCAPTCHA entirely. The `isAuthLoading` guard keeps an
+  // undecided session from loading it speculatively — once auth resolves to signed-out, this
+  // effect reruns and loads it then.
+  const [hasCreateIntent, setHasCreateIntent] = useState(false)
+  const markCreateIntent = (): void => setHasCreateIntent(true)
+
   useEffect(() => {
-    if (!document.getElementById(RECAPTCHA_SCRIPT_ID)) {
-      const script = document.createElement('script')
-      script.id = RECAPTCHA_SCRIPT_ID
-      script.src = `https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`
-      script.async = true
-      document.body.appendChild(script)
-    }
-  }, [])
+    if (!hasCreateIntent || isSignedIn || isAuthLoading) return
+    if (document.getElementById(RECAPTCHA_SCRIPT_ID)) return
+    const script = document.createElement('script')
+    script.id = RECAPTCHA_SCRIPT_ID
+    script.src = `https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`
+    script.async = true
+    document.body.appendChild(script)
+  }, [hasCreateIntent, isSignedIn, isAuthLoading])
 
   // reCAPTCHA v3 scores the first, cold `execute` of a page load low (0.2–0.4) because it has
   // gathered almost no behavioral signal yet; the next execute, against a warmed session, scores
@@ -318,9 +329,12 @@ const PollCreate = ({
   })
 
   const goToNextSection = (): void => {
-    // The first advance out of a step is the earliest reliable signal of create intent; warm up
-    // reCAPTCHA now so the eventual submit runs on a high-scoring token. `primeRecaptcha` is a
-    // once-only no-op after the first call.
+    // Advancing a step is create intent even when neither name field was ever focused — the hero
+    // starter can hand the poll name over pre-filled. Marking it here is what guarantees the
+    // script is on its way before the warm-up below starts waiting for it.
+    markCreateIntent()
+    // Warm up reCAPTCHA now so the eventual submit runs on a high-scoring token. `primeRecaptcha`
+    // is a once-only no-op after the first call.
     primeRecaptcha()
     const idx = SECTION_ORDER.indexOf(openSection)
     if (idx < SECTION_ORDER.length - 1) {
@@ -452,6 +466,7 @@ const PollCreate = ({
               error={nameError}
               maxLength={config?.pollNameMaxLength}
               onChange={setName}
+              onFocus={markCreateIntent}
               ref={nameInputRef}
               value={name}
             />
@@ -460,6 +475,7 @@ const PollCreate = ({
                 label="Your name"
                 maxLength={config?.participantNameMaxLength}
                 onChange={setVoterName}
+                onFocus={markCreateIntent}
                 ref={voterNameInputRef}
                 value={voterName}
               />

@@ -54,6 +54,7 @@ const CalendarConnected = (): React.ReactNode => {
       <>
         <Head>
           <title>Google Calendar | Pick a Time</title>
+          <meta content="noindex, nofollow" name="robots" />
         </Head>
         <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
           <Mark className="animate-breathe" size={56} />
@@ -67,6 +68,7 @@ const CalendarConnected = (): React.ReactNode => {
     <>
       <Head>
         <title>{copy.heading} | Pick a Time</title>
+        <meta content="noindex, nofollow" name="robots" />
       </Head>
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
         <Mark size={56} />

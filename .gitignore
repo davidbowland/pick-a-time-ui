@@ -14,7 +14,8 @@ out/
 # AWS SAM
 .aws-sam/
 
-# Generated artifacts (next-sitemap writes these to public/)
+# Generated artifacts. next-sitemap writes these to out/ (already ignored above); the public/
+# entries stay as a guard in case it is ever run without next-sitemap.config.js's outDir.
 public/sitemap*.xml
 public/robots.txt
 

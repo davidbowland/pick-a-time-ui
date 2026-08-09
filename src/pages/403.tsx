@@ -9,6 +9,7 @@ const Forbidden = (): React.ReactNode => {
     <>
       <Head>
         <title>You don&apos;t have access | Pick a Time</title>
+        <meta content="noindex, nofollow" name="robots" />
       </Head>
       <AppBar />
       <div className="mx-auto mt-8 max-w-md px-4 text-center">

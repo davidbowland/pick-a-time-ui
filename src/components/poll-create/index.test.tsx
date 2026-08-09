@@ -51,6 +51,9 @@ function renderWithClient(): ReturnType<typeof render> {
 
 const continueButton = (): HTMLElement => screen.getByRole('button', { name: /^continue$/i })
 
+const recaptchaScripts = (): HTMLScriptElement[] =>
+  Array.from(document.querySelectorAll<HTMLScriptElement>('script[src*="recaptcha/api.js"]'))
+
 describe('PollCreate', () => {
   afterAll(() => {
     delete (global as any).grecaptcha
@@ -72,6 +75,9 @@ describe('PollCreate', () => {
     })
     jest.mocked(createUser).mockResolvedValue({ userId: 'clever-fox', name: null })
     ;(global as any).grecaptcha = { ready: (cb: () => void) => cb(), execute: jest.fn().mockResolvedValue('token') }
+    // The component appends the reCAPTCHA script straight to document.body, which Testing
+    // Library's unmount cleanup doesn't touch — clear it so each test starts with none loaded.
+    recaptchaScripts().forEach((script) => script.remove())
     return { push }
   }
 
@@ -896,6 +902,66 @@ describe('PollCreate', () => {
       const input = await screen.findByLabelText(/poll name/i)
       act(() => focusFn?.())
       expect(input).toHaveFocus()
+    })
+  })
+
+  describe('reCAPTCHA script loading', () => {
+    it('does not load the reCAPTCHA script on mount', async () => {
+      setup()
+      renderWithClient()
+      await screen.findByLabelText(/poll name/i)
+      expect(recaptchaScripts()).toHaveLength(0)
+    })
+
+    it('loads the reCAPTCHA script once the visitor focuses the poll name field', async () => {
+      setup()
+      renderWithClient()
+      await userEvent.click(await screen.findByLabelText(/poll name/i))
+      await waitFor(() => expect(recaptchaScripts()).toHaveLength(1))
+    })
+
+    it('loads the reCAPTCHA script when the visitor continues past the first step', async () => {
+      setup()
+      renderWithClient()
+      await userEvent.click(continueButton())
+      await waitFor(() => expect(recaptchaScripts()).toHaveLength(1))
+    })
+
+    it('loads the reCAPTCHA script only once across repeated create intent', async () => {
+      setup()
+      renderWithClient()
+      await userEvent.click(await screen.findByLabelText(/poll name/i))
+      await userEvent.click(continueButton())
+      await waitFor(() => expect(recaptchaScripts()).toHaveLength(1))
+    })
+
+    it('never loads the reCAPTCHA script when signed in, since that submit path skips it', async () => {
+      setup()
+      jest.mocked(useAuthContext).mockReturnValue({
+        isSignedIn: true,
+        user: null,
+        isLoading: false,
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+      })
+      renderWithClient()
+      await userEvent.click(await screen.findByLabelText(/poll name/i))
+      await userEvent.click(continueButton())
+      expect(recaptchaScripts()).toHaveLength(0)
+    })
+
+    it('does not load the reCAPTCHA script while auth is still loading', async () => {
+      setup()
+      jest.mocked(useAuthContext).mockReturnValue({
+        isSignedIn: false,
+        user: null,
+        isLoading: true,
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+      })
+      renderWithClient()
+      await userEvent.click(await screen.findByLabelText(/poll name/i))
+      expect(recaptchaScripts()).toHaveLength(0)
     })
   })
 

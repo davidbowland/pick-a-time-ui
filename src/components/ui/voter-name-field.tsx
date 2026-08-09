@@ -5,17 +5,19 @@ type VoterNameFieldProps = {
   label: string
   value: string
   onChange: (value: string) => void
+  onFocus?: () => void
   maxLength?: number
 }
 
 export const VoterNameField = React.forwardRef<HTMLInputElement, VoterNameFieldProps>(
-  ({ label, value, onChange, maxLength }, ref): React.ReactNode => (
+  ({ label, value, onChange, onFocus, maxLength }, ref): React.ReactNode => (
     <TextField>
       <Label>{label}</Label>
       <Input
         className="border border-[var(--slate)]/70 bg-[var(--bone)]/[0.04] text-[var(--bone)] placeholder:text-[var(--slate)]"
         maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
         placeholder="e.g. Alex"
         ref={ref}
         value={value}
