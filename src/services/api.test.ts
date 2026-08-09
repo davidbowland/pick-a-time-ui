@@ -1,5 +1,3 @@
-import { fetchAuthSession } from 'aws-amplify/auth'
-
 import {
   ApiError,
   connectCalendar,
@@ -18,21 +16,20 @@ import {
   patchUser,
   syncCalendar,
 } from './api'
+import { getIdToken } from '@services/auth'
 
-jest.mock('aws-amplify/auth')
-jest.mock('@config/amplify', () => ({
+jest.mock('@services/auth')
+jest.mock('@config/api', () => ({
   baseUrl: 'http://localhost/v1',
 }))
 
 const mockFetch = jest.fn()
-const mockFetchAuthSession = jest.mocked(fetchAuthSession)
 
 const baseUrl = 'http://localhost/v1'
 const sessionId = 'fuzzy-penguin'
 const userId = 'brave-tiger'
 const authHeaders = { Authorization: 'Bearer mock-jwt-token' }
 const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' }
-const authSession = { tokens: { idToken: { payload: {}, toString: () => 'mock-jwt-token' } } } as any
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' }, status })
@@ -40,7 +37,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 beforeAll(() => {
   global.fetch = mockFetch as unknown as typeof fetch
-  mockFetchAuthSession.mockResolvedValue(authSession)
+  jest.mocked(getIdToken).mockResolvedValue('mock-jwt-token')
 })
 
 describe('API service', () => {
@@ -68,8 +65,10 @@ describe('API service', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1)
     })
 
-    it('should send no authorization header when the session cannot be read', async () => {
-      mockFetchAuthSession.mockRejectedValueOnce(new Error('Not signed in'))
+    // getIdToken rejects only when the auth chunk itself cannot be fetched -- a network problem,
+    // not evidence about the session. The request still goes out, unauthenticated.
+    it('should send no authorization header when the auth chunk cannot be loaded', async () => {
+      jest.mocked(getIdToken).mockRejectedValueOnce(new Error('chunk load failed'))
       mockFetch.mockResolvedValueOnce(jsonResponse({ lastSyncedAt: null, status: 'not_connected' }))
 
       await fetchCalendarState()
@@ -77,8 +76,8 @@ describe('API service', () => {
       expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/calendar`, { body: undefined, headers: {}, method: 'GET' })
     })
 
-    it('should send no authorization header when the session has no id token', async () => {
-      mockFetchAuthSession.mockResolvedValueOnce({} as any)
+    it('should send no authorization header when there is no session', async () => {
+      jest.mocked(getIdToken).mockResolvedValueOnce(null)
       mockFetch.mockResolvedValueOnce(jsonResponse({ lastSyncedAt: null, status: 'not_connected' }))
 
       await fetchCalendarState()
@@ -245,8 +244,8 @@ describe('API service', () => {
 
       const result = await createUser(sessionId, true)
 
-      expect(mockFetchAuthSession).toHaveBeenCalledTimes(3)
-      expect(mockFetchAuthSession).toHaveBeenNthCalledWith(2, { forceRefresh: true })
+      expect(jest.mocked(getIdToken)).toHaveBeenCalledTimes(3)
+      expect(jest.mocked(getIdToken)).toHaveBeenNthCalledWith(2, { forceRefresh: true })
       expect(mockFetch).toHaveBeenCalledTimes(3)
       expect(mockFetch).toHaveBeenNthCalledWith(1, `${baseUrl}/sessions/${sessionId}/users/authed`, expect.anything())
       expect(mockFetch).toHaveBeenNthCalledWith(2, `${baseUrl}/sessions/${sessionId}/users/authed`, expect.anything())
@@ -254,11 +253,12 @@ describe('API service', () => {
       expect(result).toEqual(newUser)
     })
 
-    it('should fall back to /users when the token refresh itself fails', async () => {
+    it('should fall back to /users when the auth chunk cannot be loaded for the refresh', async () => {
       mockFetch.mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(jsonResponse(newUser))
-      // The first call reads the (still valid) session for the initial request; the second is the
-      // forced refresh that fails.
-      mockFetchAuthSession.mockResolvedValueOnce(authSession).mockRejectedValueOnce(new Error('Refresh failed'))
+      // getIdToken rejects only when the dynamic import fails -- a refresh that fails resolves to
+      // null instead (see the test below). The first call reads the still-valid session for the
+      // initial request; the second is the forced refresh, which cannot load the chunk.
+      jest.mocked(getIdToken).mockResolvedValueOnce('mock-jwt-token').mockRejectedValueOnce(new Error('chunk failed'))
 
       const result = await createUser(sessionId, true)
 
@@ -267,13 +267,34 @@ describe('API service', () => {
       expect(result).toEqual(newUser)
     })
 
+    // The refresh-failed path proper: getIdToken swallows a dead or unreachable session and returns
+    // null, so the retry goes out with no Authorization header, earns a second 401, and only then
+    // falls back. One extra round trip versus the old behavior, same destination.
+    it('should fall back to /users when the refresh yields no token', async () => {
+      mockFetch
+        .mockResolvedValueOnce(unauthorized())
+        .mockResolvedValueOnce(unauthorized())
+        .mockResolvedValueOnce(jsonResponse(newUser))
+      jest
+        .mocked(getIdToken)
+        .mockResolvedValueOnce('mock-jwt-token')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+
+      const result = await createUser(sessionId, true)
+
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+      expect(mockFetch).toHaveBeenNthCalledWith(3, `${baseUrl}/sessions/${sessionId}/users`, expect.anything())
+      expect(result).toEqual(newUser)
+    })
+
     it('should succeed on retry after token refresh when /users/authed initially returns 401', async () => {
       mockFetch.mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(jsonResponse(newUser))
 
       const result = await createUser(sessionId, true)
 
-      expect(mockFetchAuthSession).toHaveBeenCalledTimes(3)
-      expect(mockFetchAuthSession).toHaveBeenNthCalledWith(2, { forceRefresh: true })
+      expect(jest.mocked(getIdToken)).toHaveBeenCalledTimes(3)
+      expect(jest.mocked(getIdToken)).toHaveBeenNthCalledWith(2, { forceRefresh: true })
       expect(mockFetch).toHaveBeenCalledTimes(2)
       expect(mockFetch).toHaveBeenNthCalledWith(2, `${baseUrl}/sessions/${sessionId}/users/authed`, expect.anything())
       expect(result).toEqual(newUser)
@@ -284,7 +305,7 @@ describe('API service', () => {
 
       const result = await createUser(sessionId, true)
 
-      expect(mockFetchAuthSession).toHaveBeenCalledTimes(1)
+      expect(jest.mocked(getIdToken)).toHaveBeenCalledTimes(1)
       expect(mockFetch).toHaveBeenCalledTimes(2)
       expect(result).toEqual(newUser)
     })

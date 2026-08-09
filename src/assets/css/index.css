@@ -49,10 +49,9 @@
 @import '@heroui/styles/utilities';
 @import '@heroui/styles/variants';
 
-:root {
-  --font-display: 'Fraunces Variable', Georgia, serif;
-  --font-body: 'Plus Jakarta Sans Variable', 'Helvetica', sans-serif;
-}
+/* --font-display and --font-body are defined at :root by src/pages/_app.tsx, which declares both
+   faces through next/font/local. One definition, so there is no cascade-order question between this
+   linked stylesheet and the injected <style>. */
 
 html {
   scroll-behavior: smooth;

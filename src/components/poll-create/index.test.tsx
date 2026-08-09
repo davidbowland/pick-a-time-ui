@@ -182,6 +182,36 @@ describe('PollCreate', () => {
     expect(createPoll).not.toHaveBeenCalled()
   })
 
+  // The submit path passes isSignedIn straight into createPollAuthed/createPoll, createUser, and
+  // patchUser. Submitting before auth resolves therefore files a signed-in person's poll through
+  // the anonymous endpoint, and their user record is created anonymous -- the poll is never linked
+  // to their account and there is no way to attach it afterwards. Deferring Amplify behind a
+  // dynamic import lengthens the window in which that is possible.
+  it('should not accept a submission while auth is still resolving', async () => {
+    setup()
+    jest.mocked(useAuthContext).mockReturnValue({
+      handleSignIn: jest.fn(),
+      handleSignOut: jest.fn(),
+      isLoading: true,
+      isSignedIn: false,
+      user: null,
+    })
+
+    renderWithClient()
+    await userEvent.type(screen.getByLabelText(/poll name/i), 'Lunch with friends')
+    await userEvent.click(continueButton())
+    await screen.findByTestId('date-2026-07-16')
+    await userEvent.click(screen.getByRole('button', { name: 'Weekdays Lunch' }))
+    await userEvent.click(continueButton())
+
+    expect(screen.getByRole('button', { name: /create poll/i })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /create poll/i }))
+
+    expect(createPoll).not.toHaveBeenCalled()
+    expect(createPollAuthed).not.toHaveBeenCalled()
+  })
+
   it('should disable Continue in Days & times until at least one date is selected', async () => {
     setup()
     renderWithClient()

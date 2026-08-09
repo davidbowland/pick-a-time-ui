@@ -81,10 +81,57 @@ export default tseslint.config(
         { argsIgnorePattern: '_', ignoreRestSiblings: true, varsIgnorePattern: '_' },
       ],
       'no-negated-condition': 'error',
+      // `jsx` and `global` are styled-jsx's own attributes on <style>, compiled away by the
+      // Next-bundled babel plugin. The rule only knows the DOM's property list, so without this it
+      // errors on the :root font-variable block in _app.tsx.
+      'react/no-unknown-property': ['error', { ignore: ['global', 'jsx'] }],
       'react/react-in-jsx-scope': 'off',
       'react/jsx-curly-brace-presence': ['error', { children: 'never', propElementValues: 'always', props: 'never' }],
       'react/jsx-sort-props': 'error',
       'sort-vars': 'error',
+    },
+  },
+
+  // 3b) aws-amplify is 78 KB gzip and must not re-enter the landing page's static module graph.
+  //     config/amplify.ts is the one module that may import it: it runs Amplify.configure and then
+  //     re-exports the auth surface, so the two cannot come apart. Everything else reaches that
+  //     surface through the memoized dynamic import in services/auth.ts.
+  //
+  //     This rule exists because the mistake is invisible. A static import here costs nothing at
+  //     runtime, breaks no test, and fails no typecheck -- it just quietly puts the Cognito client
+  //     back in every page's chunk. That is exactly what an `import '@config/amplify'` in _app.tsx
+  //     did until it was removed, with every runtime guard around it working perfectly.
+  //
+  //     Two patterns, because banning only `aws-amplify` would miss the exact mistake described
+  //     above: `import '@config/amplify'` is not an aws-amplify import, and it is what put the
+  //     client back in every page. Only the callback page may reach that module statically -- it
+  //     needs the OAuth listener registered before Amplify sees the ?code=. services/auth.ts is
+  //     fenced too; `allowTypeImports` lets its `import type` through, while its runtime access
+  //     stays a dynamic import(), which this rule does not restrict and which is the whole point.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/config/**', 'src/pages/auth/callback.tsx'],
+    rules: {
+      'no-restricted-imports': 'off',
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              allowTypeImports: true,
+              group: ['aws-amplify', 'aws-amplify/*'],
+              message:
+                'Import from @config/amplify (which configures Amplify first), and reach it through @services/auth so it stays out of the static bundle.',
+            },
+            {
+              allowTypeImports: true,
+              group: ['@config/amplify', '**/config/amplify'],
+              message:
+                'Reach Amplify through @services/auth, which loads it with a dynamic import. A static import here puts 78 KB gzip of Cognito client back into this page-s chunk, silently.',
+            },
+          ],
+        },
+      ],
     },
   },
 

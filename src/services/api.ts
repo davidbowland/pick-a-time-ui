@@ -1,4 +1,4 @@
-// Requests go through `fetch`, not Amplify's REST client (`aws-amplify/api`), on purpose.
+// Requests go through `fetch`, not Amplify's REST client, on purpose.
 //
 // 1. Amplify v6 retries every failed request up to three times -- on a network error, a 429, or a
 //    500/502/503/504 -- with no way to opt out per call. A gateway timeout on a request the server
@@ -11,10 +11,12 @@
 //    below. What remained was joining a base URL to a path -- at the cost of typing bodies as
 //    `DocumentType` (an `any` escape hatch) and casting every response.
 //
-// Amplify still owns auth (`aws-amplify/auth`): the Cognito session and the OAuth redirect flow.
-import { fetchAuthSession } from 'aws-amplify/auth'
-
-import { baseUrl } from '@config/amplify'
+// Amplify still owns auth -- the Cognito session and the OAuth redirect flow -- but this module
+// reaches it only through `@services/auth`, which hides it behind a dynamic import. Importing it
+// here would pull 78 KB gzip of Cognito client into the landing page's chunk, because `pages/index`
+// imports this module.
+import { baseUrl } from '@config/api'
+import { getIdToken } from '@services/auth'
 import {
   AvailabilityPatchRequest,
   AvailabilityRecord,
@@ -53,11 +55,11 @@ export class ApiError extends Error {
 
 async function authHeaders(): Promise<Record<string, string>> {
   try {
-    const session = await fetchAuthSession()
-    const token = session.tokens?.idToken?.toString()
+    const token = await getIdToken()
     if (token) return { Authorization: `Bearer ${token}` }
   } catch {
-    // Not signed in
+    // Not signed in, or the auth chunk could not be fetched. Either way, send the request
+    // unauthenticated and let the API answer.
   }
   return {}
 }
@@ -136,7 +138,7 @@ export const createUser = async (sessionId: string, authenticated: boolean): Pro
     if (err instanceof ApiError) {
       if (err.response.statusCode === 401) {
         try {
-          await fetchAuthSession({ forceRefresh: true })
+          await getIdToken({ forceRefresh: true })
         } catch {
           return apiSend('POST', `/sessions/${encodedId}/users`, false, {})
         }

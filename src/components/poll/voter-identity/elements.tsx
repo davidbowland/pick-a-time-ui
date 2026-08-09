@@ -7,13 +7,32 @@ import { FOCUS_RING } from '@components/ui/focus-ring'
 const ACTION_BUTTON_CLASS = `flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hair)] bg-[var(--bone)]/[0.05] text-[var(--slate)] hover:bg-[var(--bone)]/[0.1] disabled:opacity-40 ${FOCUS_RING}`
 
 export const EditNameButton = ({
+  disabled,
   onPress,
   ref,
 }: {
+  disabled?: boolean
   onPress: () => void
   ref?: React.Ref<HTMLButtonElement>
 }): React.ReactNode => (
-  <button aria-label="Edit name" className={ACTION_BUTTON_CLASS} onClick={onPress} ref={ref} type="button">
+  // A disabled control with no stated reason reads as broken, and this one is disabled longest for
+  // exactly the people it inconveniences most: a signed-in voter waits on the deferred Amplify
+  // chunk plus a Cognito round trip, while a signed-out one clears in a single frame.
+  //
+  // The title reaches hover only. A disabled button leaves the tab order, so it can never take
+  // focus, and most screen readers do not announce `title` in any case. Reaching keyboard and
+  // screen-reader users means aria-disabled plus a no-op handler and an aria-describedby target,
+  // keeping the control focusable -- worth doing if this wait ever grows, and not worth an
+  // inert-but-focusable button while it is one already-warm chunk fetch.
+  <button
+    aria-label="Edit name"
+    className={ACTION_BUTTON_CLASS}
+    disabled={disabled}
+    onClick={onPress}
+    ref={ref}
+    title={disabled ? 'Checking your sign-in…' : undefined}
+    type="button"
+  >
     <Pencil className="h-3.5 w-3.5" />
   </button>
 )
