@@ -5,9 +5,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AppProps } from 'next/app'
 import React, { useEffect, useState } from 'react'
 
+// Deliberately no `import '@config/amplify'` here. It was a static import from the app shell, which
+// put the whole Cognito client (78 KB gzip) in every page's graph including the landing page -- the
+// exact cost the lazy loader in @services/auth exists to avoid, and it would have survived every
+// runtime guard silently. Amplify.configure now runs via that dynamic import, and the OAuth listener
+// is registered by the callback page's own static import, which is the only route the ?code= can
+// land on.
 import '@assets/css/index.css'
 import { AuthProvider } from '@components/auth-context'
-import '@config/amplify'
 
 export default function App({ Component, pageProps }: AppProps) {
   const [queryClient] = useState(
