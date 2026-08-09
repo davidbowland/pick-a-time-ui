@@ -1,14 +1,17 @@
-import { Hub } from 'aws-amplify/utils'
 import Head from 'next/head'
-import { useRouter } from 'next/router'
 import React, { useEffect, useState } from 'react'
 
 import { Mark } from '@components/mark'
+// Static, not lazy: the OAuth listener this import registers must exist before Amplify sees the
+// ?code= in the URL. This page is the only route Cognito redirects to and is never a cold entry
+// point except mid-sign-in, so the cost lands only on people already waiting on a redirect. Every
+// other module reaches Amplify through the dynamic import in @services/auth.
+import { Hub } from '@config/amplify'
+import { markSessionStored } from '@services/auth'
 
 const TIMEOUT_MS = 15_000
 
 const AuthCallback = (): React.ReactNode => {
-  const router = useRouter()
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -24,15 +27,24 @@ const AuthCallback = (): React.ReactNode => {
     // Amplify automatically exchanges the authorization code in the URL for tokens.
     // We wait for the Hub 'signedIn' event to confirm the exchange is complete
     // before redirecting, so we don't navigate away and lose the code.
+    //
+    // A full-document navigation, not router.replace. AuthProvider lives in _app and does not
+    // remount across a client-side transition, so the useAuth instance that returned early on this
+    // page -- the session flag was false when it mounted, because this is the sign-in that sets it
+    // -- would stay mounted with user: null all the way to the destination, and the app bar would
+    // offer to sign in someone who just did.
     const redirect = () => {
       const returnTo = sessionStorage.getItem('pat_auth_return') ?? '/'
       sessionStorage.removeItem('pat_auth_return')
-      router.replace(returnTo)
+      window.location.assign(returnTo)
     }
 
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signedIn') {
         clearTimeout(timer)
+        // Set from the same event the navigation hangs off, so the flag is written before the
+        // destination's AuthProvider mounts and reads it.
+        markSessionStored()
         redirect()
       }
       if (payload.event === 'signInWithRedirect_failure') {
@@ -47,7 +59,7 @@ const AuthCallback = (): React.ReactNode => {
       unsubscribe()
       clearTimeout(timer)
     }
-  }, [router])
+  }, [])
 
   return (
     <>
