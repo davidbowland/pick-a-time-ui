@@ -64,13 +64,33 @@ describe('Poll', () => {
 
   beforeAll(() => {
     jest.mocked(useSessionCookie).mockReturnValue({ userId: undefined, setUserId: jest.fn(), clearUserId: jest.fn() })
-    // usePollOnboarding reads real window.localStorage (scoped by sessionId). Three of the tests
-    // below reach the identity phase using this poll's sessionId ("amber-harbor") and assert on
-    // the poll name via `findByText` — they don't exercise onboarding, so mark it "already
-    // dismissed" here to keep the first-visit intro overlay from duplicating that text. The two
-    // onboarding-specific tests further down use their own distinct sessionId, so they get an
-    // independent, always-fresh storage key and never touch this one.
-    window.localStorage.setItem('pat_onboarded_amber_harbor', 'true')
+    // usePollOnboarding reads real window.localStorage. Three of the tests below reach the identity
+    // phase using this poll's sessionId ("amber-harbor") and assert on the poll name via
+    // `findByText` — they don't exercise onboarding, so mark it "already dismissed" here to keep
+    // the first-visit intro overlay from duplicating that text. The two onboarding-specific tests
+    // further down use their own distinct sessionId and never touch this entry.
+    //
+    // ADR-4 moved that flag out of its own `pat_onboarded_{sessionId}` key and into the recents
+    // entry, so seeding the old key does nothing now. `expiration` is epoch SECONDS (see
+    // src/utils/dates.ts) — passing milliseconds here reads as a date in the year 55000 and would
+    // work by accident, which is worse than failing.
+    window.localStorage.setItem(
+      'pat_recent_polls',
+      JSON.stringify({
+        migrated: true,
+        polls: [
+          {
+            expiration: 1_800_000_000,
+            lastSeen: 1_700_000_000_000,
+            name: 'Dave',
+            pollName: 'Lunch with friends',
+            seenIntro: true,
+            sessionId: 'amber-harbor',
+            userId: 'u_seed',
+          },
+        ],
+      }),
+    )
     jest.mocked(detectViewerTimezone).mockReturnValue('America/Chicago')
     jest.mocked(fetchConfig).mockResolvedValue(config)
     jest.mocked(useAuthContext).mockReturnValue({
