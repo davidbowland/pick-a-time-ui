@@ -1,22 +1,67 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
-import Poll from './index'
+import Poll, { PollGoneState, isPollGone } from './index'
 import { useAuthContext } from '@components/auth-context'
+import { useInstallPrompt } from '@hooks/useInstallPrompt'
+import { RECENT_POLLS_KEY, RecentPoll } from '@hooks/useRecentPolls'
 import { useSessionCookie } from '@hooks/useSessionCookie'
-import { createUser, fetchAvailability, fetchConfig, fetchOverlap, fetchPoll, fetchUsers } from '@services/api'
+import {
+  createUser,
+  fetchAvailability,
+  fetchConfig,
+  fetchOverlap,
+  fetchPoll,
+  fetchUsers,
+  patchAvailability,
+} from '@services/api'
 import '@testing-library/jest-dom'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PollData, User } from '@types'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
+import { InstallCapability } from '@utils/install-capability'
 
 jest.mock('@services/api')
+jest.mock('@hooks/useInstallPrompt')
 jest.mock('@hooks/useSessionCookie')
 jest.mock('@utils/detectViewerTimezone')
 jest.mock('@components/auth-context')
 
 describe('Poll', () => {
+  // Every render below injects this clock, so nothing in this file compares stored expirations
+  // against the wall clock. It sits before the fixture poll's expiration and before the seeded
+  // entry's, which is what keeps both of them "live" on any day this suite runs.
+  const fixedNow = (): number => 1_700_000_000_000
+
+  // What the install hook reports for the render under way. Only the two install tests change it,
+  // and the teardown below puts it back — a leaked `ios-share` would put a banner into every later
+  // test in this file.
+  const installOffer = { capability: 'none' as InstallCapability }
+
+  /** An in-memory `Storage`, so a test can read exactly what the component wrote. */
+  function memoryStorage(seed: Record<string, string> = {}): Storage {
+    const data = new Map<string, string>(Object.entries(seed))
+    return {
+      clear: () => data.clear(),
+      getItem: (key: string) => data.get(key) ?? null,
+      key: (index: number) => [...data.keys()][index] ?? null,
+      get length() {
+        return data.size
+      },
+      removeItem: (key: string) => {
+        data.delete(key)
+      },
+      // A jest.fn so a test can count writes: "one entry" and "written once" are different claims,
+      // and only the second catches a record that fires again on every refetch.
+      setItem: jest.fn((key: string, value: string) => {
+        data.set(key, value)
+      }),
+    }
+  }
+
+  const storedPolls = (storage: Storage): RecentPoll[] =>
+    (JSON.parse(storage.getItem(RECENT_POLLS_KEY) ?? '{"polls":[]}') as { polls: RecentPoll[] }).polls
   const poll: PollData = {
     sessionId: 'amber-harbor',
     name: 'Lunch with friends',
@@ -91,6 +136,12 @@ describe('Poll', () => {
         ],
       }),
     )
+    jest.mocked(useInstallPrompt).mockImplementation(() => ({
+      capability: installOffer.capability,
+      dismiss: jest.fn(),
+      isDismissed: false,
+      prompt: jest.fn().mockResolvedValue(false),
+    }))
     jest.mocked(detectViewerTimezone).mockReturnValue('America/Chicago')
     jest.mocked(fetchConfig).mockResolvedValue(config)
     jest.mocked(useAuthContext).mockReturnValue({
@@ -102,6 +153,12 @@ describe('Poll', () => {
     })
   })
 
+  // Teardown, not arrangement: `clearMocks` clears calls but keeps implementations, so the offer
+  // set by an install test would otherwise persist into every test after it.
+  afterEach(() => {
+    installOffer.capability = 'none'
+  })
+
   function renderWithClient(ui: React.ReactElement) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
@@ -111,7 +168,7 @@ describe('Poll', () => {
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
     jest.mocked(fetchUsers).mockResolvedValueOnce([])
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
   })
@@ -138,7 +195,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
     const paintingTab = screen.getByRole('tab', { name: 'Your hours' })
@@ -183,7 +240,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
     expect(fetchPoll).toHaveBeenCalledTimes(1)
@@ -235,7 +292,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
@@ -258,7 +315,7 @@ describe('Poll', () => {
     )
     jest.mocked(fetchUsers).mockResolvedValueOnce([])
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByRole('status')).toBeInTheDocument()
 
@@ -272,7 +329,7 @@ describe('Poll', () => {
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
     jest.mocked(fetchUsers).mockResolvedValue([])
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t load this poll/i)
 
@@ -324,7 +381,7 @@ describe('Poll', () => {
       grid: { bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] }, cells: [] },
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
 
@@ -345,7 +402,7 @@ describe('Poll', () => {
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
     jest.mocked(fetchUsers).mockResolvedValueOnce([])
 
-    renderWithClient(<Poll sessionId="amber-harbor-onboarding-intro" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor-onboarding-intro" />)
 
     expect(await screen.findByText(/no account needed/i)).toBeInTheDocument()
 
@@ -375,7 +432,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor-onboarding-toggle" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor-onboarding-toggle" />)
 
     await screen.findByRole('tab', { name: 'Your hours' })
 
@@ -387,7 +444,7 @@ describe('Poll', () => {
     jest.mocked(fetchPoll).mockResolvedValueOnce(pollWithKnownExpiration)
     jest.mocked(fetchUsers).mockResolvedValueOnce([])
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Closes Aug 24, 2026 at 12:30 PM')).toBeInTheDocument()
   })
@@ -410,7 +467,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit name' })).toBeInTheDocument()
@@ -448,7 +505,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByRole('button', { name: "This isn't me" })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: "This isn't me" }))
@@ -493,7 +550,7 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     await userEvent.click(await screen.findByRole('tab', { name: 'The overlap' }))
     expect(screen.getByRole('tab', { name: 'The overlap' })).toHaveAttribute('aria-selected', 'true')
@@ -529,11 +586,244 @@ describe('Poll', () => {
       recommendedMeetings: [],
     })
 
-    renderWithClient(<Poll sessionId="amber-harbor" />)
+    renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByRole('button', { name: "This isn't me" })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: "This isn't me" }))
 
     expect(await screen.findByText('Who are you on this poll?')).toBeInTheDocument()
+  })
+
+  describe('recording the poll on entry', () => {
+    const activePhaseMocks = (): void => {
+      jest.mocked(fetchPoll).mockResolvedValue(poll)
+      jest.mocked(fetchUsers).mockResolvedValue([existingUser])
+      jest.mocked(fetchAvailability).mockResolvedValue({
+        userId: existingUser.userId,
+        free: [
+          [false, false],
+          [false, false],
+          [false, false],
+        ],
+        expiration: 1725453600,
+      })
+      jest.mocked(fetchOverlap).mockResolvedValue({
+        grid: { cells: [], bestSlot: { dateIndex: 0, slotIndex: 0, freeCount: 0, freeUserIds: [] } },
+        recommendedMeetings: [],
+      })
+    }
+
+    it('writes the entry as soon as identity resolves, without waiting for availability to be marked', async () => {
+      // ADR-4/AC-028. Somebody who opens a shared link and is pulled away before answering is
+      // exactly the person who loses the way back, so the trigger is identity, not participation.
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      const storage = memoryStorage()
+      activePhaseMocks()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" storage={storage} />)
+
+      await waitFor(() =>
+        expect(storedPolls(storage)).toEqual([
+          {
+            expiration: poll.expiration,
+            lastSeen: fixedNow(),
+            name: 'Quiet Falcon',
+            pollName: 'Lunch with friends',
+            seenIntro: false,
+            sessionId: 'amber-harbor',
+            userId: existingUser.userId,
+          },
+        ]),
+      )
+      expect(patchAvailability).not.toHaveBeenCalled()
+    })
+
+    it('stores the expiration in epoch seconds, as the server sends it', async () => {
+      // Milliseconds would read as a date in the year 55000 and prune nothing, ever, while looking
+      // like it worked. The year is the observable difference.
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      const storage = memoryStorage()
+      activePhaseMocks()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" storage={storage} />)
+
+      await waitFor(() => expect(storedPolls(storage)).toHaveLength(1))
+      expect(new Date(storedPolls(storage)[0].expiration * 1000).getUTCFullYear()).toBe(2024)
+    })
+
+    it('writes once, not again on every refetch', async () => {
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      const storage = memoryStorage()
+      activePhaseMocks()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" storage={storage} />)
+
+      await waitFor(() => expect(storedPolls(storage)).toHaveLength(1))
+      // Opening the overlap tab invalidates and refetches both the poll and the users.
+      await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
+      await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
+
+      expect(storage.setItem).toHaveBeenCalledTimes(1)
+    })
+
+    it('records nothing while identity is still unresolved', async () => {
+      window.history.replaceState(null, '', '/')
+      // Explicit, because earlier tests in this file install stateful `useSessionCookie`
+      // implementations and `clearMocks` clears calls, not implementations.
+      jest.mocked(useSessionCookie).mockReturnValue({ clearUserId: jest.fn(), setUserId: jest.fn(), userId: undefined })
+      const storage = memoryStorage()
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" storage={storage} />)
+
+      expect(await screen.findByText('Who are you on this poll?')).toBeInTheDocument()
+      expect(storage.setItem).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when the poll is gone', () => {
+    // A plain object rather than `new ApiError(...)`: this file automocks `@services/api`, whose
+    // mocked constructor never runs its body, so a real ApiError built here would carry no
+    // `response` at all. What the component reads is the status, and that is what this carries.
+    const notFound = Object.assign(new Error('Not found'), {
+      response: { body: '', headers: {}, statusCode: 404 },
+    })
+    const entry: RecentPoll = {
+      expiration: 1_800_000_000,
+      lastSeen: 1_699_000_000_000,
+      name: 'Dave',
+      pollName: 'Sprint retro',
+      seenIntro: true,
+      sessionId: 'dim-lantern',
+      userId: 'u_dave',
+    }
+
+    const seededStorage = (polls: RecentPoll[]): Storage =>
+      memoryStorage({ [RECENT_POLLS_KEY]: JSON.stringify({ migrated: true, polls }) })
+
+    const renderGone = (storage: Storage) => {
+      window.history.replaceState(null, '', '/')
+      jest.mocked(fetchPoll).mockRejectedValue(notFound)
+      jest.mocked(fetchUsers).mockRejectedValue(notFound)
+      return renderWithClient(<Poll now={fixedNow} sessionId="dim-lantern" storage={storage} />)
+    }
+
+    it('names the poll, says it is gone, and offers both ways on', async () => {
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent("Sprint retro isn't there anymore")
+      expect(screen.getByText("The poll closed or was deleted, so it's no longer in your polls.")).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Go to your polls' })).toHaveAttribute('href', '/')
+      expect(screen.getByRole('link', { name: 'Start a poll' })).toHaveAttribute('href', '/')
+    })
+
+    it('removes the dead entry from the store rather than merely hiding it', async () => {
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      await screen.findByRole('heading', { level: 1 })
+      await waitFor(() => expect(storedPolls(storage)).toEqual([]))
+    })
+
+    it('announces the removal', async () => {
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      await waitFor(() =>
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Sprint retro is no longer available and has been removed from your polls.',
+        ),
+      )
+    })
+
+    it('keeps naming the poll after its entry is destroyed', async () => {
+      // The name comes from the entry the state itself deletes, so a heading derived on every
+      // render would blank a beat after it appeared.
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      await waitFor(() => expect(storedPolls(storage)).toEqual([]))
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("Sprint retro isn't there anymore")
+    })
+
+    it('still explains itself on a dead link this device never recorded', async () => {
+      const storage = seededStorage([])
+
+      renderGone(storage)
+
+      expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent("This poll isn't there anymore")
+    })
+
+    it('falls back to the retryable error state when the failure is not a 404', async () => {
+      window.history.replaceState(null, '', '/')
+      const storage = seededStorage([entry])
+      jest.mocked(fetchPoll).mockRejectedValue(new Error('network error'))
+      jest.mocked(fetchUsers).mockRejectedValue(new Error('network error'))
+
+      renderWithClient(<Poll now={fixedNow} sessionId="dim-lantern" storage={storage} />)
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t load this poll/i)
+      // A poll that could not be reached is not a poll that is gone: the entry survives.
+      expect(storedPolls(storage)).toHaveLength(1)
+    })
+  })
+
+  describe('PollGoneState', () => {
+    it('renders its live region before the announcement has any text', () => {
+      // A region that enters the DOM already populated is routinely announced by nothing at all,
+      // so the element exists first and gains its text on a later render.
+      render(<PollGoneState announcement="" pollName="Sprint retro" />)
+
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+  })
+
+  describe('isPollGone', () => {
+    it('is true for a 404', () => {
+      expect(isPollGone({ response: { statusCode: 404 } })).toBe(true)
+    })
+
+    it('is false for any other status', () => {
+      expect(isPollGone({ response: { statusCode: 500 } })).toBe(false)
+    })
+
+    it('is false for an error carrying no response', () => {
+      expect(isPollGone(new Error('network error'))).toBe(false)
+    })
+
+    it('is false when there is no error at all', () => {
+      expect(isPollGone(null)).toBe(false)
+    })
+  })
+
+  describe('install offer', () => {
+    it('offers installation one heading level below the poll title', async () => {
+      installOffer.capability = 'ios-share'
+      window.history.replaceState(null, '', '/')
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      expect(await screen.findByRole('heading', { level: 2, name: 'Install Pick a Time' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Lunch with friends')
+    })
+
+    it('offers nothing where the browser cannot install anything', async () => {
+      window.history.replaceState(null, '', '/')
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      await screen.findByRole('heading', { level: 1 })
+      expect(screen.queryByRole('heading', { name: 'Install Pick a Time' })).not.toBeInTheDocument()
+    })
   })
 })
