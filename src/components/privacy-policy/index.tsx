@@ -16,93 +16,50 @@ const PrivacyPolicy = (): React.ReactNode => {
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Legal</p>
         <h1 className="text-4xl font-bold text-[var(--bone)]">Privacy Policy</h1>
         <p className="text-[var(--bone)]">
-          This policy explains what pick-a-time.com does with your data. Short version: we collect little, we delete it
-          on the schedule below, and we never sell it.
+          Pick a Time runs on your name and the hours you say you&apos;re free. We never sell any of it. Amazon Web
+          Services runs our servers and our Google sign-in; past that we hand nothing over unless a court orders it.
         </p>
       </div>
 
-      <Section title="What We Collect">
+      <Section title="Who Can See Your Hours">
         <p>
-          When your browser calls our API, the request is logged: your IP address, the time, the address requested, and
-          your browser&apos;s user-agent string. We keep those logs to see what breaks. We don&apos;t record which pages
-          you view — the website itself keeps no access log.
+          Anyone with a poll&apos;s link or QR code can read every participant&apos;s name and free hours, yours
+          included, without joining. A poll is guarded by its link and nothing else, so share the link the way
+          you&apos;d share what&apos;s on it.
         </p>
         <p>
-          When you join a poll, we set a small cookie in your browser that remembers which participant you are on that
-          poll. It only works for that one poll, and it lasts 14 days — the same time the poll itself stays alive.
-        </p>
-        <p>
-          Your browser also holds two things of its own: a note of whether you&apos;ve seen the introduction, and — if
-          you start connecting a calendar — the poll you were on, so we can return you there afterwards. The first stays
-          until you clear your browser data; the second disappears when you close the tab.
-        </p>
-        <p>
-          If you sign in with Google, we store your name, your email address, and the Google account identifier that
-          links you across devices, so we can recognize you the next time you sign in.
-        </p>
-        <p>
-          If you connect Google Calendar, we ask Google only for your busy and free times. That permission makes it
-          impossible for us to see event titles, guests, or locations. We store an encrypted token so we can check again
-          without asking you every time, and we cache the busy time ranges themselves.
-        </p>
-        <p>
-          When you create a poll, we run Google&apos;s reCAPTCHA to check that you&apos;re not a bot. Google receives
-          the signals it needs to make that judgment and handles them under its own privacy policy, which permits it to
-          use them to improve reCAPTCHA and general security.
+          They never see your email address. Hours your calendar blocks off look exactly like hours you crossed out by
+          hand — nobody on the poll can tell which is which.
         </p>
       </Section>
 
-      <Section title="Why We Collect It">
+      <Section title="What We Store">
         <p>
-          We keep server logs to run a secure, working website. We don&apos;t collect any of this to advertise to you or
-          to build a profile of you, and we don&apos;t ask for your consent to skip that — we simply don&apos;t do it.
+          Join a poll and we store the name you type and the hours you mark. Sign in with Google, which is optional, and
+          we also store your name, your email address, and Google&apos;s identifier for your account.
+        </p>
+        <p>
+          Our server logs each request for 30 days, including your IP address. We never use those logs to work out who
+          you are.
+        </p>
+        <p>
+          Joining sets a cookie that remembers which participant you are on that one poll. Nothing we keep in your
+          browser follows you to other sites.
         </p>
       </Section>
 
-      <Section title="What We Don't Do">
+      <Section title="Google">
         <p>
-          We don&apos;t sell your data. We don&apos;t share it with advertisers. We don&apos;t build profiles of you. We
-          don&apos;t use anything we collect for marketing.
-        </p>
-      </Section>
-
-      <Section title="Who Can See Your Data">
-        <p>
-          Everybody else on a poll can see your name and the hours you&apos;ve marked as free — that&apos;s how the tool
-          works. Anybody who has the poll&apos;s link or QR code can open it and join, since a poll isn&apos;t locked to
-          specific people, only to that link.
+          Connecting your calendar lets us ask Google one question: when are you busy? The permission we request
+          can&apos;t return event titles, guests, or locations, so we never see them. We keep the answer and an
+          encrypted key that lets us ask again.
         </p>
         <p>
-          If you connect your calendar, the hours it marks busy look exactly like the hours you marked by hand. Other
-          people on the poll see which hours you&apos;re free and can&apos;t tell which of them came from your calendar.
+          While you&apos;re signed out, the create form runs Google&apos;s reCAPTCHA to keep bots from filling the site
+          with junk polls, and Google may use what it observes to improve reCAPTCHA. Sign in first and reCAPTCHA never
+          runs.
         </p>
-      </Section>
-
-      <Section title="When We Share Your Data">
-        <p>
-          Signing in with Google sends a small piece of data to Google, which verifies who you are as its own
-          independent service. Google&apos;s privacy policy governs what Google does with that data.
-        </p>
-        <p>
-          Checking your calendar sends Google the dates we&apos;re asking about and the token you gave us when you
-          connected. Nothing about the poll or the other people on it goes to Google.
-        </p>
-        <p>
-          Creating a poll sends data to Google&apos;s reCAPTCHA to screen out bots. Google handles those signals under
-          its own privacy policy, which permits it to use them to improve reCAPTCHA and general security.
-        </p>
-        <p>
-          Amazon Web Services hosts the site and stores everything described here, and Amazon Cognito manages Google
-          sign-in. Log lines recording an error are copied to a separate error-reporting function we run in the same AWS
-          account. We share data beyond this only when the law requires it — for example, a valid court order.
-        </p>
-      </Section>
-
-      <Section title="Google User Data">
-        <p>
-          Everything we receive from Google does only the two jobs described above: it recognizes you when you sign in,
-          and it marks you busy where your calendar says you&apos;re booked. Nothing else, and nobody else.
-        </p>
+        <p>What we get from Google signs you in and marks you busy. Nothing else, and nobody else.</p>
         {/*
           Google's OAuth reviewers look for this sentence close to verbatim -- it is the affirmative Limited Use
           statement their policy requires, not our own phrasing. Rewriting it to match the plainer voice of the rest of
@@ -120,77 +77,44 @@ const PrivacyPolicy = (): React.ReactNode => {
           , including the Limited Use requirements.
         </p>
         <p>
-          Disconnect your calendar anytime from the menu by your name. You can also revoke our access from your{' '}
+          Disconnect your calendar whenever you like, from the menu under your name, or revoke our access from your{' '}
           <Link
             className="text-[var(--accent)] underline hover:text-[var(--accent-soft)]"
             href="https://myaccount.google.com/permissions"
           >
             Google account permissions page
           </Link>
-          , which cuts us off at Google&apos;s end whether or not you disconnect here.
+          .
         </p>
+      </Section>
+
+      <Section title="How Long We Keep It">
+        <p>
+          A poll and everything in it disappears 14 days after the poll is created, whether or not the group ever picked
+          a time.
+        </p>
+        <p>
+          Your calendar connection outlives the poll. We keep it, and the busy times we&apos;ve saved, for 90 days after
+          the last time we checked, and every check restarts that clock. Disconnect and both go immediately — though
+          hours we already marked busy stay busy, and you can mark yourself free again at any time.
+        </p>
+        <p>If you signed in with Google, the record that lets us recognize you stays until you ask us to delete it.</p>
       </Section>
 
       <Section title="Your Rights">
         <p>
-          Depending on where you live, you may have legal rights over your personal data — such as the right to access,
-          correct, or delete it. To exercise any such rights, contact us at{' '}
+          Email{' '}
           <Link
             className="text-[var(--accent)] underline hover:text-[var(--accent-soft)]"
             href="mailto:privacy@dbowland.com"
           >
             privacy@dbowland.com
-          </Link>
-          .
-        </p>
-      </Section>
-
-      <Section title="Data Retention">
-        <p>We keep server logs for 30 days, then delete them.</p>
-        <p>
-          We delete everything tied to a poll — its schedule, its participants, their names, and everybody&apos;s marked
-          availability — 14 days after the poll is created, with one exception noted below. This happens automatically,
-          whether or not everybody has finished entering their availability, and no matter how far out the poll&apos;s
-          dates are.
+          </Link>{' '}
+          to see, correct, or delete your data, or to ask anything else about this page.
         </p>
         <p>
-          Calendar data is the exception to that 14-day rule. It&apos;s tied to your Google account rather than to any
-          one poll, so it outlives the poll: we keep it for 90 days after the last time we checked your calendar, and
-          that clock restarts every time we check. The busy times we cache cover the combined date range of every poll
-          you&apos;re in, not just one.
-        </p>
-        <p>
-          Disconnect your calendar and we delete the token and the cached busy times right away. The hours we already
-          marked busy stay busy on your polls — they&apos;re part of your availability now, and you can mark yourself
-          free again at any time.
-        </p>
-        <p>
-          If you sign in with Google, we keep the record that lets us recognize you until you ask us to delete it —
-          that&apos;s separate from any individual poll and doesn&apos;t expire with it.
-        </p>
-      </Section>
-
-      <Section title="Age">
-        <p>This site is meant for people 13 and older.</p>
-      </Section>
-
-      <Section title="Changes">
-        <p>
-          If we change how we handle data in a meaningful way, we&apos;ll update this page. The date at the bottom
-          reflects the last revision.
-        </p>
-      </Section>
-
-      <Section title="Contact">
-        <p>
-          Questions about this policy? Email{' '}
-          <Link
-            className="text-[var(--accent)] underline hover:text-[var(--accent-soft)]"
-            href="mailto:privacy@dbowland.com"
-          >
-            privacy@dbowland.com
-          </Link>
-          .
+          Pick a Time is meant for people 13 and older. If we change how we handle your data, we&apos;ll change this
+          page and the date below.
         </p>
       </Section>
 
@@ -199,7 +123,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
           Back to Pick a Time
         </Link>
-        <span>Effective August 1, 2026</span>
+        <span>Effective August 10, 2026</span>
       </div>
     </div>
   )
