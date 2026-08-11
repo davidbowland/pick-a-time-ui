@@ -42,9 +42,21 @@ const PrivacyPolicy = (): React.ReactNode => {
           Our server logs each request for 30 days, including your IP address. We never use those logs to work out who
           you are.
         </p>
+      </Section>
+
+      <Section title="What Stays on Your Device">
         <p>
-          Joining sets a cookie that remembers which participant you are on that one poll. Nothing we keep in your
-          browser follows you to other sites.
+          Your browser holds which participant you are on each poll, the polls you&apos;ve opened here, a couple of your
+          choices, and one page to show when your connection drops. None of it reaches us or anyone else on your polls,
+          and none of it follows you to other sites.
+        </p>
+        <p>
+          That list holds each poll&apos;s link, and a link is all it takes to read a poll — so anyone using this
+          browser can open the polls you&apos;ve joined. Remove one, or clear the whole list, from the home page.
+        </p>
+        <p>
+          Clearing the list only empties this device. The polls stay open, and anyone still holding a link can still
+          read them.
         </p>
       </Section>
 
@@ -123,7 +135,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
           Back to Pick a Time
         </Link>
-        <span>Effective August 10, 2026</span>
+        <span>Last updated August 11, 2026</span>
       </div>
     </div>
   )
