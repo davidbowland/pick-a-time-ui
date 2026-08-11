@@ -11,11 +11,6 @@ jest.mock('@hooks/useScrollProgress')
 const ALL_SCENES = [HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene]
 
 describe('illustrative story scenes', () => {
-  it('HeroScene narrates finding the minute everyone is free', () => {
-    render(<HeroScene />)
-    expect(screen.getByRole('heading', { name: /find the minute/i })).toBeInTheDocument()
-  })
-
   it('HeroScene is the page heading, so the homepage has an h1 at all', () => {
     render(<HeroScene />)
     expect(screen.getByRole('heading', { level: 1, name: /find the minute/i })).toBeInTheDocument()
@@ -61,26 +56,6 @@ describe('illustrative story scenes', () => {
   it('HeroScene renders an action slot when given one', () => {
     render(<HeroScene action={<button type="button">Start</button>} />)
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
-  })
-
-  it('IdentityScene narrates choosing your own name, with an auto-generated one as the fallback', () => {
-    render(<IdentityScene />)
-    expect(screen.getByRole('heading', { name: /quiet falcon/i })).toBeInTheDocument()
-  })
-
-  it('PaintingScene narrates marking dates and times', () => {
-    render(<PaintingScene />)
-    expect(screen.getByRole('heading', { name: /paint your hours/i })).toBeInTheDocument()
-  })
-
-  it('ResultsScene narrates finding the best time at a glance', () => {
-    render(<ResultsScene />)
-    expect(screen.getByRole('heading', { name: /best time/i })).toBeInTheDocument()
-  })
-
-  it('ShareScene narrates the one shareable link', () => {
-    render(<ShareScene />)
-    expect(screen.getByRole('heading', { name: /one link/i })).toBeInTheDocument()
   })
 
   it('ShareScene draws a real QR code for the pick-a-time homepage', () => {

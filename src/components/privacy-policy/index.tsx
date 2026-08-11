@@ -42,34 +42,9 @@ const PrivacyPolicy = (): React.ReactNode => {
           Our server logs each request for 30 days, including your IP address. We never use those logs to work out who
           you are.
         </p>
-      </Section>
-
-      <Section title="What Stays on Your Device">
-        <p>Joining sets a cookie that remembers which participant you are on that one poll.</p>
         <p>
-          The home page lists the polls you&apos;ve opened on this device, and that list lives in your browser. Each
-          entry holds the poll&apos;s link, which participant you are on it, the name you typed there, the poll&apos;s
-          name, when you last opened it, when it closes, and whether you dismissed its introduction. An entry drops off
-          the list when its poll closes, and you can remove one, or clear the whole list, whenever you like.
-        </p>
-        <p>
-          Clearing the list only empties this device. The polls themselves stay open, and anyone still holding a link
-          can still read them.
-        </p>
-        <p>
-          The offline page remembers, for the length of a tab, that you pressed Try again, so it can tell you the
-          connection is still down instead of repainting an identical screen. Your browser also remembers two choices:
-          whether you kept the tour of how a poll works open on the home page, and whether you dismissed the offer to
-          install Pick a Time.
-        </p>
-        <p>
-          Pick a Time keeps one page ready for when your connection drops. That offline cache holds nothing else: no
-          poll, and nothing our servers send you.
-        </p>
-        <p>
-          Those two choices and the offline page stay until you clear this site&apos;s data. None of this leaves your
-          device. We never see it, nobody else on your polls sees it, and nothing we keep in your browser follows you to
-          other sites.
+          Joining sets a cookie that remembers which participant you are on that one poll. Nothing we keep in your
+          browser follows you to other sites.
         </p>
       </Section>
 

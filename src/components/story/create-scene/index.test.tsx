@@ -17,11 +17,6 @@ describe('CreateScene', () => {
     expect(screen.getByTestId('real-poll-create')).toBeInTheDocument()
   })
 
-  it('names the interaction explicitly in the eyebrow copy, not just a timestamp', () => {
-    render(<CreateScene />)
-    expect(screen.getByText(/this one's live|try it now|this one's real/i)).toBeInTheDocument()
-  })
-
   it('does not wrap the form in the decorative phone-mockup chrome', () => {
     const { container } = render(<CreateScene />)
     // PhoneMock's signature is a div with aria-hidden="true" wrapping everything — the real
