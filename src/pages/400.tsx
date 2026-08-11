@@ -3,6 +3,7 @@ import Link from 'next/link'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
+import { FOCUS_RING } from '@components/ui/focus-ring'
 
 const BadRequest = (): React.ReactNode => {
   return (
@@ -15,7 +16,7 @@ const BadRequest = (): React.ReactNode => {
       <div className="mx-auto mt-8 max-w-md px-4 text-center">
         <h1 className="mb-4 text-xl font-semibold">Something went wrong</h1>
         <p className="mb-4 text-default-500">We couldn&apos;t process that. Try going back and starting over.</p>
-        <Link className="text-primary underline" href="/">
+        <Link className={`rounded-sm text-primary underline ${FOCUS_RING}`} href="/">
           Go home
         </Link>
       </div>

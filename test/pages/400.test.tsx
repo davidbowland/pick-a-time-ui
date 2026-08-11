@@ -4,6 +4,7 @@ import AppBar from '@components/app-bar'
 import BadRequest from '@pages/400'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 jest.mock('@components/app-bar')
 
@@ -30,6 +31,14 @@ describe('400 error page', () => {
   it('should render a link to home', () => {
     render(<BadRequest />)
     expect(screen.getByRole('link', { name: /go home/i })).toHaveAttribute('href', '/')
+  })
+
+  it('should put the home link in the keyboard tab order', async () => {
+    render(<BadRequest />)
+
+    await userEvent.tab()
+
+    expect(screen.getByRole('link', { name: /go home/i })).toHaveFocus()
   })
 
   it('should exclude the page from search indexes', () => {

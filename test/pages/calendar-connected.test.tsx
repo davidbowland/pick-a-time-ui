@@ -101,6 +101,22 @@ describe('calendar-connected page', () => {
     expect(replace).toHaveBeenCalledWith('/')
   })
 
+  it('should offer a way back even when the connection failed', () => {
+    jest.mocked(useRouter).mockReturnValueOnce({ isReady: true, query: { status: 'error' }, replace } as never)
+
+    render(<CalendarConnected />)
+
+    expect(screen.getByRole('button', { name: /continue to poll/i })).toBeInTheDocument()
+  })
+
+  it('should put the return control in the keyboard tab order', async () => {
+    render(<CalendarConnected />)
+
+    await userEvent.tab()
+
+    expect(screen.getByRole('button', { name: /continue to poll/i })).toHaveFocus()
+  })
+
   it('should exclude the page from search indexes', () => {
     render(<CalendarConnected />)
 
