@@ -58,11 +58,17 @@ self.addEventListener('activate', (event) => {
       await deleteAllCaches()
 
       // Deliberately NO self.clients.claim(). Claiming fires `controllerchange` in every open page,
-      // and src/hooks/useServiceWorker.ts reloads on that event — the reload re-registers, this
-      // worker claims again, and the page loops forever without the person ever seeing a working
-      // site. Skipping the claim costs nothing here: this worker handles no fetches, so a tab still
-      // controlled by the old worker is already going to the network for everything now that the
-      // caches are gone, and the next navigation is uncontrolled anyway.
+      // and src/hooks/useServiceWorker.ts reloads on that event.
+      //
+      // That reload does NOT loop, and it is worth being exact about why rather than leaving a
+      // scarier reason in place: the hook captures `serviceWorker.controller` BEFORE it calls
+      // register(), and the load after an unregister starts uncontrolled, so it declines to reload.
+      // An earlier version of this comment claimed the page would loop forever. It would not.
+      //
+      // Skipping the claim is still right, for a smaller reason: this worker handles no fetches, so
+      // a tab still controlled by the old worker is already going to the network for everything now
+      // that the caches are gone, and the next navigation is uncontrolled anyway. Claiming would buy
+      // one reload and nothing else.
       await self.registration.unregister()
     })(),
   )
