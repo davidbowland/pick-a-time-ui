@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 // One root-scoped key (ADR-3). It cannot be derived from anything already on the device:
 // `pat_user_{sessionId}` is path-scoped to `/p/{sessionId}` (src/hooks/useSessionCookie.ts:8-10)
@@ -176,12 +176,29 @@ export const writeSeenIntro = (
   )
 }
 
+const EMPTY_INITIAL = { polls: [] as RecentPoll[], prunedCount: 0, prunedPolls: [] as RecentPoll[] }
+
 export function useRecentPolls(
   storage: Storage | undefined = defaultStorage(),
   now: () => number = Date.now,
 ): RecentPolls {
-  const [initial] = useState(() => initialRead(storage, now))
-  const [polls, setPolls] = useState<RecentPoll[]>(initial.polls)
+  // Read AFTER mount, not in a lazy initialiser. This is a static export: the shipped HTML is
+  // generated with no localStorage, so a lazy read makes a returning visitor's hydrating render
+  // differ from the markup it is hydrating, React throws that render away, and the flash comes back
+  // INSIDE the list -- the one the pre-paint script removes from AROUND it. The outer composition is
+  // already settled before paint, so what fills in here is rows within a container whose presence
+  // never flickers.
+  const [initial, setInitial] = useState<ReturnType<typeof initialRead>>(EMPTY_INITIAL)
+  const [polls, setPolls] = useState<RecentPoll[]>([])
+
+  useEffect(() => {
+    const read = initialRead(storage, now)
+    setInitial(read)
+    setPolls(read.polls)
+    // Deliberately mount-only, and the empty dep list is the point rather than an oversight:
+    // re-reading on a changed `now` or `storage` would clobber whatever the visitor has since
+    // removed or restored. Every later mutation goes through updatePolls instead.
+  }, [])
 
   const record = useCallback(
     (poll: RecentPollInput): void => {
