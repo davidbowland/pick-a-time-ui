@@ -147,6 +147,25 @@ html.dark {
   --color-warning: var(--accent);
   --warning-foreground: var(--ink);
   --color-warning-foreground: var(--ink);
+
+  /* Error states. The real consumer is `.field-error` (field-error.css, imported above), which
+     paints with --danger directly and reaches the app at poll-create/elements.tsx — without a
+     value here it fell back to HeroUI's stock red #db3b3e, measured at 4.010:1 on --ink, an actual
+     AA failure rather than merely an unverified colour.
+     Note what this does NOT cover, because it is easy to assume otherwise: the four components
+     rendering `AlertRoot status="danger"` never touch --danger. HeroUI paints .alert__description
+     with --muted and only colours a title/indicator neither of them renders, so their text is
+     #9f9fa9 and was already passing. Their status is carried by role="alert" alone — a danger
+     alert is visually identical to any other, which is its own defect and not this token's.
+     #eb7a6d is
+     chosen for contrast PARITY with --accent: 6.42:1 on --ink against the accent's 6.50:1, so an
+     error reads with the same weight as primary text instead of shouting or whispering. It is a
+     warm coral rather than a pure red so it sits with the emerald and gold already in the
+     palette. */
+  --danger: #eb7a6d;
+  --color-danger: var(--danger);
+  --danger-foreground: var(--ink);
+  --color-danger-foreground: var(--ink);
 }
 
 /* Hide reCAPTCHA's floating badge and any of its related elements — branding text is shown
