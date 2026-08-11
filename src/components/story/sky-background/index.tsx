@@ -28,10 +28,22 @@ function eyebrowAccentFor(chipHex: string): string {
   return pickAccessibleTextColor(chipHex, { onLight: '#1f6b52', onDark: ACCENT_HEX })
 }
 
-export const SkyBackground = (): React.ReactNode => {
+// First half of the page: night -> day. Second half: day -> night.
+function daynessFor(progress: number): number {
+  return progress < 0.5 ? progress / 0.5 : 1 - (progress - 0.5) / 0.5
+}
+
+export const SkyBackground = ({
+  // The arc only reads as an arc when there are six scenes of scrolling to spread it over. A page
+  // that doesn't scroll the story past the viewport would instead flicker the whole palette —
+  // background, `--copy-color`, `--eyebrow-accent` — on a few hundred pixels of movement. `pinned`
+  // holds the sky at night, where the story already starts, so those tokens stay put.
+  pinned = false,
+}: {
+  pinned?: boolean
+}): React.ReactNode => {
   const progress = useScrollProgress()
-  // First half of the page: night -> day. Second half: day -> night.
-  const dayness = progress < 0.5 ? progress / 0.5 : 1 - (progress - 0.5) / 0.5
+  const dayness = pinned ? 0 : daynessFor(progress)
   const backgroundHex = mixHex(NIGHT, DAY, dayness)
   const copyColor = pickAccessibleTextColor(backgroundHex)
   const eyebrowAccent = eyebrowAccentFor(copyColor)

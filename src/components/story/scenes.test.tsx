@@ -1,8 +1,14 @@
 import React from 'react'
 
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from './scenes'
+import { SkyBackground } from './sky-background'
+import { useScrollProgress } from '@hooks/useScrollProgress'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
+
+jest.mock('@hooks/useScrollProgress')
+
+const ALL_SCENES = [HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene]
 
 describe('illustrative story scenes', () => {
   it('HeroScene narrates finding the minute everyone is free', () => {
@@ -19,6 +25,35 @@ describe('illustrative story scenes', () => {
     for (const Scene of [IdentityScene, PaintingScene, ResultsScene, ShareScene]) {
       const { unmount } = render(<Scene />)
       expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('drops every scene to an h3 when asked, for a story that hangs off another surface heading', () => {
+    for (const Scene of ALL_SCENES) {
+      const { unmount } = render(<Scene headingLevel="h3" />)
+      expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('renders any scene at an explicitly requested h2', () => {
+    for (const Scene of ALL_SCENES) {
+      const { unmount } = render(<Scene headingLevel="h2" />)
+      expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('renders a scene at an explicitly requested h1', () => {
+    render(<IdentityScene headingLevel="h1" />)
+    expect(screen.getByRole('heading', { level: 1, name: /quiet falcon/i })).toBeInTheDocument()
+  })
+
+  it('keeps the heading text the same whatever level it is rendered at', () => {
+    for (const headingLevel of ['h1', 'h2', 'h3'] as const) {
+      const { unmount } = render(<PaintingScene headingLevel={headingLevel} />)
+      expect(screen.getByRole('heading', { name: /paint your hours/i })).toBeInTheDocument()
       unmount()
     }
   })
@@ -54,7 +89,7 @@ describe('illustrative story scenes', () => {
   })
 
   it('none of the illustrative phone mockups expose fake interactive controls to assistive tech', () => {
-    for (const Scene of [HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene]) {
+    for (const Scene of ALL_SCENES) {
       const { container, unmount } = render(<Scene />)
       const mock = container.querySelector('[aria-hidden="true"]')
       expect(mock).toBeInTheDocument()
@@ -87,5 +122,35 @@ describe('illustrative story scenes', () => {
       expect(copyWrapper).not.toHaveClass('md:order-last')
       unmount()
     }
+  })
+})
+
+// Lives here rather than in sky-background/index.test.tsx because `pinned` arrived with the scene
+// heading levels, in the same change, for the same composition — a page that shows the story
+// collapsed instead of scrolling it. Move it next to its siblings when that file is next touched.
+describe('SkyBackground pinned to night', () => {
+  beforeAll(() => {
+    // The day midpoint: the one scroll position where pinned and unpinned cannot agree.
+    jest.mocked(useScrollProgress).mockReturnValue(0.5)
+  })
+
+  it('publishes the day copy-color at the midpoint when it is free to follow the scroll', () => {
+    render(<SkyBackground />)
+    expect(document.documentElement.style.getPropertyValue('--copy-color')).toBe('#17171a')
+  })
+
+  it('publishes the night copy-color at that same scroll position when pinned', () => {
+    render(<SkyBackground pinned />)
+    expect(document.documentElement.style.getPropertyValue('--copy-color')).toBe('#f2f1ee')
+  })
+
+  it('follows the scroll again when pinned is passed explicitly false', () => {
+    render(<SkyBackground pinned={false} />)
+    expect(document.documentElement.style.getPropertyValue('--copy-color')).toBe('#17171a')
+  })
+
+  it('stays hidden from assistive tech when pinned', () => {
+    const { container } = render(<SkyBackground pinned />)
+    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true')
   })
 })
