@@ -112,6 +112,72 @@ describe('privacy-policy component', () => {
     )
   })
 
+  it('should say the identity cookie is scoped to the one poll you joined', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/which participant you are on that one poll/i)).toBeInTheDocument()
+  })
+
+  it('should say the list of polls lives in the browser and name what an entry holds', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/that list lives in your browser/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /the poll's link, which participant you are on it, the name you typed there, the poll's name, when you last opened it, when it closes, and whether you dismissed its introduction/i,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('should say an entry disappears when its poll closes and can be removed by hand', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/An entry drops off the list when its poll closes/i)).toBeInTheDocument()
+    expect(screen.getByText(/remove one, or clear the whole list, whenever you like/i)).toBeInTheDocument()
+  })
+
+  it('should say clearing the list does not close the polls or revoke a link', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/Clearing the list only empties this device/i)).toBeInTheDocument()
+    expect(screen.getByText(/anyone still holding a link can still read them/i)).toBeInTheDocument()
+  })
+
+  it('should disclose the two remembered choices the browser keeps', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/whether you kept the tour of how a poll works open on the home page/i)).toBeInTheDocument()
+    expect(screen.getByText(/whether you dismissed the offer to install Pick a Time/i)).toBeInTheDocument()
+  })
+
+  it('should name the offline cache and say it holds nothing but the offline page', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/That offline cache holds nothing else/i)).toBeInTheDocument()
+    expect(screen.getByText(/no poll, and nothing our servers send you/i)).toBeInTheDocument()
+  })
+
+  it('should say the choices and the offline page last until you clear site data', () => {
+    render(<PrivacyPolicy />)
+
+    expect(
+      screen.getByText(/Those two choices and the offline page stay until you clear this site's data/i),
+    ).toBeInTheDocument()
+  })
+
+  it('should say nothing kept on the device is sent to us or to other participants', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/None of this leaves your device/i)).toBeInTheDocument()
+    expect(screen.getByText(/nobody else on your polls sees it/i)).toBeInTheDocument()
+  })
+
+  it('should not describe the onboarding keys this run removed', () => {
+    const { container } = render(<PrivacyPolicy />)
+
+    expect(container.textContent).not.toMatch(/pat_onboarded/i)
+  })
+
   it('should carry the August 2026 effective date', () => {
     render(<PrivacyPolicy />)
 
