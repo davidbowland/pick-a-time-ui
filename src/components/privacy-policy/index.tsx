@@ -123,7 +123,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
           Back to Pick a Time
         </Link>
-        <span>Effective August 1, 2026</span>
+        <span>Effective August 10, 2026</span>
       </div>
     </div>
   )

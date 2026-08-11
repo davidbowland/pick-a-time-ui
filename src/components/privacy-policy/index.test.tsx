@@ -115,6 +115,6 @@ describe('privacy-policy component', () => {
   it('should carry the August 2026 effective date', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText('Effective August 1, 2026')).toBeInTheDocument()
+    expect(screen.getByText('Effective August 10, 2026')).toBeInTheDocument()
   })
 })
