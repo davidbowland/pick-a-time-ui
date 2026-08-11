@@ -9,6 +9,16 @@ function readCssVar(css: string, name: string): string {
   return match[1].trim()
 }
 
+const VAR_REFERENCE = /^var\(\s*--([\w-]+)\s*\)$/
+
+// Tokens that alias another token (--danger-foreground: var(--ink)) have to be followed to a
+// literal colour before any contrast maths can run on them.
+function resolveCssVar(css: string, name: string): string {
+  const raw = readCssVar(css, name)
+  const reference = VAR_REFERENCE.exec(raw)
+  return reference ? resolveCssVar(css, reference[1]) : raw
+}
+
 describe('design tokens in index.css', () => {
   const css = readFileSync(join(process.cwd(), 'src/assets/css/index.css'), 'utf-8')
 
@@ -55,6 +65,34 @@ describe('design tokens in index.css', () => {
     ['heat-4', '#b4e4d3'],
   ])('defines --%s as the audited value %s', (name, value) => {
     expect(readCssVar(css, name)).toBe(value)
+  })
+
+  it('defines --danger as the audited value #eb7a6d', () => {
+    expect(readCssVar(css, 'danger')).toBe('#eb7a6d')
+  })
+
+  // Asserted through the alias rather than as a second literal, matching how --color-warning
+  // aliases --accent. Duplicating the hex in both places is how the twins drift apart later;
+  // resolving it proves the alias actually lands on the audited value.
+  it('defines --color-danger as an alias resolving to the audited value', () => {
+    expect(readCssVar(css, 'color-danger')).toBe('var(--danger)')
+    expect(resolveCssVar(css, 'color-danger')).toBe('#eb7a6d')
+  })
+
+  it.each([['danger-foreground'], ['color-danger-foreground']])('defines --%s as an alias of --ink', (name) => {
+    expect(readCssVar(css, name)).toBe('var(--ink)')
+  })
+
+  it('the danger-on-ink pairing (a field error on the page background) passes AA', () => {
+    expect(contrastRatio(resolveCssVar(css, 'danger'), resolveCssVar(css, 'ink'))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  // Against --surface, not --danger. `--danger-foreground` resolves to `--ink` and contrast is
+  // symmetric, so a danger-foreground-on-danger assertion is byte-identical to the one above and
+  // could never fail on its own however its name reads. --surface is the background panels and
+  // alerts actually paint on, and is the pairing that was genuinely untested.
+  it('the danger-on-surface pairing (a field error inside a panel) passes AA', () => {
+    expect(contrastRatio(resolveCssVar(css, 'danger'), resolveCssVar(css, 'surface'))).toBeGreaterThanOrEqual(4.5)
   })
 
   it('always returns a choice meeting 4.5:1 against the shipped heat ramp', () => {
