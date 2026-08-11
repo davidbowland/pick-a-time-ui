@@ -57,8 +57,10 @@ const PrivacyPolicy = (): React.ReactNode => {
           can still read them.
         </p>
         <p>
-          Your browser also remembers two choices: whether you kept the tour of how a poll works open on the home page,
-          and whether you dismissed the offer to install Pick a Time.
+          The offline page remembers, for the length of a tab, that you pressed Try again, so it can tell you the
+          connection is still down instead of repainting an identical screen. Your browser also remembers two choices:
+          whether you kept the tour of how a poll works open on the home page, and whether you dismissed the offer to
+          install Pick a Time.
         </p>
         <p>
           Pick a Time keeps one page ready for when your connection drops. That offline cache holds nothing else: no

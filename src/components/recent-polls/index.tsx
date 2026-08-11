@@ -38,7 +38,6 @@ export interface RecentPollsProps {
   // so exactly one owner mounts the hook and hands the pieces down.
   polls: RecentPoll[]
   prunedCount?: number
-  // Names for the prune notice. `useRecentPolls` exposes only a count today, so this is normally
   // empty and the nameless singular is what renders. See the note in `pruneMessage`.
   prunedPolls?: RecentPoll[]
   timeZone?: string

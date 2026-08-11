@@ -87,7 +87,6 @@ const closedOnDate = (poll: RecentPoll, timeZone: string): string =>
 
 // AC-042: the notice has to agree in number with what was actually pruned. `count` is authoritative
 // because it is what the store measured; `pruned` only supplies names, and the hook does not
-// expose them today, so the nameless forms are the ones that ship until it does.
 export const pruneMessage = (count: number, pruned: RecentPoll[], timeZone: string): string => {
   if (count !== 1) return `${count} polls closed, so they're no longer in your polls.`
   if (pruned.length === 1)

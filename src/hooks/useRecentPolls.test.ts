@@ -533,4 +533,54 @@ describe('useRecentPolls', () => {
       expect(readSeenIntro('amber-harbor', storage)).toBe(false)
     })
   })
+
+  // Dismissing the introduction before picking a name seeds an entry so the dismissal survives, but
+  // that entry has no participant. Listed, it renders "Closes in 12 days · as " with nothing after
+  // the "as", an accessible name that trails off, and a link with an empty ?id= that
+  // consumeQueryParamId cannot strip because '' is falsy.
+  describe('an entry seeded by an intro dismissal', () => {
+    const seeded = {
+      expiration: LIVE_EXPIRATION,
+      lastSeen: NOW_MS,
+      name: '',
+      pollName: 'Sprint retro',
+      seenIntro: true,
+      sessionId: 'amber-harbor',
+      userId: '',
+    }
+
+    it('is not listed as a poll, since nobody has joined it yet', () => {
+      const storage = fakeStorage({ pat_recent_polls: JSON.stringify({ migrated: true, polls: [seeded] }) })
+
+      const { result } = renderHook(() => useRecentPolls(storage, now))
+
+      expect(result.current.polls).toEqual([])
+    })
+
+    it('still carries the dismissal it was written for', () => {
+      const storage = fakeStorage({ pat_recent_polls: JSON.stringify({ migrated: true, polls: [seeded] }) })
+
+      const { result } = renderHook(() => useRecentPolls(storage, now))
+
+      expect(result.current.seenIntro('amber-harbor')).toBe(true)
+    })
+
+    it('appears once identity resolves and record fills it in', () => {
+      const storage = fakeStorage({ pat_recent_polls: JSON.stringify({ migrated: true, polls: [seeded] }) })
+
+      const { result } = renderHook(() => useRecentPolls(storage, now))
+      act(() =>
+        result.current.record({
+          expiration: LIVE_EXPIRATION,
+          name: 'Dave',
+          pollName: 'Sprint retro',
+          sessionId: 'amber-harbor',
+          userId: 'u_7Qk2',
+        }),
+      )
+
+      expect(result.current.polls.map((poll) => poll.name)).toEqual(['Dave'])
+      expect(result.current.seenIntro('amber-harbor')).toBe(true)
+    })
+  })
 })

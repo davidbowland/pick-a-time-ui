@@ -271,9 +271,17 @@ export function useRecentPolls(
     [now, storage],
   )
 
+  // A seeded entry -- written when someone dismisses the introduction before picking a name -- has
+  // no participant yet, so it is intro state rather than a poll the visitor has joined. Listing it
+  // renders a row reading "Closes in 12 days · as " with nothing after the "as", an accessible name
+  // that trails off mid-sentence, and a link carrying an empty `?id=` that consumeQueryParamId
+  // cannot strip because '' is falsy. `record` fills the entry in the moment identity resolves,
+  // carrying the dismissal with it, and the row appears then.
+  const listed = polls.filter((poll) => poll.userId !== '')
+
   return {
     clear,
-    polls,
+    polls: listed,
     prunedCount: initial.prunedCount,
     prunedPolls: initial.prunedPolls,
     record,
