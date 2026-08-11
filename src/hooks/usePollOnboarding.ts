@@ -12,19 +12,21 @@ export interface PollOnboarding {
  * `pat_recent_polls` entry (ADR-4), so it expires with the poll itself instead of accumulating in
  * a `pat_onboarded_{sessionId}` key that nothing ever removed.
  *
- * Dismissal only persists once the poll has a recents entry, which is written when identity
- * resolves. Before that, the dismissal holds for the session but is not stored — writing an
- * onboarding record with no expiration is precisely the defect this change removes.
+ * Pass `seed` so dismissal can persist before identity resolves. The introduction renders during
+ * the identity phase and the recents entry is written when that phase ends, so without a seed the
+ * two never coexist and the dismissal is lost — someone who dismissed it, was pulled away before
+ * picking a name, and returned to the same link would meet it again.
  */
 export function usePollOnboarding(
   sessionId: string,
   storage: Storage | undefined = defaultStorage(),
   now: () => number = Date.now,
+  seed?: { expiration: number; pollName: string },
 ): PollOnboarding {
   const [showIntro, setShowIntro] = useState(() => !readSeenIntro(sessionId, storage, now))
 
   const dismissIntro = (): void => {
-    writeSeenIntro(sessionId, true, storage, now)
+    writeSeenIntro(sessionId, true, storage, now, seed)
     setShowIntro(false)
   }
 

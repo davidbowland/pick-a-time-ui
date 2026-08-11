@@ -88,11 +88,34 @@ const Index = (): React.ReactNode => {
   const [isReturning, setIsReturning] = useState(false)
   const [isStoryOpen, setIsStoryOpen] = useState(false)
   const [startRequests, setStartRequests] = useState(0)
+  const hasReadStore = useRef(false)
 
   useEffect(() => {
-    setIsReturning(isReturningComposition())
     setIsStoryOpen(readLandingView())
   }, [])
+
+  // The pre-paint script owns FIRST PAINT and nothing else. It runs once per full document load, so
+  // on a client-side navigation -- tapping the brand link from a poll you just answered, or either
+  // CTA on the poll-is-gone screen -- it never runs again and its attribute is stale or absent. A
+  // respondent would land on the marketing story with their brand-new entry invisible until a hard
+  // reload, which is precisely the person P-1 is about.
+  //
+  // So React owns every truth after that first paint: the store's own contents decide, and the
+  // attribute is written back so the CSS swap follows. Both directions matter -- clearing the last
+  // poll has to put the story back.
+  useEffect(() => {
+    // The attribute is consulted on the first pass ONLY. After that the store is the sole truth, or
+    // the attribute perpetuates itself: `polls.length > 0 || attribute` can never go false once the
+    // script has set it, so clearing the last poll would leave the recents composition on screen
+    // with nothing in it.
+    const returning = hasReadStore.current ? polls.length > 0 : polls.length > 0 || isReturningComposition()
+    hasReadStore.current = true
+    setIsReturning(returning)
+    const root = globalThis.document?.documentElement
+    if (!root) return
+    if (returning) root.setAttribute(RECENT_POLLS_ATTRIBUTE, 'true')
+    else root.removeAttribute(RECENT_POLLS_ATTRIBUTE)
+  }, [polls.length])
 
   const scrollTo = (target: HTMLElement | null | undefined): void => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches

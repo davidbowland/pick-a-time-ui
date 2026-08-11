@@ -134,4 +134,48 @@ describe('usePollOnboarding', () => {
       window.localStorage.clear()
     }
   })
+
+  // The intro renders during the identity phase; the recents entry lands when that phase ends. The
+  // two never coexist, so without a seed writeSeenIntro had nothing to update and the dismissal was
+  // silently dropped -- someone who dismissed it, was pulled away before picking a name, and came
+  // back to the same link met it again. That worked before ADR-4 moved the flag, so it was a
+  // regression rather than a limitation.
+  describe('dismissing before identity resolves', () => {
+    it('persists the dismissal by seeding an entry', () => {
+      const storage = fakeStorage({})
+      const seed = { expiration: LIVE_EXPIRATION, pollName: 'Sprint retro' }
+
+      const { result } = renderHook(() => usePollOnboarding('amber-harbor', storage, now, seed))
+      act(() => result.current.dismissIntro())
+
+      expect(renderHook(() => usePollOnboarding('amber-harbor', storage, now, seed)).result.current.showIntro).toBe(
+        false,
+      )
+    })
+
+    it('gives the seeded entry the server expiration, so it cannot outlive the poll', () => {
+      const storage = fakeStorage({})
+
+      const { result } = renderHook(() =>
+        usePollOnboarding('amber-harbor', storage, now, { expiration: LIVE_EXPIRATION, pollName: 'Sprint retro' }),
+      )
+      act(() => result.current.dismissIntro())
+
+      const stored = JSON.parse(storage.getItem('pat_recent_polls') ?? '{}')
+
+      expect(stored.polls[0].expiration).toEqual(LIVE_EXPIRATION)
+    })
+
+    // Without a seed there is nothing to give an entry an expiration, and an onboarding record with
+    // no expiry is the exact defect P-6 exists to remove. The envelope itself may be rewritten --
+    // that is updatePolls being unconditional -- but no entry may appear.
+    it('creates no entry when no seed is available', () => {
+      const storage = fakeStorage({})
+
+      const { result } = renderHook(() => usePollOnboarding('amber-harbor', storage, now))
+      act(() => result.current.dismissIntro())
+
+      expect(JSON.parse(storage.getItem('pat_recent_polls') ?? '{}').polls).toEqual([])
+    })
+  })
 })

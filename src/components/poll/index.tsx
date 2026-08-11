@@ -171,7 +171,16 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
   }
 
   const phase = derivePhase(poll, usersLoaded, effectiveUserId != null, isPollError || isUsersError)
-  const onboarding = usePollOnboarding(sessionId, storage, now)
+  // The seed lets a dismissal persist before identity resolves. The intro renders during the
+  // identity phase and the recents entry lands when that phase ends, so without it the two never
+  // coexist and the dismissal is silently lost (a regression against the behaviour before ADR-4).
+  // `poll` is fetched by the time the intro can render, so its expiration is real.
+  const onboarding = usePollOnboarding(
+    sessionId,
+    storage,
+    now,
+    poll ? { expiration: poll.expiration, pollName: poll.name } : undefined,
+  )
   const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
 
   // Exactly one instance on this page. Two do not share state: the second reads its own copy at

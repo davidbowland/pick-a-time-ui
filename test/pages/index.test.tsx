@@ -92,13 +92,24 @@ const headingLevels = (composition: 'first-visit' | 'returning'): string[] => {
     .map((heading) => heading.tagName.toLowerCase())
 }
 
-function renderPage({ returning = false, storyOpen = false } = {}): ReturnType<typeof render> {
+function renderPage({
+  recents,
+  returning = false,
+  storyOpen = false,
+}: { recents?: Partial<ReturnType<typeof useRecentPolls>>; returning?: boolean; storyOpen?: boolean } = {}): ReturnType<
+  typeof render
+> {
   // Reset on every render, never set only when true, so no test inherits another's document state.
   // Absence is the false case in production — the script deletes the attribute rather than writing
   // "false" — so the first-visit path here is the same state a blocked or thrown script leaves.
   const attributeValues = returning ? ['true'] : []
   document.documentElement.removeAttribute(RECENT_POLLS_ATTRIBUTE)
   attributeValues.forEach((value) => document.documentElement.setAttribute(RECENT_POLLS_ATTRIBUTE, value))
+  // The store drives the composition too, not only the attribute. The pre-paint script owns first
+  // paint and cannot run again on a client-side navigation, so after mount the store's contents are
+  // what decide. Setting only the attribute here would test a coupling the app no longer has -- and
+  // that gap is exactly how the client-side-navigation defect survived sixteen section reviews.
+  jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult(recents ?? (returning ? {} : { polls: [] })))
   window.localStorage.setItem(LANDING_VIEW_KEY, storyOpen ? 'story-open' : 'story-closed')
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -255,30 +266,24 @@ describe('Index page', () => {
   })
 
   describe('recents wiring when the read pruned entries', () => {
-    beforeAll(() => {
-      jest.mocked(useRecentPolls).mockReturnValue(
-        recentPollsResult({
-          prunedCount: 2,
-          prunedPolls: [
-            { ...SPRINT_RETRO, pollName: 'Cabin trip', sessionId: 'gone-1' },
-            { ...SPRINT_RETRO, pollName: 'Design crit', sessionId: 'gone-2' },
-          ],
-        }),
-      )
-    })
-
-    afterAll(() => {
-      jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult())
-    })
+    // Passed per render rather than set in beforeAll: renderPage now drives the store as well as
+    // the attribute, because the page derives its composition from the store after mount.
+    const prunedRecents = {
+      prunedCount: 2,
+      prunedPolls: [
+        { ...SPRINT_RETRO, pollName: 'Cabin trip', sessionId: 'gone-1' },
+        { ...SPRINT_RETRO, pollName: 'Design crit', sessionId: 'gone-2' },
+      ],
+    }
 
     it('passes the prune result down rather than recomputing it', () => {
-      renderPage({ returning: true })
+      renderPage({ recents: prunedRecents, returning: true })
       expect(screen.getByText("2 polls closed, so they're no longer in your polls.")).toBeInTheDocument()
       expect(screen.getByText('Cabin trip and Design crit')).toBeInTheDocument()
     })
 
     it('leaves the heading sequence alone when a prune notice is on screen', () => {
-      renderPage({ returning: true })
+      renderPage({ recents: prunedRecents, returning: true })
       expect(headingLevels('returning')).toEqual(['h1', 'h2', 'h2'])
     })
   })
@@ -430,6 +435,40 @@ describe('Index page', () => {
       expect(screen.queryByText('No polls on this device yet.')).not.toBeInTheDocument()
 
       jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult())
+    })
+  })
+
+  // The pre-paint script runs once per full document load. Tapping the brand link from a poll you
+  // just answered is a client-side navigation, so it never runs again and its attribute is absent —
+  // and the entry written moments earlier would be invisible until a hard reload. That is the P-1
+  // population exactly. Sixteen section reviews missed it because the harness set the attribute by
+  // hand while the store was mocked, so the two were never wired together.
+  describe('arriving by client-side navigation, with no fresh script run', () => {
+    it('shows the recents list from the store when the attribute is absent', () => {
+      renderPage({ recents: { polls: [SPRINT_RETRO] }, returning: false })
+
+      expect(screen.getByText('Sprint retro')).toBeInTheDocument()
+    })
+
+    it('writes the attribute back so the CSS swap follows', () => {
+      renderPage({ recents: { polls: [SPRINT_RETRO] }, returning: false })
+
+      expect(document.documentElement.getAttribute(RECENT_POLLS_ATTRIBUTE)).toEqual('true')
+    })
+
+    // A rerender, not a fresh render: clearing happens to a page already showing a list, and the
+    // attribute must not perpetuate itself once the store has been read.
+    it('puts the story back when the last poll is cleared', () => {
+      const { rerender } = renderPage({ recents: { polls: [SPRINT_RETRO] }, returning: true })
+      jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult({ polls: [] }))
+
+      rerender(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Index />
+        </QueryClientProvider>,
+      )
+
+      expect(document.documentElement.getAttribute(RECENT_POLLS_ATTRIBUTE)).toBeNull()
     })
   })
 })

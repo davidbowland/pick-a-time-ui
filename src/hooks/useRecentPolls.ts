@@ -162,18 +162,37 @@ export const readSeenIntro = (
   now: () => number = Date.now,
 ): boolean => prunePolls(readStore(storage).polls, now()).some((poll) => poll.sessionId === sessionId && poll.seenIntro)
 
-// A no-op on content when no entry exists yet: entries are written once identity resolves and
-// carry the server's `expiration` (ADR-4). Creating one here would mean an onboarding record with
-// no expiry — the exact defect the sweep removes.
+/**
+ * Record that this poll's introduction has been dismissed.
+ *
+ * `seed` matters more than it looks. The introduction renders during the identity phase, and the
+ * recents entry is written when identity RESOLVES — which is the moment that phase ends. The two
+ * are mutually exclusive, so without a seed there is never an entry to update and dismissal could
+ * never persist at all: someone who dismissed the intro, was pulled away before picking a name, and
+ * came back to the same link met it again. That worked before ADR-4 moved the flag, so it was a
+ * regression rather than a limitation.
+ *
+ * The original objection — that creating an entry here would mean an onboarding record with no
+ * expiry, the exact defect the sweep removes — does not apply. The intro only renders once the poll
+ * has been fetched, so its `expiration` is known and the seeded entry prunes itself like any other.
+ */
 export const writeSeenIntro = (
   sessionId: string,
   seen: boolean,
   storage: Storage | undefined = defaultStorage(),
   now: () => number = Date.now,
+  seed?: Pick<RecentPoll, 'expiration' | 'pollName'>,
 ): void => {
-  updatePolls(storage, now, (polls) =>
-    polls.map((poll) => (poll.sessionId === sessionId ? { ...poll, seenIntro: seen } : poll)),
-  )
+  updatePolls(storage, now, (polls) => {
+    const existing = polls.some((poll) => poll.sessionId === sessionId)
+    if (existing || !seed) {
+      return polls.map((poll) => (poll.sessionId === sessionId ? { ...poll, seenIntro: seen } : poll))
+    }
+    // No participant yet, so no userId and no display name. Both are filled in by `record` the
+    // moment identity resolves; until then this entry exists only to carry the dismissal, and it
+    // carries the server's expiration so it cannot outlive the poll.
+    return [{ ...seed, lastSeen: now(), name: '', seenIntro: seen, sessionId, userId: '' }, ...polls]
+  })
 }
 
 const EMPTY_INITIAL = { polls: [] as RecentPoll[], prunedCount: 0, prunedPolls: [] as RecentPoll[] }
