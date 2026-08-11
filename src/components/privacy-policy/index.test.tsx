@@ -14,26 +14,32 @@ describe('privacy-policy component', () => {
   it('should say anyone with the link can read the poll without joining it', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/don.t have to join first/i)).toBeInTheDocument()
+    expect(screen.getByText(/without joining/i)).toBeInTheDocument()
     expect(screen.getByText(/guarded by its link and nothing else/i)).toBeInTheDocument()
   })
 
-  it('should say other participants never see your email or Google account', () => {
+  it('should say other participants never see your email address', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/never see your email address or which Google account/i)).toBeInTheDocument()
+    expect(screen.getByText(/never see your email address/i)).toBeInTheDocument()
   })
 
   it('should say participants cannot tell which hours came from a calendar', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/Nobody on the poll can tell which is which/i)).toBeInTheDocument()
+    expect(screen.getByText(/nobody on the poll can tell which is which/i)).toBeInTheDocument()
   })
 
   it('should say we store the Google account identifier, not just the name', () => {
     render(<PrivacyPolicy />)
 
     expect(screen.getByText(/identifier for your account/i)).toBeInTheDocument()
+  })
+
+  it('should name the IP address in the request log and how long logs last', () => {
+    render(<PrivacyPolicy />)
+
+    expect(screen.getByText(/logs each request for 30 days, including your IP address/i)).toBeInTheDocument()
   })
 
   it('should state what the calendar permission cannot see', () => {
@@ -45,50 +51,33 @@ describe('privacy-policy component', () => {
   it('should say we keep an encrypted key and the busy times themselves', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/we keep the answer, and we keep an encrypted key/i)).toBeInTheDocument()
+    expect(screen.getByText(/we keep the answer and an encrypted key/i)).toBeInTheDocument()
   })
 
-  it('should say what a calendar check sends to Google', () => {
+  it('should say reCAPTCHA never runs when you are signed in', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/the poll.s name and the other people on it never reach Google/i)).toBeInTheDocument()
-  })
-
-  it('should say reCAPTCHA starts before you submit and never runs when signed in', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/starts watching as soon as you begin filling the form in/i)).toBeInTheDocument()
     expect(screen.getByText(/Sign in first and reCAPTCHA never runs/i)).toBeInTheDocument()
   })
 
-  it('should disclose that calendar data outlives the poll', () => {
+  it('should say a poll deletes itself 14 days after it is created', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/90 days/i)).toBeInTheDocument()
-    expect(screen.getByText(/outlives the poll/i)).toBeInTheDocument()
+    expect(screen.getByText(/14 days after the poll is created/i)).toBeInTheDocument()
   })
 
-  it('should say the clock restarts on every calendar check', () => {
+  it('should disclose that calendar data outlives the poll and its clock restarts', () => {
     render(<PrivacyPolicy />)
 
+    expect(screen.getByText(/outlives the poll/i)).toBeInTheDocument()
+    expect(screen.getByText(/90 days/i)).toBeInTheDocument()
     expect(screen.getByText(/every check restarts that clock/i)).toBeInTheDocument()
   })
 
-  it('should disclose that saved busy times span every poll you are in', () => {
+  it('should say disconnecting deletes what we saved but leaves hours marked busy', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/combined date range of every poll/i)).toBeInTheDocument()
-  })
-
-  it('should say disconnecting deletes the key and the saved busy times', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/both the key and the saved busy times go immediately/i)).toBeInTheDocument()
-  })
-
-  it('should say hours already marked busy survive a disconnect', () => {
-    render(<PrivacyPolicy />)
-
+    expect(screen.getByText(/Disconnect and both go immediately/i)).toBeInTheDocument()
     expect(screen.getByText(/hours we already marked busy stay busy/i)).toBeInTheDocument()
   })
 
