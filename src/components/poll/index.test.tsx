@@ -815,6 +815,45 @@ describe('Poll', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Lunch with friends')
     })
 
+    it('puts the offer after the person picker', async () => {
+      installOffer.capability = 'ios-share'
+      window.history.replaceState(null, '', '/')
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      // A populated roster and no `?id=`: the poll stops on the picker rather than auto-creating.
+      jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      const offer = await screen.findByRole('heading', { name: 'Install Pick a Time' })
+      const picker = screen.getByRole('heading', { name: 'Who are you on this poll?' })
+
+      expect(picker.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('puts the offer after the calendar', async () => {
+      installOffer.capability = 'ios-share'
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+      jest.mocked(fetchAvailability).mockResolvedValueOnce({
+        userId: existingUser.userId,
+        free: [
+          [false, false],
+          [false, false],
+          [false, false],
+        ],
+        expiration: 1725453600,
+      })
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      const offer = await screen.findByRole('heading', { name: 'Install Pick a Time' })
+      // The tab bar opens the calendar block, so anything following it follows the whole block.
+      const tabs = screen.getByRole('tablist')
+
+      expect(tabs.compareDocumentPosition(offer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
     it('offers nothing where the browser cannot install anything', async () => {
       window.history.replaceState(null, '', '/')
       jest.mocked(fetchPoll).mockResolvedValueOnce(poll)

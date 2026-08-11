@@ -256,10 +256,6 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
         </div>
         <p className="text-xs text-[var(--slate)]">{formatExpiration(poll.expiration, viewerTimezone)}</p>
       </div>
-      {/* AC-023. `h2` because the only heading above it on this page is the poll title's `h1`, and
-          the identity step's own heading is an `h2` alongside it — an `h3` here would skip a level.
-          Focus after dismissal falls to the default: the page's `<main>` landmark. */}
-      <InstallPrompt headingLevel="h2" />
       {phase === 'identity' ? (
         <>
           {onboarding.showIntro && (
@@ -331,6 +327,12 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
           )}
         </>
       )}
+      {/* AC-023, and last on purpose: the poll itself is what the visitor came for, so the install
+          offer sits under the person picker and under the calendar rather than ahead of either.
+          `h2` because the only heading above it on this page is the poll title's `h1`, and the
+          identity step's own heading is an `h2` alongside it — an `h3` here would skip a level.
+          Focus after dismissal falls to the default: the page's `<main>` landmark. */}
+      <InstallPrompt headingLevel="h2" />
     </div>
   )
 }
