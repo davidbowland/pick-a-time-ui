@@ -1,0 +1,309 @@
+<!doctype html>
+<!--
+  Served directly out of `public/` by the service worker when a navigation fails. It receives no
+  `_app`, no `_document`, no React and no Tailwind build, so everything the app normally supplies is
+  inlined here by hand: the `dark` class (added at `_document.tsx:15-19`), the design tokens
+  (`src/assets/css/index.css:69-149`), the page wrapper (`_app.tsx:75-79`) and the focus ring
+  (`src/components/ui/focus-ring.ts:1`).
+
+  ADR-1: the app is genuinely non-functional offline — nothing is precached but this file. The copy
+  below says so plainly and must not be softened into implying otherwise.
+-->
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- This page ships standalone and gets a viewport tag from nowhere else. `viewport-fit=cover`
+         is what makes the `env(safe-area-inset-*)` padding below do anything at all. -->
+    <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport" />
+    <!-- It ships as a crawlable URL under the site's own origin. -->
+    <meta content="noindex, nofollow" name="robots" />
+    <meta content="#17171a" name="theme-color" />
+    <title>Pick a Time — offline</title>
+    <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+    <style>
+      html.dark {
+        /* Copied verbatim from src/assets/css/index.css:69-149. Keep in sync by hand — this file
+           is outside the Tailwind build and reads no stylesheet. */
+        color-scheme: dark;
+
+        --ink: #17171a;
+        --bone: #f2f1ee;
+        --accent: #3fae8a;
+        --accent-soft: #7ecdb3;
+        --slate: #9494a3;
+        --hair: rgba(148, 148, 163, 0.22);
+
+        /* The app's real faces (Fraunces, Plus Jakarta Sans) are loaded by `next/font/local` from
+           build-hashed URLs under /_next/static/media/. Those names change every build and this
+           file cannot know them, so it falls back to a serif for display and the system sans for
+           body text. The page reads as Pick a Time by color, mark and layout, not by typeface. */
+        --font-display: Georgia, 'Times New Roman', serif;
+        --font-body:
+          system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: var(--ink);
+        /* `_app.tsx:77-79` paints two blurred accent orbs behind the page. Reproduced here as two
+           radial gradients rather than two 38rem `blur(140px)` divs: the same wash of color, with
+           no extra DOM and no compositing cost on a phone that is already having a bad time. */
+        background-image:
+          radial-gradient(38rem 38rem at 88% -10%, rgba(63, 174, 138, 0.09), transparent 70%),
+          radial-gradient(32rem 32rem at -8% 112%, rgba(126, 205, 179, 0.06), transparent 70%);
+        background-repeat: no-repeat;
+        color: var(--bone);
+        display: flex;
+        flex-direction: column;
+        font-family: var(--font-body);
+        font-size: 1rem;
+        line-height: 1.6;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+          calc(1.5rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+      }
+
+      /* Brand row, on the `NavContainer` pill idiom from src/components/app-bar/elements.tsx. */
+      .brand {
+        align-items: center;
+        border: 1px solid var(--hair);
+        border-radius: 9999px;
+        color: var(--accent);
+        display: inline-flex;
+        font-family: var(--font-display);
+        font-size: 1.375rem;
+        gap: 0.5rem;
+        letter-spacing: 0.12em;
+        padding: 0.5rem 1.25rem;
+      }
+
+      .content {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        justify-content: center;
+        margin: 0 auto;
+        max-width: 32rem;
+        padding: 2rem 0;
+        text-align: center;
+        width: 100%;
+      }
+
+      h1 {
+        color: var(--bone);
+        font-family: var(--font-display);
+        font-size: clamp(1.75rem, 6vw, 2.5rem);
+        font-weight: 600;
+        line-height: 1.2;
+        margin: 0 0 1rem;
+      }
+
+      /* var(--bone) on var(--ink) = 15.84:1. The load-bearing sentence is not dimmed. */
+      .lede {
+        color: var(--bone);
+        margin: 0 0 0.75rem;
+      }
+
+      /* var(--slate) on var(--ink) = 5.98:1. */
+      .muted {
+        color: var(--slate);
+        margin: 0 0 2rem;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+      }
+
+      /* WCAG 2.2 SC 2.5.8 asks for 24x24 CSS px; 44px is the app's own button height. */
+      .action {
+        align-items: center;
+        border: 2px solid transparent;
+        border-radius: 9999px;
+        cursor: pointer;
+        display: inline-flex;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 700;
+        justify-content: center;
+        line-height: 1;
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.75rem 1.5rem;
+        text-decoration: none;
+      }
+
+      /* var(--ink) on var(--accent) = 6.50:1. */
+      .action--primary {
+        background-color: var(--accent);
+        color: var(--ink);
+      }
+
+      /* var(--bone) on var(--ink) = 15.84:1; the border is var(--slate) rather than the fainter
+         var(--hair) so the control's own boundary clears the 3:1 of SC 1.4.11. */
+      .action--secondary {
+        background-color: transparent;
+        border-color: var(--slate);
+        color: var(--bone);
+      }
+
+      .action--primary:hover {
+        background-color: var(--accent-soft);
+      }
+
+      .action--secondary:hover {
+        background-color: rgba(242, 241, 238, 0.06);
+        border-color: var(--bone);
+      }
+
+      /* src/components/ui/focus-ring.ts:1 written as real CSS: a 2px accent ring, offset 2px from
+         the control by an inner ring in the page background. The `:focus` rule comes first so a
+         browser without `:focus-visible` still shows an indicator; the `:not(:focus-visible)` rule
+         then takes it back for pointer users everywhere that does support it. There is no browser
+         chrome in the installed app, so these two controls are the only way out — neither may be
+         focusable-but-invisible, and nothing on this page moves or traps focus. */
+      .action:focus {
+        box-shadow:
+          0 0 0 2px var(--ink),
+          0 0 0 4px var(--accent);
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+      }
+
+      .action:focus:not(:focus-visible) {
+        box-shadow: none;
+      }
+
+      .action:focus-visible {
+        box-shadow:
+          0 0 0 2px var(--ink),
+          0 0 0 4px var(--accent);
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+      }
+
+      @keyframes pat-offline-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Every animation and transition on this page sits inside the gate, matching
+         src/assets/css/index.css:179-195. Under `prefers-reduced-motion: reduce` the page simply
+         arrives finished. */
+      @media (prefers-reduced-motion: no-preference) {
+        .content {
+          animation: pat-offline-in 240ms ease-out both;
+        }
+
+        .action {
+          transition:
+            background-color 150ms ease,
+            border-color 150ms ease,
+            color 150ms ease;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="brand">
+        <!-- src/components/mark/index.tsx, inlined with a static gradient id. -->
+        <svg aria-hidden="true" height="24" viewBox="0 0 64 64" width="24" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="pat-mark-gradient" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="var(--accent-soft)" />
+              <stop offset="1" stop-color="var(--accent)" />
+            </linearGradient>
+          </defs>
+          <rect fill="url(#pat-mark-gradient)" height="60" rx="14" width="56" x="4" y="2" />
+          <rect
+            fill="none"
+            height="58"
+            rx="13"
+            stroke="var(--bone)"
+            stroke-opacity="0.35"
+            stroke-width="1"
+            width="54"
+            x="5"
+            y="3"
+          />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="12" y="9" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="25" y="9" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="38" y="9" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="12" y="20.5" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="38" y="20.5" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="12" y="32" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="25" y="32" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="38" y="32" />
+          <rect fill="var(--ink)" height="10" rx="2.5" width="12" x="12" y="43.5" />
+        </svg>
+        Pick a Time
+      </span>
+    </header>
+    <main class="content">
+      <h1>You're offline</h1>
+      <p class="lede">
+        Pick a Time needs a connection. Nothing here works without one — not even the polls you've already opened.
+      </p>
+      <p class="muted">Try again once you're back.</p>
+      <p class="muted" hidden id="retry-status" role="status">Still no connection.</p>
+      <div class="actions">
+        <button class="action action--primary" hidden id="retry" type="button">Try again</button>
+        <a class="action action--secondary" href="/">Go home</a>
+      </div>
+    </main>
+    <script>
+      // The button ships hidden and this reveals it. A browser with scripting off never registers
+      // the worker that serves this page, so in practice it never gets here -- but a present-but-
+      // dead primary control is the worst failure this page could have, on the one screen in the
+      // installed app with no browser chrome to escape from. Costing nothing to rule out beats
+      // reasoning about why it cannot happen. `Go home` is a real link and stands either way.
+      var retry = document.getElementById('retry')
+      var status = document.getElementById('retry-status')
+      retry.hidden = false
+
+      // A retry that fails repaints an identical page, so without this a keyboard or screen-reader
+      // user gets no signal that anything happened and has to tab from the top again. sessionStorage
+      // rather than a query string: the URL is the page the visitor actually wanted, and rewriting
+      // it would make the next retry retry the wrong thing.
+      try {
+        if (window.sessionStorage.getItem('pat_offline_retried') === '1') {
+          window.sessionStorage.removeItem('pat_offline_retried')
+          status.hidden = false
+          retry.focus()
+        }
+      } catch (error) {
+        // Storage blocked (Safari private browsing). The page still works; only the notice is lost.
+      }
+
+      // Reloads the address currently in the bar, which is the page the visitor actually asked for
+      // -- the worker answers a failed navigation with this file's body without changing the URL.
+      retry.addEventListener('click', function () {
+        try {
+          window.sessionStorage.setItem('pat_offline_retried', '1')
+        } catch (error) {
+          // Same as above; the reload below still happens.
+        }
+        window.location.reload()
+      })
+    </script>
+  </body>
+</html>
