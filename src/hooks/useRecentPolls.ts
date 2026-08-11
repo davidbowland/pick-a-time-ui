@@ -37,6 +37,10 @@ export interface RecentPolls {
   polls: RecentPoll[]
   // How many entries this read dropped, for the prune notice (AC-042). Fixed at mount.
   prunedCount: number
+  // The entries that were pruned, not just how many. The approved notice names them -- "Board
+  // meeting — Q3 closed on Aug 8, so it's no longer in your polls" -- and initialRead already has
+  // them in hand, so discarding them made that copy unrenderable.
+  prunedPolls: RecentPoll[]
   record: (poll: RecentPollInput) => void
   remove: (sessionId: string) => void
   restore: (poll: RecentPoll) => void
@@ -137,14 +141,19 @@ const updatePolls = (
   return next
 }
 
-const initialRead = (storage: Storage | undefined, now: () => number): { polls: RecentPoll[]; prunedCount: number } => {
+const initialRead = (
+  storage: Storage | undefined,
+  now: () => number,
+): { polls: RecentPoll[]; prunedCount: number; prunedPolls: RecentPoll[] } => {
   const store = readStore(storage)
   const polls = prunePolls(store.polls, now())
   const prunedCount = store.polls.length - polls.length
+  const kept = new Set(polls.map((poll) => poll.sessionId))
+  const prunedPolls = store.polls.filter((poll) => !kept.has(poll.sessionId))
   // Pruning is a read that writes: the entry must be gone from storage, not merely unlisted
   // (AC-016, AC-030).
   if (prunedCount > 0) writeStore(storage, { migrated: store.migrated, polls })
-  return { polls: sortedByRecency(polls), prunedCount }
+  return { polls: sortedByRecency(polls), prunedCount, prunedPolls: sortedByRecency(prunedPolls) }
 }
 
 export const readSeenIntro = (
@@ -226,5 +235,15 @@ export function useRecentPolls(
     [now, storage],
   )
 
-  return { clear, polls, prunedCount: initial.prunedCount, record, remove, restore, seenIntro, setSeenIntro }
+  return {
+    clear,
+    polls,
+    prunedCount: initial.prunedCount,
+    prunedPolls: initial.prunedPolls,
+    record,
+    remove,
+    restore,
+    seenIntro,
+    setSeenIntro,
+  }
 }
