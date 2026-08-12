@@ -16,8 +16,8 @@ const PrivacyPolicy = (): React.ReactNode => {
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Legal</p>
         <h1 className="text-4xl font-bold text-[var(--bone)]">Privacy Policy</h1>
         <p className="text-[var(--bone)]">
-          Pick a Time runs on your name and the hours you say you&apos;re free. We never sell any of it. Amazon Web
-          Services runs our servers and our Google sign-in; past that we hand nothing over unless a court orders it.
+          Pick a Time runs on your name and the hours you say you&apos;re free. We never sell any of it, and we hand
+          nothing over unless a court orders it.
         </p>
       </div>
 
