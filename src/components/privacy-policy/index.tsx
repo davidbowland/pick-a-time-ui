@@ -28,8 +28,8 @@ const PrivacyPolicy = (): React.ReactNode => {
           you&apos;d share what&apos;s on it.
         </p>
         <p>
-          They never see your email address. Hours your calendar blocks off look exactly like hours you crossed out by
-          hand — nobody on the poll can tell which is which.
+          No users ever see your email address. Hours your calendar blocks off look exactly like hours you crossed out
+          by hand — nobody on the poll can tell which is which.
         </p>
       </Section>
 
@@ -46,32 +46,28 @@ const PrivacyPolicy = (): React.ReactNode => {
 
       <Section title="What Stays on Your Device">
         <p>
-          Your browser holds which participant you are on each poll, the polls you&apos;ve opened here, a couple of your
-          choices, and one page to show when your connection drops. None of it reaches us or anyone else on your polls,
-          and none of it follows you to other sites.
+          Your browser holds information about the polls you participate in to help you rejoin polls. That list of polls
+          stays on your device. It is not sent to us.
         </p>
         <p>
-          That list holds each poll&apos;s link, and a link is all it takes to read a poll — so anyone using this
-          browser can open the polls you&apos;ve joined. Remove one, or clear the whole list, from the home page.
+          Anyone using this browser can open the polls you&apos;ve joined. Remove one, or clear the whole list, from the
+          home page.
         </p>
         <p>
           Clearing the list only empties this device. The polls stay open, and anyone still holding a link can still
-          read them.
+          access them.
         </p>
       </Section>
 
       <Section title="Google">
         <p>
-          Connecting your calendar lets us ask Google one question: when are you busy? The permission we request
-          can&apos;t return event titles, guests, or locations, so we never see them. We keep the answer and an
-          encrypted key that lets us ask again.
+          Connecting your calendar lets us ask Google two questions: who are you? and when are you busy? We can&apos;t
+          see event titles, guests, or locations. We keep the answers and an encrypted key that lets us ask again.
         </p>
         <p>
-          While you&apos;re signed out, the create form runs Google&apos;s reCAPTCHA to keep bots from filling the site
-          with junk polls, and Google may use what it observes to improve reCAPTCHA. Sign in first and reCAPTCHA never
-          runs.
+          While you&apos;re signed out, the create form runs Google&apos;s reCAPTCHA. Google may use what it observes to
+          improve reCAPTCHA. Sign in first and reCAPTCHA never runs.
         </p>
-        <p>What we get from Google signs you in and marks you busy. Nothing else, and nobody else.</p>
         {/*
           Google's OAuth reviewers look for this sentence close to verbatim -- it is the affirmative Limited Use
           statement their policy requires, not our own phrasing. Rewriting it to match the plainer voice of the rest of
@@ -107,8 +103,8 @@ const PrivacyPolicy = (): React.ReactNode => {
         </p>
         <p>
           Your calendar connection outlives the poll. We keep it, and the busy times we&apos;ve saved, for 90 days after
-          the last time we checked, and every check restarts that clock. Disconnect and both go immediately — though
-          hours we already marked busy stay busy, and you can mark yourself free again at any time.
+          the last time we checked, and every check restarts that clock. Disconnect and both go immediately. Hours
+          marked busy by your calendar stay busy. You can mark yourself free again at any time.
         </p>
         <p>If you signed in with Google, the record that lets us recognize you stays until you ask us to delete it.</p>
       </Section>
@@ -124,10 +120,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           </Link>{' '}
           to see, correct, or delete your data, or to ask anything else about this page.
         </p>
-        <p>
-          Pick a Time is meant for people 13 and older. If we change how we handle your data, we&apos;ll change this
-          page and the date below.
-        </p>
+        <p>Pick a Time is meant for people 13 and older.</p>
       </Section>
 
       <div className="flex items-center justify-between border-t border-[var(--hair)] pt-6 text-sm text-[var(--slate)]">
