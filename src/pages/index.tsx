@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
+import dynamic from 'next/dynamic'
 import Head from 'next/head'
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
-import InstallPrompt from '@components/install-prompt'
 import PrivacyLink from '@components/privacy-link'
 import RecentPolls from '@components/recent-polls'
 import { BackToFormCta } from '@components/story/back-to-form-cta'
@@ -13,6 +13,14 @@ import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } fro
 import { SkyBackground } from '@components/story/sky-background'
 import { defaultStorage, useRecentPolls } from '@hooks/useRecentPolls'
 import { fetchConfig } from '@services/api'
+
+// The offer renders nothing at all on a browser that cannot install, and nothing it does render is
+// in the prerendered HTML, so its HeroUI Modal has no business in the first-paint download. Not
+// prefetched: 2.9 KB gzip is below the threshold where warming it would pay for itself.
+//
+// `ssr: false` costs no markup — the banner is gated on `beforeinstallprompt` and a capability
+// check that only exist in a browser, so the export never rendered it either.
+const InstallPrompt = dynamic(() => import('@components/install-prompt'), { ssr: false })
 
 const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
 

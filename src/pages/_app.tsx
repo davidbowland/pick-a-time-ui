@@ -1,4 +1,7 @@
-import { ToastProvider } from '@heroui/react'
+// Deliberately no ToastProvider. It was mounted here unconditionally while nothing in the app ever
+// raised a toast, which cost every page view 11 KB gzip of HeroUI's overlay machinery for a surface
+// that never appeared. Adding it back is this import plus one line in the tree below -- do that in
+// the same change that writes the first `addToast`, not before.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { AppProps } from 'next/app'
 import localFont from 'next/font/local'
@@ -84,11 +87,10 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* At :root, not on the wrapper div below: HeroUI's ToastProvider portals outside that
-          wrapper and would otherwise render in the browser default font. next/font's own
-          `variable:` option cannot do this -- it defines the variable inside a generated class that
-          has to be attached to an element, and the only element high enough is <html>, which _app
-          cannot reach in the Pages Router. */}
+      {/* At :root rather than on the wrapper div below, so anything that portals outside that
+          wrapper still resolves these. next/font's own `variable:` option cannot do this -- it
+          defines the variable inside a generated class that has to be attached to an element, and
+          the only element high enough is <html>, which _app cannot reach in the Pages Router. */}
       <style global jsx>{`
         :root {
           --font-display: ${fraunces.style.fontFamily};
@@ -106,7 +108,6 @@ export default function App({ Component, pageProps }: AppProps) {
           </div>
         </div>
       </AuthProvider>
-      <ToastProvider placement="bottom" />
     </QueryClientProvider>
   )
 }

@@ -1,5 +1,5 @@
-import { AlertDialog, Button } from '@heroui/react'
 import { X } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import React from 'react'
 
@@ -18,7 +18,10 @@ const CARD_CLASS = 'rounded-2xl border border-[var(--hair)] bg-[var(--bone)]/10'
 // already does at src/assets/css/index.css:101.
 const CONTROL_CLASS = `inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-[var(--slate)] px-3 py-1.5 text-sm font-semibold text-[var(--bone)] hover:bg-[var(--bone)]/[0.12] motion-safe:transition-colors motion-safe:duration-150 ${FOCUS_RING}`
 
-const DIALOG_BUTTON_CLASS = `rounded-full px-4 text-sm font-bold ${FOCUS_RING}`
+// Exported for `clear-all-dialog.tsx`, which is loaded lazily from this module. That is an import
+// cycle on paper; it is inert in practice because the dynamic import cannot begin evaluating until
+// long after this module has finished, and it keeps the dialog's styling beside its siblings.
+export const DIALOG_BUTTON_CLASS = `rounded-full px-4 text-sm font-bold ${FOCUS_RING}`
 
 // ---------------------------------------------------------------------------
 // Copy builders. Pure, so the approved strings are assertable without a render.
@@ -282,6 +285,13 @@ export const CountLine = ({ count }: { count: number }): React.ReactNode => (
   <p className="mt-4 text-xs text-[var(--slate)]">{countLine(count)}</p>
 )
 
+const ClearAllDialogImpl = dynamic(async () => (await import('./clear-all-dialog')).ClearAllDialog, {
+  ssr: false,
+})
+
+// Rendering `null` while closed is what keeps the chunk unfetched: `dynamic()` starts its import on
+// mount, so leaving the wrapper mounted-but-closed would download the dialog on every visit and
+// defeat the split.
 export const ClearAllDialog = ({
   count,
   isOpen,
@@ -292,29 +302,5 @@ export const ClearAllDialog = ({
   isOpen: boolean
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
-}): React.ReactNode => (
-  <AlertDialog.Root isOpen={isOpen} onOpenChange={onOpenChange}>
-    {/* Alert dialogs disable Escape by default. This one is cancellable and Escape is how people
-        leave a confirmation, so it stays on. */}
-    <AlertDialog.Backdrop isKeyboardDismissDisabled={false} variant="blur">
-      <AlertDialog.Container size="sm">
-        <AlertDialog.Dialog>
-          <AlertDialog.Header>
-            <AlertDialog.Heading>Clear your polls?</AlertDialog.Heading>
-          </AlertDialog.Header>
-          <AlertDialog.Body>
-            <p className="text-sm text-[var(--slate)]">{clearDialogBody(count)}</p>
-          </AlertDialog.Body>
-          <AlertDialog.Footer>
-            <Button className={DIALOG_BUTTON_CLASS} onPress={() => onOpenChange(false)} variant="outline">
-              Cancel
-            </Button>
-            <Button className={DIALOG_BUTTON_CLASS} onPress={onConfirm} variant="primary">
-              Clear all
-            </Button>
-          </AlertDialog.Footer>
-        </AlertDialog.Dialog>
-      </AlertDialog.Container>
-    </AlertDialog.Backdrop>
-  </AlertDialog.Root>
-)
+}): React.ReactNode =>
+  isOpen ? <ClearAllDialogImpl count={count} isOpen={isOpen} onConfirm={onConfirm} onOpenChange={onOpenChange} /> : null
