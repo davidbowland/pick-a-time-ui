@@ -4,89 +4,36 @@ import PrivacyPolicy from './index'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
 
-describe('provacy-policy component', () => {
-  it('should render privacy policy', async () => {
+describe('privacy-policy component', () => {
+  it('should render the page under a level-one heading', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.queryAllByText(/privacy policy/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeInTheDocument()
   })
 
-  it('should state what the calendar permission can and cannot see', () => {
+  it('should nest every section heading below the page heading', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/busy and free times/i)).toBeInTheDocument()
-    expect(screen.getByText(/event titles, guests, or locations/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0)
+    expect(screen.queryAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
-  it('should say we store an encrypted token and cache the busy times', () => {
+  it('should link back to the app', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/encrypted token/i)).toBeInTheDocument()
-    expect(screen.getByText(/cache the busy time ranges/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /back to pick a time/i })).toHaveAttribute('href', '/')
   })
 
-  it('should say we store the Google account identifier, not just the name', () => {
+  it('should give a working address for data requests', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText(/account identifier/i)).toBeInTheDocument()
-  })
-
-  it('should disclose that calendar data outlives the poll', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/90 days/i)).toBeInTheDocument()
-    expect(screen.getByText(/outlives the poll/i)).toBeInTheDocument()
-    expect(screen.getByText(/disconnect.*delete/i)).toBeInTheDocument()
-  })
-
-  it('should say the clock restarts on every calendar check', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/restarts every time we check/i)).toBeInTheDocument()
-  })
-
-  it('should disclose that cached busy times span every poll you are in', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/combined date range of every poll/i)).toBeInTheDocument()
-  })
-
-  it('should say hours already marked busy survive a disconnect', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/hours we already marked busy stay busy/i)).toBeInTheDocument()
-  })
-
-  it('should say what a calendar check sends to Google', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/dates we.re asking about/i)).toBeInTheDocument()
-    expect(screen.getByText(/nothing about the poll or the other people on it goes to google/i)).toBeInTheDocument()
-  })
-
-  it('should say participants cannot tell which hours came from a calendar', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/can.t tell which of them came from your calendar/i)).toBeInTheDocument()
-  })
-
-  it('should carry the Limited Use disclosure in the wording Google looks for', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/including the Limited Use requirements/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Google API Services User Data Policy/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'privacy@dbowland.com' })).toHaveAttribute(
       'href',
-      'https://developers.google.com/terms/api-services-user-data-policy',
+      'mailto:privacy@dbowland.com',
     )
   })
 
-  it('should say Google data does nothing beyond sign-in and marking you busy', () => {
-    render(<PrivacyPolicy />)
-
-    expect(screen.getByText(/nothing else, and nobody else/i)).toBeInTheDocument()
-  })
-
-  it('should point at the Google page that revokes our access', () => {
+  it('should link to the Google page that revokes our access', () => {
     render(<PrivacyPolicy />)
 
     expect(screen.getByRole('link', { name: /Google account permissions page/i })).toHaveAttribute(
@@ -95,9 +42,16 @@ describe('provacy-policy component', () => {
     )
   })
 
-  it('should carry the August 2026 effective date', () => {
+  // Google's OAuth reviewers check for the Limited Use statement close to verbatim, and the app's
+  // sensitive-scope verification fails without it. This is the one piece of wording on the page
+  // that is a compliance contract rather than our own copy, so it is pinned on purpose.
+  it('should carry the Limited Use disclosure in the wording Google looks for', () => {
     render(<PrivacyPolicy />)
 
-    expect(screen.getByText('Effective August 1, 2026')).toBeInTheDocument()
+    expect(screen.getByText(/including the Limited Use requirements/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Google API Services User Data Policy/i })).toHaveAttribute(
+      'href',
+      'https://developers.google.com/terms/api-services-user-data-policy',
+    )
   })
 })

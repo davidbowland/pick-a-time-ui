@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useMemo, useState } from 'react'
+import Link from 'next/link'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { ErrorState, LoadingState } from './elements'
 import { derivePhase } from './helpers'
@@ -10,16 +11,87 @@ import ResultsPhase from './results'
 import VoterIdentityControl from './voter-identity'
 import { useAuthContext } from '@components/auth-context'
 import ErrorBoundary from '@components/error-boundary'
+import InstallPrompt from '@components/install-prompt'
 import Share from '@components/share'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { usePollOnboarding } from '@hooks/usePollOnboarding'
+import { useRecentPolls } from '@hooks/useRecentPolls'
 import { useSessionCookie } from '@hooks/useSessionCookie'
 import { fetchPoll, fetchUsers } from '@services/api'
 import { PollData, User } from '@types'
 import { formatExpiration } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
+import { displayName } from '@utils/users'
 
 const TAB_BASE_CLASS = `rounded-full px-4 py-1.5 text-sm font-bold transition-colors duration-150 ease-out ${FOCUS_RING}`
+
+/**
+ * The poll-is-gone arrival state (AC-040). Approved copy, kept together so a later edit has to
+ * look at the whole voice at once.
+ *
+ * `{pollName}` is the name held by the local entry, because the server has nothing left to tell us:
+ * a 404 carries no poll name. A visitor who arrives on a dead link with no entry of their own gets
+ * `GONE_FALLBACK_NAME` instead — the state is still true for them, only less specific.
+ */
+const GONE_COPY = {
+  body: "The poll closed or was deleted, so it's no longer in your polls.",
+  heading: (pollName: string): string => `${pollName} isn't there anymore`,
+  startPoll: 'Start a poll',
+  status: (pollName: string): string => `${pollName} is no longer available and has been removed from your polls.`,
+  yourPolls: 'Go to your polls',
+}
+
+const GONE_FALLBACK_NAME = 'This poll'
+
+const GONE_ACTION_BASE = `inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-bold ${FOCUS_RING}`
+
+/**
+ * Both controls navigate, so both are links rather than buttons: a control that changes the URL
+ * has to be openable in a new tab and has to announce itself as a link. The copy table calls them
+ * buttons; the shape it describes is a link that looks like one.
+ */
+export const PollGoneState = ({
+  announcement,
+  pollName,
+}: {
+  announcement: string
+  pollName: string
+}): React.ReactNode => (
+  <div className="flex flex-col items-center gap-4 p-10 text-center">
+    <h1 className="text-2xl text-[var(--bone)]" style={{ fontFamily: 'var(--font-display)' }}>
+      {GONE_COPY.heading(pollName)}
+    </h1>
+    <p className="text-sm text-[var(--slate)]">{GONE_COPY.body}</p>
+    {/* Rendered EMPTY on the commit that mounts it, and given its text on a later one. A live
+        region that enters the DOM already populated is routinely announced by nothing at all —
+        NVDA, JAWS and VoiceOver all watch regions that already exist for changes. */}
+    <p className="sr-only" role="status">
+      {announcement}
+    </p>
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      <Link className={`${GONE_ACTION_BASE} bg-[var(--accent)] text-[var(--ink)] hover:opacity-90`} href="/">
+        {GONE_COPY.yourPolls}
+      </Link>
+      <Link
+        className={`${GONE_ACTION_BASE} border border-[var(--hair)] text-[var(--bone)] hover:bg-[var(--bone)]/[0.06]`}
+        href="/"
+      >
+        {GONE_COPY.startPoll}
+      </Link>
+    </div>
+  </div>
+)
+
+/**
+ * Whether a failed poll fetch means "this poll is gone" rather than "we could not reach the API".
+ *
+ * Read structurally rather than with `instanceof ApiError`: the status is the fact that matters,
+ * and a check that depends on class identity fails quietly wherever the class is duplicated (two
+ * copies of the module, an automocked `@services/api`) — turning a gone poll back into a generic
+ * error with no visible sign that anything is wrong.
+ */
+export const isPollGone = (error: unknown): boolean =>
+  (error as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === 404
 
 function tabSkinFor(isSelected: boolean): string {
   return isSelected ? 'bg-[var(--accent)] text-[var(--ink)]' : 'text-[var(--slate)] hover:text-[var(--bone)]'
@@ -38,10 +110,14 @@ function consumeQueryParamId(): string | undefined {
 }
 
 export interface PollProps {
+  /** Injectable clock. Entry pruning and `lastSeen` both read it, so tests must be able to fix it. */
+  now?: () => number
   sessionId: string
+  /** Injectable storage for the recents entry. Defaults to `window.localStorage`. */
+  storage?: Storage
 }
 
-const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
+const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode => {
   const queryClient = useQueryClient()
   const { userId, setUserId, clearUserId } = useSessionCookie(sessionId)
   const { isLoading: isAuthLoading, isSignedIn } = useAuthContext()
@@ -52,6 +128,7 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
 
   const {
     data: poll,
+    error: pollError,
     isError: isPollError,
     refetch: refetchPoll,
   } = useQuery<PollData>({ queryKey: ['poll', sessionId], queryFn: () => fetchPoll(sessionId) })
@@ -94,8 +171,64 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
   }
 
   const phase = derivePhase(poll, usersLoaded, effectiveUserId != null, isPollError || isUsersError)
-  const onboarding = usePollOnboarding(sessionId)
+  // The seed lets a dismissal persist before identity resolves. The intro renders during the
+  // identity phase and the recents entry lands when that phase ends, so without it the two never
+  // coexist and the dismissal is silently lost (a regression against the behaviour before ADR-4).
+  // `poll` is fetched by the time the intro can render, so its expiration is real.
+  const onboarding = usePollOnboarding(
+    sessionId,
+    storage,
+    now,
+    poll ? { expiration: poll.expiration, pollName: poll.name } : undefined,
+  )
   const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
+
+  // Exactly one instance on this page. Two do not share state: the second reads its own copy at
+  // mount, so one list goes stale the moment the other writes.
+  const { polls: recentPolls, record, remove } = useRecentPolls(storage, now)
+
+  const isGone = isPollGone(pollError)
+  // The name is captured as state rather than derived on every render, because the entry it comes
+  // from is deliberately destroyed a moment later — a purely derived name would blank the heading
+  // the instant the removal lands. It is derived once, for the render that removes it.
+  const [goneName, setGoneName] = useState<string | undefined>(undefined)
+  const [announcement, setAnnouncement] = useState('')
+  const gonePollName =
+    goneName ?? recentPolls.find((entry) => entry.sessionId === sessionId)?.pollName ?? GONE_FALLBACK_NAME
+
+  // ADR-4: the entry is written when identity RESOLVES, not when availability is marked. Somebody
+  // who opened a shared link and was pulled away before answering is exactly the person who has
+  // lost the way back, and the entry is what gives it to them. Every dependency here is a
+  // primitive, so a refetch that returns the same poll does not write a second time.
+  const participantName = currentUser ? displayName(currentUser) : undefined
+  const resolvedUserId = currentUser?.userId
+  const pollName = poll?.name
+  // Epoch SECONDS, copied from the server's own value — never a computed TTL, and never
+  // milliseconds, which would read as a date in the year 55000 and expire nothing.
+  const expiration = poll?.expiration
+  useEffect(() => {
+    if (expiration === undefined || pollName === undefined || participantName === undefined || !resolvedUserId) return
+    record({ expiration, name: participantName, pollName, sessionId, userId: resolvedUserId })
+  }, [expiration, participantName, pollName, record, resolvedUserId, sessionId])
+
+  // AC-040: pruning happens on read, so a live entry can point at a poll that has since died. The
+  // entry is removed from the store, not merely hidden.
+  useEffect(() => {
+    if (!isGone || goneName !== undefined) return
+    setGoneName(gonePollName)
+    remove(sessionId)
+  }, [goneName, gonePollName, isGone, remove, sessionId])
+
+  // A second pass, deliberately: the region above paints empty first and gains its text here.
+  useEffect(() => {
+    if (goneName === undefined) return
+    setAnnouncement(GONE_COPY.status(goneName))
+  }, [goneName])
+
+  // Ahead of the generic error state, which is what a 404 would otherwise land in.
+  if (isGone) {
+    return <PollGoneState announcement={announcement} pollName={gonePollName} />
+  }
 
   if (phase === 'error') {
     return (
@@ -194,13 +327,19 @@ const PollComponent = ({ sessionId }: PollProps): React.ReactNode => {
           )}
         </>
       )}
+      {/* AC-023, and last on purpose: the poll itself is what the visitor came for, so the install
+          offer sits under the person picker and under the calendar rather than ahead of either.
+          `h2` because the only heading above it on this page is the poll title's `h1`, and the
+          identity step's own heading is an `h2` alongside it — an `h3` here would skip a level.
+          Focus after dismissal falls to the default: the page's `<main>` landmark. */}
+      <InstallPrompt headingLevel="h2" />
     </div>
   )
 }
 
-const PollWithErrorBoundary = ({ sessionId }: PollProps): React.ReactNode => (
+const PollWithErrorBoundary = ({ now, sessionId, storage }: PollProps): React.ReactNode => (
   <ErrorBoundary>
-    <PollComponent sessionId={sessionId} />
+    <PollComponent now={now} sessionId={sessionId} storage={storage} />
   </ErrorBoundary>
 )
 

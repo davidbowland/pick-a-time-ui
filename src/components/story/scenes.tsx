@@ -6,6 +6,12 @@ import { PhoneMock } from '@components/story/phone-mock'
 import { EyebrowTag } from '@components/ui/eyebrow-tag'
 import { pickAccessibleTextColor } from '@utils/contrast'
 
+// 'h1' for the scene that is the page's subject, 'h2' for its siblings, and 'h3' for the case where
+// the whole story hangs off somebody else's 'h1' — collapsed beneath a surface that owns the page.
+// There the scenes are a level deeper in the outline, and rendering them as h2s would leave the
+// document skipping straight past the section that contains them.
+export type SceneHeadingLevel = 'h1' | 'h2' | 'h3'
+
 const SceneLayout = ({
   eyebrow,
   heading,
@@ -24,7 +30,7 @@ const SceneLayout = ({
   visual: React.ReactNode
   action?: React.ReactNode
   reverse?: boolean
-  headingLevel?: 'h1' | 'h2'
+  headingLevel?: SceneHeadingLevel
 }): React.ReactNode => (
   // `grid-cols-1` (rather than bare `grid`) gives the mobile track an explicit `minmax(0, 1fr)`,
   // so it can't grow past the viewport to fit a descendant's un-wrapped `truncate` text
@@ -224,13 +230,23 @@ const MockRadioOption = ({ label, selected }: { label: string; selected?: boolea
   </div>
 )
 
-export const HeroScene = ({ action }: { action?: React.ReactNode } = {}): React.ReactNode => (
+// Every scene forwards the level it is given and falls back to what it renders today when given
+// nothing — the hero to 'h1' here, the rest to SceneLayout's own 'h2' — so a caller that passes
+// nothing gets exactly the story that has always rendered, and only a caller hanging the story off
+// another surface's heading has to say so.
+export const HeroScene = ({
+  action,
+  headingLevel = 'h1',
+}: {
+  action?: React.ReactNode
+  headingLevel?: SceneHeadingLevel
+}): React.ReactNode => (
   <SceneLayout
     action={action}
     copy="Start a poll. Send one link. Watch the times fill in as people mark when they're free. No downloads, no logins needed."
     eyebrow="No cost. No account."
     heading="Find the minute everybody's free."
-    headingLevel="h1"
+    headingLevel={headingLevel}
     visual={
       <PhoneMock>
         <div className="flex flex-col gap-3 px-5 pb-6">
@@ -255,11 +271,12 @@ export const HeroScene = ({ action }: { action?: React.ReactNode } = {}): React.
   />
 )
 
-export const IdentityScene = (): React.ReactNode => (
+export const IdentityScene = ({ headingLevel }: { headingLevel?: SceneHeadingLevel }): React.ReactNode => (
   <SceneLayout
     copy="Type a name and it's yours. Leave it blank and we'll give you a fun one, visible only to this group. Change it anytime. Want your name to follow you across devices? Sign in with Google."
     eyebrow="Nothing for your guests to set up"
     heading="Join as you — or as Quiet Falcon."
+    headingLevel={headingLevel}
     reverse
     visual={
       <PhoneMock>
@@ -309,11 +326,12 @@ const PAINTING_GRID = [
   [true, true, false], // Sat
 ]
 
-export const PaintingScene = (): React.ReactNode => (
+export const PaintingScene = ({ headingLevel }: { headingLevel?: SceneHeadingLevel }): React.ReactNode => (
   <SceneLayout
     copy="Tap the times that work. Nothing to type, nothing to explain. A one-off Saturday is just as easy to mark as a standing Tuesday night."
     eyebrow="No typing required"
     heading="Paint your hours."
+    headingLevel={headingLevel}
     visual={
       <PhoneMock>
         <div className="flex flex-col gap-3 px-5 pb-6">
@@ -403,11 +421,12 @@ const BEST_SLOT_INDEX = HEAT_STEPS.indexOf('heat-4')
 const HEAT_TIMES = ['4p', '5p', '6p']
 const HEAT_DATES = ['Thu 9/4', 'Fri 9/5', 'Sat 9/6']
 
-export const ResultsScene = (): React.ReactNode => (
+export const ResultsScene = ({ headingLevel }: { headingLevel?: SceneHeadingLevel }): React.ReactNode => (
   <SceneLayout
     copy="Every square gets brighter as more people say they're free. Scan every date at once. The brightest square is your best time. Even if no time works for everybody, you can see who's closest."
     eyebrow="No tallying required"
     heading="See the best time at a glance."
+    headingLevel={headingLevel}
     reverse
     visual={
       <PhoneMock>
@@ -468,11 +487,12 @@ export const ResultsScene = (): React.ReactNode => (
   />
 )
 
-export const ShareScene = (): React.ReactNode => (
+export const ShareScene = ({ headingLevel }: { headingLevel?: SceneHeadingLevel }): React.ReactNode => (
   <SceneLayout
     copy="The poll lives at one address the whole time. Send it once — people join, mark the dates that work, and the overlap updates for everybody watching."
     eyebrow="One link, always current"
     heading="One link. Everybody finds their way back."
+    headingLevel={headingLevel}
     visual={
       <PhoneMock>
         <div className="flex flex-col items-center gap-4 px-6 pb-6 text-center">

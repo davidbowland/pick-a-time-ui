@@ -82,7 +82,16 @@ jobs:
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides 'Environment=test'
       - name: Copy static site to test S3 bucket
-        run: ./scripts/copyToS3.sh ${{ env.TESTING_S3_BUCKET }}
+        # The distribution ID is read here rather than inherited: this job calls copyToS3.sh
+        # directly and never runs scripts/deploy.sh, so the lookup that lives there does not apply.
+        # `|| true` plus the redirect keep a missing output from failing a deploy whose files
+        # copied fine — copyToS3.sh warns and skips the invalidation when the value is empty.
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.TESTING_STACK_NAME }} --region ${{ env.TESTING_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text 2>/dev/null || true)
+          ./scripts/copyToS3.sh ${{ env.TESTING_S3_BUCKET }} "$DISTRIBUTION_ID"
 
   deploy-production:
     name: Deploy to production
@@ -123,7 +132,16 @@ jobs:
             --role-arn ${{ env.PROD_CLOUDFORMATION_EXECUTION_ROLE }} \
             --capabilities CAPABILITY_NAMED_IAM
       - name: Copy static site to production S3 bucket
-        run: ./scripts/copyToS3.sh ${{ env.PROD_S3_BUCKET }}
+        # Duplicated from the test job on purpose — see the comment there. This is the only place
+        # production ever gets a distribution ID, and without it the kill switch in
+        # scripts/sw-killswitch.js has no way to reach a browser that already fetched a broken
+        # worker.
+        run: |
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.PROD_STACK_NAME }} --region ${{ env.PROD_REGION }} \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
+            --output text 2>/dev/null || true)
+          ./scripts/copyToS3.sh ${{ env.PROD_S3_BUCKET }} "$DISTRIBUTION_ID"
 
   bump:
     name: Bump the version number and tag the commit

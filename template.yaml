@@ -171,3 +171,16 @@ Resources:
       HostedZoneId: !FindInMap [EnvironmentMap, !Ref Environment, zoneId]
       Name: !FindInMap [EnvironmentMap, !Ref Environment, domain]
       Type: A
+
+Outputs:
+  # Consumed by scripts/deploy.sh and by both deploy jobs in .github/workflows/pipeline.yaml, which
+  # read it with `describe-stacks` and hand it to copyToS3.sh so a deploy can invalidate /sw.js.
+  # Read from the stack rather than hardcoded anywhere: a rebuilt distribution gets a new ID, and a
+  # pinned one would leave every deploy invalidating a distribution that no longer serves the site —
+  # succeeding quietly while the stale worker stayed put.
+  #
+  # Named DistributionId to match choosee-ui, which runs the same deploy scripts. Nothing imports
+  # this output, so the name is local to the stack and costs nothing to keep aligned.
+  DistributionId:
+    Description: CloudFront distribution ID, used to invalidate /sw.js on deploy
+    Value: !Ref UiCloudfrontDistribution

@@ -2,14 +2,20 @@ import React, { RefObject } from 'react'
 
 import PollCreate from '@components/poll-create'
 import { LivePill } from '@components/story/live-pill'
+import { SceneHeadingLevel } from '@components/story/scenes'
 
 export const CreateScene = ({
   formRef,
+  // Same prop, same default, same reason as the five scenes in `scenes.tsx`: when the whole story
+  // hangs off somebody else's `h1` this scene sits a level deeper, and a hardcoded `h2` there
+  // leaves the document skipping past the section that contains it (AC-048).
+  headingLevel: Heading = 'h2',
   name,
   onNameChange,
   registerFocusName,
 }: {
   formRef?: RefObject<HTMLDivElement | null>
+  headingLevel?: SceneHeadingLevel
   name?: string
   onNameChange?: (name: string) => void
   registerFocusName?: (focus: () => void) => void
@@ -22,9 +28,9 @@ export const CreateScene = ({
   <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-12 px-5 md:grid-cols-2 md:items-center md:gap-20">
     <div>
       <LivePill />
-      <h2 className="mt-4 text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium text-[var(--copy-color,var(--bone))]">
+      <Heading className="mt-4 text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium text-[var(--copy-color,var(--bone))]">
         Pick your dates.
-      </h2>
+      </Heading>
       <p className="mt-4 max-w-[46ch] text-[1.08rem] leading-relaxed text-[var(--copy-color,var(--bone))]/75">
         Name the poll. Then choose dates — click them one at a time on the calendar, or set a weekly pattern like
         &lsquo;every Tuesday&rsquo; in one tap. Add a time window only if the hour matters. This form is real: fill it

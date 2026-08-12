@@ -12,6 +12,9 @@ import React, { useEffect, useState } from 'react'
 // land on.
 import '@assets/css/index.css'
 import { AuthProvider } from '@components/auth-context'
+import { installPromptStore } from '@hooks/useInstallPrompt'
+import { useServiceWorker } from '@hooks/useServiceWorker'
+import { runRecentPollsMigration } from '@utils/recent-polls-migration'
 
 // These two faces used to arrive as Fontsource side-effect imports, which put their @font-face rules
 // inside the render-blocking stylesheet -- so the browser could not discover the woff2 files until
@@ -42,6 +45,18 @@ const plusJakartaSans = localFont({
 })
 
 export default function App({ Component, pageProps }: AppProps) {
+  // Chromium fires `beforeinstallprompt` once, early, and the event cannot be replayed or asked for
+  // again (AC-035). This runs in the render body, not from an effect: effects run after the first
+  // paint, and mounting `useInstallPrompt` -- which starts the store from its own effect -- in the
+  // component that renders the offer is later still, by which point the event has fired and been
+  // discarded. `start` is idempotent and no-ops without a `window`, so re-renders and the static
+  // export's prerender both cost nothing.
+  installPromptStore.start()
+
+  // Registers /sw.js in production and actively unregisters an existing worker under `next dev`
+  // (AC-005, AC-006). Every failure mode is swallowed inside the hook; nothing surfaces here.
+  useServiceWorker()
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -56,6 +71,15 @@ export default function App({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     document.documentElement.classList.add('dark')
+  }, [])
+
+  // Sweeps the legacy `pat_onboarded_*` keys (AC-029). Nothing else calls it. It records its own
+  // done flag inside `pat_recent_polls`, so every load after the first is a no-op -- the empty
+  // dependency list keeps it to one call per load, and the flag keeps it to one sweep per device.
+  // In an effect rather than in render because it reads localStorage, which the static export's
+  // prerender does not have.
+  useEffect(() => {
+    runRecentPollsMigration()
   }, [])
 
   return (

@@ -17,7 +17,7 @@
   "homepage": "https://github.com/davidbowland/pick-a-time-ui#readme",
   "scripts": {
     "build": "npm run clean && next build",
-    "postbuild": "next-export-optimize-images && node scripts/generate-dynamic-pages.js && next-sitemap",
+    "postbuild": "next-export-optimize-images && node scripts/generate-dynamic-pages.js && next-sitemap && node scripts/build-sw.js",
     "clean": "rm -rf .next coverage out && npm ci",
     "deploy": "DEVELOPMENT=true npm run build && ./scripts/deploy.sh",
     "lint": "prettier --write . && eslint --fix .",
