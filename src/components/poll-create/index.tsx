@@ -196,14 +196,23 @@ const PollCreate = ({
   // viewport and already partly onscreen, so 'nearest' has nothing to do. Scrolling the
   // newly-opened section itself to the top of the viewport works in both directions. Skipped on
   // the very first render, since 'name' is already in view then.
+  //
+  // `behavior: 'instant'`, not 'smooth': this scroll isn't a journey the visitor asked to watch,
+  // it's a correction for content that moved under them. Animating it means several hundred ms of
+  // the page sliding on its own right after a tap, which reads as the screen running away rather
+  // than as the next step arriving. Jumping means the new step is simply *there*.
+  // It must be 'instant' and not 'auto': `html { scroll-behavior: smooth }` in index.css is the
+  // site-wide default (anchor links and the hero's "Start" hand-off want it), and 'auto' means
+  // "defer to CSS" — i.e. smooth — so only 'instant' actually overrides it here.
+  // The `scroll-mt-*` on each section wrapper (below) is the other half: it keeps the step off the
+  // very top edge, leaving the finished step's bottom border visible as an anchor for where we are.
   useEffect(() => {
     if (isFirstOpenSectionRenderRef.current) {
       isFirstOpenSectionRenderRef.current = false
       return
     }
     const sectionRef = { name: nameSectionRef, daysTimes: daysTimesSectionRef, review: reviewSectionRef }[openSection]
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    sectionRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+    sectionRef.current?.scrollIntoView({ behavior: 'instant', block: 'start' })
   }, [openSection])
 
   // reCAPTCHA costs ~670 KiB of script and ~900 ms of CPU on a mid-range phone, and this form is
@@ -408,7 +417,9 @@ const PollCreate = ({
     // The quick-fill buttons sit above the calendar, so applying one can leave the (now-updated)
     // calendar off-screen below the fold — scroll it into view so the result is actually visible.
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    calendarRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' })
+    // 'instant' rather than 'auto' for the same reason as the section scroll above: 'auto' defers
+    // to `html { scroll-behavior: smooth }`, so it animated for reduced-motion users.
+    calendarRef.current?.scrollIntoView({ behavior: reduceMotion ? 'instant' : 'smooth', block: 'nearest' })
   }
 
   const handleSubmit = (): void => {
@@ -474,7 +485,13 @@ const PollCreate = ({
       <CreateCard>
         <CreateCardHeader />
 
-        <div ref={nameSectionRef}>
+        {/*
+          `scroll-mt-7` (28px) is what the section-scroll effect above lands on. The sections are
+          stacked 18px apart, so 28px puts the viewport's top edge 10px *into* the step that was
+          just finished: enough of its bottom border shows to read as "that one's done, this one's
+          next", and the open step never sits flush against the top of the screen.
+        */}
+        <div className="scroll-mt-7" ref={nameSectionRef}>
           <ChecklistSection
             isDone={furthestIndex > 0}
             isOpen={openSection === 'name'}
@@ -505,7 +522,7 @@ const PollCreate = ({
           </ChecklistSection>
         </div>
 
-        <div ref={daysTimesSectionRef}>
+        <div className="scroll-mt-7" ref={daysTimesSectionRef}>
           <ChecklistSection
             isDone={furthestIndex > 1}
             isOpen={openSection === 'daysTimes'}
@@ -615,7 +632,7 @@ const PollCreate = ({
           </ChecklistSection>
         </div>
 
-        <div ref={reviewSectionRef}>
+        <div className="scroll-mt-7" ref={reviewSectionRef}>
           <ChecklistSection
             isDone={furthestIndex > 2}
             isOpen={openSection === 'review'}

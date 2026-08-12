@@ -126,9 +126,12 @@ const Index = (): React.ReactNode => {
     else root.removeAttribute(RECENT_POLLS_ATTRIBUTE)
   }, [polls.length])
 
+  // The reduced-motion branch must be 'instant', not 'auto': `html { scroll-behavior: smooth }` in
+  // index.css is the site-wide default, and 'auto' means "defer to CSS" — so 'auto' animated the
+  // scroll for exactly the people who asked for no animation. Only 'instant' overrides the CSS.
   const scrollTo = (target: HTMLElement | null | undefined): void => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    target?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+    target?.scrollIntoView({ behavior: reduceMotion ? 'instant' : 'smooth', block: 'start' })
   }
 
   const scrollToCreateScene = (): void => {

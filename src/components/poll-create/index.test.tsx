@@ -122,6 +122,19 @@ describe('PollCreate', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }))
   })
 
+  // 'instant' specifically, not 'auto': the site sets `html { scroll-behavior: smooth }`, and
+  // 'auto' defers to that CSS — it would animate. Only 'instant' overrides it, so asserting the
+  // exact keyword is what keeps this from silently regressing to a smooth scroll.
+  it('jumps to the newly-opened section instead of animating, so the page never slides under the tap', async () => {
+    setup()
+    renderWithClient()
+
+    await userEvent.click(continueButton())
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'instant' }))
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+  })
+
   it('scrolls the calendar into view when a quick-fill preset is applied, so the result is visible', async () => {
     setup()
     renderWithClient()
