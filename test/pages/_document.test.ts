@@ -25,12 +25,11 @@ describe('_document.tsx favicon links', () => {
 })
 
 describe('_document.tsx viewport (AC-027)', () => {
-  it('declares a viewport so safe-area insets resolve to something', () => {
-    expect(source).toMatch(/name="viewport"/)
-  })
-
-  it('opts into the display cutout with viewport-fit=cover', () => {
-    expect(source).toMatch(/content="width=device-width, initial-scale=1, viewport-fit=cover"/)
+  it('declares no viewport tag, which Next warns about here', () => {
+    // no-document-viewport-meta: _document renders once on the server, outside next/head's dedupe,
+    // so a viewport declared here can only ever be a second tag racing next/head's. The real one
+    // lives in _app — see test/pages/_app-viewport.test.ts.
+    expect(source).not.toMatch(/name="viewport"/)
   })
 })
 

@@ -10,9 +10,14 @@ export interface ShareProps {
 
 const Share = ({ pollName, sessionId }: ShareProps): React.ReactNode => {
   const [copied, setCopied] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const [isQrOpen, setIsQrOpen] = useState(false)
   const hasWebShare = useHasWebShare()
 
-  const sessionUrl = `${typeof window === 'undefined' ? '' : window.location.origin}/p/${sessionId}`
+  // encodeURIComponent, matching services/api.ts:125: an identifier carrying a URL-meaningful
+  // character would otherwise produce a link, a QR payload and a Web Share URL that all point
+  // somewhere other than this poll.
+  const sessionUrl = `${typeof window === 'undefined' ? '' : window.location.origin}/p/${encodeURIComponent(sessionId)}`
 
   const handleCopy = async (): Promise<void> => {
     try {
@@ -23,6 +28,25 @@ const Share = ({ pollName, sessionId }: ShareProps): React.ReactNode => {
       // Clipboard write failures are silent — the Copied announcement simply never
       // fires, and the Share button and QR code remain available as fallbacks.
     }
+  }
+
+  const handleCopyCode = async (): Promise<void> => {
+    try {
+      // The identifier alone, not the URL — this is the thing someone reads out or types in.
+      await navigator.clipboard.writeText(sessionId)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    } catch {
+      // Silent, as above: no success is claimed, and the code stays on screen to be read
+      // aloud or selected by hand.
+    }
+  }
+
+  const handleQrOpenChange = (isOpen: boolean): void => {
+    setIsQrOpen(isOpen)
+    // A confirmation left over from a previous visit to the modal would be stale, and it would
+    // mount the live region already populated, where nothing announces it.
+    setCodeCopied(false)
   }
 
   const handleShare = async (): Promise<void> => {
@@ -38,7 +62,14 @@ const Share = ({ pollName, sessionId }: ShareProps): React.ReactNode => {
     <ShareGroup>
       {hasWebShare && <ShareButton onPress={handleShare} />}
       <CopyButton copied={copied} onPress={handleCopy} />
-      <QrButton url={sessionUrl} />
+      <QrButton
+        codeCopied={codeCopied}
+        isOpen={isQrOpen}
+        onCopyCode={handleCopyCode}
+        onOpenChange={handleQrOpenChange}
+        sessionId={sessionId}
+        url={sessionUrl}
+      />
     </ShareGroup>
   )
 }

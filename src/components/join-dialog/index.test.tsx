@@ -1,0 +1,583 @@
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query'
+import { useRouter } from 'next/router'
+import React from 'react'
+
+import { JoinTrigger, JoinTriggerProps } from './index'
+import { fetchPoll } from '@services/api'
+import '@testing-library/jest-dom'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { PollData } from '@types'
+
+// Only `fetchPoll` is replaced. `hasStatusCode` and `parseApiMessage` are pure and stay real --
+// and this partial mock is precisely the arrangement that makes `instanceof ApiError` unreliable,
+// which is why the dialog reads the status structurally instead.
+jest.mock('@services/api', () => ({
+  ...jest.requireActual('@services/api'),
+  fetchPoll: jest.fn(),
+}))
+jest.mock('next/router', () => ({ useRouter: jest.fn() }))
+
+const poll = { expiration: 1_800_000_000, name: 'Board meeting — Q3' } as PollData
+
+/** The shape a failed request arrives in: a plain object, never an `ApiError` instance. */
+const apiFailure = (statusCode: number, body = ''): unknown => ({ response: { body, headers: {}, statusCode } })
+
+interface Deferred {
+  promise: Promise<PollData>
+  resolve: (value: PollData) => void
+}
+
+const deferred = (): Deferred => {
+  let resolve!: (value: PollData) => void
+  const promise = new Promise<PollData>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
+describe('JoinTrigger', () => {
+  const push = jest.fn()
+  const isOnline = jest.fn()
+
+  beforeAll(() => {
+    // jsdom's navigator.onLine is a read-only accessor on the prototype, so it is replaced once
+    // with one that reads a mock. `setup()` restores the default for every test.
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => isOnline() })
+  })
+
+  afterAll(() => {
+    onlineManager.setOnline(true)
+  })
+
+  function setup(): void {
+    isOnline.mockReturnValue(true)
+    onlineManager.setOnline(true)
+    // `mockResolvedValue`, not a bare `jest.fn()`. `router.push` returns a promise and the component
+    // attaches a `.catch` to it; a mock returning `undefined` makes that a TypeError thrown inside
+    // `onSuccess`, which query-core catches and turns into `onError`. Every test here would still
+    // pass — the success branch has already rendered by then — while the component under test was
+    // quietly failing on every single one of them.
+    push.mockResolvedValue(true)
+    jest.mocked(useRouter).mockReturnValue({ push } as any)
+    jest.mocked(fetchPoll).mockResolvedValue(poll)
+  }
+
+  /** Both the browser and React Query believe the device is offline. */
+  function goOffline(): void {
+    isOnline.mockReturnValue(false)
+    onlineManager.setOnline(false)
+  }
+
+  const renderTrigger = (variant?: JoinTriggerProps['variant']): void => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <JoinTrigger variant={variant} />
+      </QueryClientProvider>,
+    )
+  }
+
+  const trigger = (): HTMLElement => screen.getByRole('button', { name: 'Enter it and join a poll' })
+
+  const openDialog = async (): Promise<HTMLElement> => {
+    await userEvent.click(trigger())
+    return await screen.findByRole('dialog')
+  }
+
+  const field = (): HTMLElement => screen.getByLabelText('Poll code or link')
+
+  const enterCode = async (code: string): Promise<HTMLElement> => {
+    const dialog = await openDialog()
+    await userEvent.type(field(), code)
+    return dialog
+  }
+
+  const submit = async (dialog: HTMLElement): Promise<void> => {
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Join poll' }))
+  }
+
+  describe('the trigger', () => {
+    it('asks the question in words, and extends the control name for screen readers', () => {
+      setup()
+
+      renderTrigger()
+
+      expect(screen.getByText('Have a poll code?')).toBeInTheDocument()
+      expect(trigger()).toBeInTheDocument()
+    })
+
+    it('offers a plain pill where a sentence has nothing to sit beside', () => {
+      setup()
+
+      renderTrigger('pill')
+
+      expect(screen.getByRole('button', { name: 'Enter a poll code' })).toBeInTheDocument()
+    })
+
+    it('renders no dialog until it is pressed, so the overlay chunk is never fetched', () => {
+      setup()
+
+      renderTrigger()
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('opens the dialog from the pill too', async () => {
+      setup()
+
+      renderTrigger('pill')
+      await userEvent.click(screen.getByRole('button', { name: 'Enter a poll code' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Join a poll' })).toBeInTheDocument()
+    })
+  })
+
+  describe('opening', () => {
+    it('names the dialog, its field, and its way out', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await openDialog()
+
+      expect(screen.getByRole('dialog', { name: 'Join a poll' })).toBeInTheDocument()
+      expect(field()).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Join poll' })).toBeInTheDocument()
+    })
+
+    it('says what the field accepts, and describes the field with it', async () => {
+      setup()
+
+      renderTrigger()
+      await openDialog()
+
+      expect(screen.getByText('Like lazy giraffe. A whole poll link works too.')).toBeInTheDocument()
+      expect(field()).toHaveAccessibleDescription('Like lazy giraffe. A whole poll link works too.')
+    })
+
+    it('puts focus on the field, not on the close button', async () => {
+      setup()
+
+      renderTrigger()
+      await openDialog()
+
+      await waitFor(() => expect(field()).toHaveFocus())
+    })
+
+    it('mounts both live regions empty, so a later change is the thing announced', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await openDialog()
+
+      expect(within(dialog).getByRole('alert')).toBeEmptyDOMElement()
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('closes on Escape and returns focus to the trigger', async () => {
+      setup()
+
+      renderTrigger()
+      await openDialog()
+      await userEvent.keyboard('{Escape}')
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() => expect(trigger()).toHaveFocus())
+    })
+
+    it('closes on the close control', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await openDialog()
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+  })
+
+  describe('before any request', () => {
+    it('asks for a value rather than looking up nothing', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await openDialog()
+      await submit(dialog)
+
+      expect(await within(dialog).findByText('Enter your poll code or link')).toBeInTheDocument()
+      expect(fetchPoll).not.toHaveBeenCalled()
+    })
+
+    it('refuses locally what could not be a poll code, and spends no request on it', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('100%')
+      await submit(dialog)
+
+      expect(await within(dialog).findByText("Couldn't read that as a poll code.")).toBeInTheDocument()
+      expect(
+        within(dialog).getByText('Enter the poll code, like lazy giraffe, or paste the whole poll link.'),
+      ).toBeInTheDocument()
+      expect(fetchPoll).not.toHaveBeenCalled()
+    })
+
+    it('keeps the refused value and selects it, so a retry is one keystroke', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('100%')
+      await submit(dialog)
+
+      await waitFor(() => expect(field()).toHaveFocus())
+      expect(field()).toHaveValue('100%')
+    })
+
+    it('marks the field invalid and describes it with the error', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('100%')
+      await submit(dialog)
+
+      await waitFor(() => expect(field()).toHaveAttribute('aria-invalid', 'true'))
+      expect(field()).toHaveAccessibleDescription(/Couldn't read that as a poll code\./)
+    })
+  })
+
+  describe('a code that resolves', () => {
+    it('names the poll it found and goes there', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(await screen.findByText('Opening Board meeting — Q3…')).toBeInTheDocument()
+      expect(screen.getByText('Poll code: lazy giraffe')).toBeInTheDocument()
+      expect(fetchPoll).toHaveBeenCalledWith('lazy-giraffe')
+      expect(push).toHaveBeenCalledWith('/p/lazy-giraffe')
+    })
+
+    it('goes nowhere when the dialog was dismissed while the lookup was still running', async () => {
+      // useMutation's callbacks still fire after its observer unmounts, so without a guard someone
+      // who closes mid-lookup gets yanked to a poll a second after deciding against it. That is the
+      // same "navigation the user is no longer expecting" that networkMode: 'always' exists to
+      // prevent, arriving through a different door.
+      setup()
+      const pending = deferred()
+      jest.mocked(fetchPoll).mockReturnValueOnce(pending.promise)
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await userEvent.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      pending.resolve(poll)
+
+      await waitFor(() => expect(fetchPoll).toHaveBeenCalledWith('lazy-giraffe'))
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the code when the poll has no name', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockResolvedValueOnce({ ...poll, name: '' })
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(await screen.findByText('Opening lazy giraffe…')).toBeInTheDocument()
+      expect(screen.queryByText('Poll code: lazy giraffe')).not.toBeInTheDocument()
+    })
+
+    it('focuses the headline, which is what announces it', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      await waitFor(() => expect(screen.getByText('Opening Board meeting — Q3…')).toHaveFocus())
+    })
+
+    it('leaves the status region empty, so the success is not announced twice', async () => {
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      await screen.findByText('Opening Board meeting — Q3…')
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('encodes the code it routes to', async () => {
+      // A code carrying a character that ENCODES DIFFERENTLY. The earlier version of this test used
+      // `lazy%20giraffe`, which the parser normalises to `lazy-giraffe` — and since
+      // `encodeURIComponent('lazy-giraffe')` is `lazy-giraffe`, deleting the encode entirely left
+      // the test green. It proved normalisation and called it encoding.
+      //
+      // The parser deliberately allows non-ASCII (it refuses only what could mean something other
+      // than itself in a URL, never a shape), so this input is one the app must really handle.
+      setup()
+
+      renderTrigger()
+      const dialog = await enterCode('perezoso jirafa ñ')
+      await submit(dialog)
+
+      await screen.findByText('Opening Board meeting — Q3…')
+      expect(push).toHaveBeenCalledWith('/p/perezoso-jirafa-%C3%B1')
+    })
+
+    it('shows a failure rather than sitting on "Opening…" when the navigation itself rejects', async () => {
+      // Without the `.catch`, a rejected push leaves the success panel on screen forever: a poll
+      // that says it is opening and never opens. Untested until now because the router mock
+      // returned `undefined`, which made this branch unreachable.
+      setup()
+      push.mockRejectedValueOnce(new Error('route cancelled'))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(await within(dialog).findByText('Something went wrong looking that up. Try again.')).toBeInTheDocument()
+      expect(screen.queryByText('Opening Board meeting — Q3…')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('while the lookup is in flight', () => {
+    it('says what it is doing, in the status region and on the button', async () => {
+      setup()
+      const pending = deferred()
+      jest.mocked(fetchPoll).mockReturnValueOnce(pending.promise)
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Finding your poll…'))
+      expect(within(dialog).getByRole('button', { name: 'Finding your poll…' })).toBeInTheDocument()
+
+      pending.resolve(poll)
+      await screen.findByText('Opening Board meeting — Q3…')
+    })
+
+    it('keeps the field in the tab order rather than disabling it under the caret', async () => {
+      setup()
+      const pending = deferred()
+      jest.mocked(fetchPoll).mockReturnValueOnce(pending.promise)
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      await waitFor(() => expect(field()).toHaveAttribute('readonly'))
+      expect(field()).toHaveAttribute('aria-disabled', 'true')
+      expect(field()).not.toBeDisabled()
+
+      pending.resolve(poll)
+      await screen.findByText('Opening Board meeting — Q3…')
+    })
+
+    it('will not start a second lookup', async () => {
+      setup()
+      const pending = deferred()
+      jest.mocked(fetchPoll).mockReturnValueOnce(pending.promise)
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Finding your poll…'))
+      // Enter in the field submits the form again -- the button is already unavailable, the guard
+      // in the handler is what stops this one.
+      await userEvent.type(field(), '{Enter}')
+
+      expect(fetchPoll).toHaveBeenCalledTimes(1)
+
+      pending.resolve(poll)
+      await screen.findByText('Opening Board meeting — Q3…')
+    })
+  })
+
+  describe('a code that misses', () => {
+    it('reads the code back and says what to do about it', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again."),
+      ).toBeInTheDocument()
+      expect(within(dialog).getByText("If it's right, the poll may have closed.")).toBeInTheDocument()
+    })
+
+    it('does not read back a value too long to be evidence', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('a-poll-code-far-longer-than-anyone-would-say-aloud')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText("Couldn't find that poll code. Check the spelling and try again."),
+      ).toBeInTheDocument()
+    })
+
+    it('says something new the second time, rather than repeating itself', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText('Still no poll with that code. Check it against what you were sent.'),
+      ).toBeInTheDocument()
+      expect(
+        within(dialog).getByText('If it matches, the poll may have closed. Ask whoever sent it for the link.'),
+      ).toBeInTheDocument()
+    })
+
+    it('starts counting again once the value changes to something new', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+      await submit(dialog)
+      await within(dialog).findByText('Still no poll with that code. Check it against what you were sent.')
+      await userEvent.clear(field())
+      await userEvent.type(field(), 'brave otter')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText("Couldn't find brave otter. Check the spelling and try again."),
+      ).toBeInTheDocument()
+    })
+
+    it('still escalates when the same value is cleared and retyped', async () => {
+      // The path the second-miss copy was written for: someone re-reading the words off a phone
+      // call, who clears the field and types the same thing again because they misheard nothing.
+      // Tracking this on every keystroke could never work — getting back to `lazy giraffe` means
+      // passing through `l`, `la`, `laz`, each of which differs from the value that missed.
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+      await userEvent.clear(field())
+      await userEvent.type(field(), 'lazy giraffe')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText('Still no poll with that code. Check it against what you were sent.'),
+      ).toBeInTheDocument()
+    })
+
+    it('escalates when the same code is retyped in a different shape', async () => {
+      // `lazy giraffe` and `Lazy-Giraffe` are the same identifier. Someone re-reading two words off
+      // a message types a different string for the same poll nearly every attempt, so keying the
+      // counter on raw text would hand them the first-miss copy forever.
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+      await userEvent.clear(field())
+      await userEvent.type(field(), 'Lazy-Giraffe')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText('Still no poll with that code. Check it against what you were sent.'),
+      ).toBeInTheDocument()
+    })
+
+    it('keeps the typed value through the failure', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+
+      expect(field()).toHaveValue('lazy giraffe')
+      await waitFor(() => expect(field()).toHaveFocus())
+    })
+
+    it('goes nowhere', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(404))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+      await within(dialog).findByText("Couldn't find lazy giraffe. Check the spelling and try again.")
+
+      expect(push).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('a lookup that cannot happen', () => {
+    // The regression test for `networkMode: 'always'`. React Query v5 pauses an online-mode
+    // mutation fired while offline: nothing is requested, `onError` never fires, and this message
+    // never arrives -- the submit just hangs with the spinner up.
+    it('says so while the device is offline, rather than waiting forever', async () => {
+      setup()
+      goOffline()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(
+        await within(dialog).findByText("Couldn't look that up. Check your connection and try again."),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('passes on what the API said about its own failure', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(apiFailure(503, JSON.stringify({ message: 'Try again shortly.' })))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(await within(dialog).findByText('Try again shortly.')).toBeInTheDocument()
+    })
+
+    it('falls back to its own words, and never puts the thrown message on screen', async () => {
+      setup()
+      jest.mocked(fetchPoll).mockRejectedValueOnce(new Error('GET /sessions/lazy-giraffe responded with 500'))
+
+      renderTrigger()
+      const dialog = await enterCode('lazy giraffe')
+      await submit(dialog)
+
+      expect(await within(dialog).findByText('Something went wrong looking that up. Try again.')).toBeInTheDocument()
+      expect(screen.queryByText(/GET \/sessions/)).not.toBeInTheDocument()
+    })
+  })
+})

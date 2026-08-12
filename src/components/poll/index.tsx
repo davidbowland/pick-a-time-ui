@@ -12,6 +12,7 @@ import VoterIdentityControl from './voter-identity'
 import { useAuthContext } from '@components/auth-context'
 import ErrorBoundary from '@components/error-boundary'
 import InstallPrompt from '@components/install-prompt'
+import { JoinTrigger } from '@components/join-dialog'
 import Share from '@components/share'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { usePollOnboarding } from '@hooks/usePollOnboarding'
@@ -37,7 +38,11 @@ const GONE_COPY = {
   body: "The poll closed or was deleted, so it's no longer in your polls.",
   heading: (pollName: string): string => `${pollName} isn't there anymore`,
   startPoll: 'Start a poll',
-  status: (pollName: string): string => `${pollName} is no longer available and has been removed from your polls.`,
+  // Announced, not read. It restates the heading and body on purpose -- that is what the region is
+  // for -- but in the app's own voice rather than the passive: "is no longer available and has been
+  // removed" was two passives and a zombie noun where the visible copy right above it says
+  // "isn't there anymore" and "closed or was deleted" (AC-050).
+  status: (pollName: string): string => `${pollName} isn't there anymore. It closed or was deleted.`,
   yourPolls: 'Go to your polls',
 }
 
@@ -79,6 +84,12 @@ export const PollGoneState = ({
         {GONE_COPY.startPoll}
       </Link>
     </div>
+    {/* Last, and deliberately not a third pill. The two links above are certainties -- both go
+        somewhere that exists. Entering a code is a maybe, and dressing it like its neighbours would
+        turn one clear pair of exits into three equal-looking offers. So it is the same quiet
+        sentence the home page uses, one line beneath the row, which also puts it last in reading
+        and focus order: heading, fact, the two ways out, then the way back in. */}
+    <JoinTrigger />
   </div>
 )
 
@@ -89,6 +100,14 @@ export const PollGoneState = ({
  * and a check that depends on class identity fails quietly wherever the class is duplicated (two
  * copies of the module, an automocked `@services/api`) — turning a gone poll back into a generic
  * error with no visible sign that anything is wrong.
+ *
+ * `services/api.ts` exports `hasStatusCode`, which is this function with the status as a parameter,
+ * and delegating to it looks like the obvious cleanup. It is not: this file's own test does
+ * `jest.mock('@services/api')`, so the delegate would resolve to an automock returning `undefined`
+ * and `isPollGone` would be false for every input, forever. That is the same class of silent
+ * failure the paragraph above is about, arriving by the door marked "remove duplication". The two
+ * exist separately on purpose — this one for a component whose API module is mocked wholesale, that
+ * one for callers that mock nothing.
  */
 export const isPollGone = (error: unknown): boolean =>
   (error as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === 404

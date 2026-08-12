@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useRouter } from 'next/router'
 import React from 'react'
 
 import Poll, { PollGoneState, isPollGone } from './index'
@@ -27,12 +28,21 @@ jest.mock('@hooks/useInstallPrompt')
 jest.mock('@hooks/useSessionCookie')
 jest.mock('@utils/detectViewerTimezone')
 jest.mock('@components/auth-context')
+// The gone screen's join dialog navigates on a successful lookup, and `useRouter` throws outside a
+// mounted router. Nothing here reaches the navigation; this only lets the dialog mount.
+jest.mock('next/router', () => ({ useRouter: jest.fn() }))
 
 describe('Poll', () => {
   // Every render below injects this clock, so nothing in this file compares stored expirations
   // against the wall clock. It sits before the fixture poll's expiration and before the seeded
   // entry's, which is what keeps both of them "live" on any day this suite runs.
   const fixedNow = (): number => 1_700_000_000_000
+
+  /**
+   * The join trigger's accessible name on the poll-is-gone screen: the visible `Enter it` plus the
+   * screen-reader-only extension that makes the name say what it does out of context.
+   */
+  const CODE_CONTROL = 'Enter it and join a poll'
 
   // What the install hook reports for the render under way. Only the two install tests change it,
   // and the teardown below puts it back — a leaked `ios-share` would put a banner into every later
@@ -108,6 +118,7 @@ describe('Poll', () => {
   }
 
   beforeAll(() => {
+    jest.mocked(useRouter).mockReturnValue({ push: jest.fn() } as unknown as ReturnType<typeof useRouter>)
     jest.mocked(useSessionCookie).mockReturnValue({ userId: undefined, setUserId: jest.fn(), clearUserId: jest.fn() })
     // usePollOnboarding reads real window.localStorage. Three of the tests below reach the identity
     // phase using this poll's sessionId ("amber-harbor") and assert on the poll name via
@@ -736,7 +747,7 @@ describe('Poll', () => {
 
       await waitFor(() =>
         expect(screen.getByRole('status')).toHaveTextContent(
-          'Sprint retro is no longer available and has been removed from your polls.',
+          "Sprint retro isn't there anymore. It closed or was deleted.",
         ),
       )
     })
@@ -760,6 +771,39 @@ describe('Poll', () => {
       expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent("This poll isn't there anymore")
     })
 
+    it('offers a way back in to somebody who still has the poll code', async () => {
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      expect(await screen.findByRole('button', { name: CODE_CONTROL })).toBeInTheDocument()
+    })
+
+    it('puts the way back in last, after both ways out', async () => {
+      // Heading, fact, the two ways out, then the way back in. The two links are certainties; the
+      // code is a maybe, and it must not read as a third equal offer.
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      const control = await screen.findByRole('button', { name: CODE_CONTROL })
+      const yourPolls = screen.getByRole('link', { name: 'Go to your polls' })
+      const startPoll = screen.getByRole('link', { name: 'Start a poll' })
+
+      expect(yourPolls.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(startPoll.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('opens the join dialog from the code control', async () => {
+      const storage = seededStorage([entry])
+
+      renderGone(storage)
+
+      await userEvent.click(await screen.findByRole('button', { name: CODE_CONTROL }))
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+
     it('falls back to the retryable error state when the failure is not a 404', async () => {
       window.history.replaceState(null, '', '/')
       const storage = seededStorage([entry])
@@ -781,6 +825,23 @@ describe('Poll', () => {
       render(<PollGoneState announcement="" pollName="Sprint retro" />)
 
       expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('adds no second live region when the code control is on screen', () => {
+      // The trigger sits in the same subtree as the announcement. A second `role="status"` would
+      // make `getByRole('status')` ambiguous for a screen reader as much as for this suite.
+      render(<PollGoneState announcement="Sprint retro isn't there anymore." pollName="Sprint retro" />)
+
+      expect(screen.getByRole('button', { name: CODE_CONTROL })).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent("Sprint retro isn't there anymore.")
+    })
+
+    it('leaves the dialog unmounted until the control is pressed', () => {
+      // No QueryClientProvider here on purpose: the dialog's lookup mutation needs one, so this
+      // render can only succeed while the dialog is still behind its trigger.
+      render(<PollGoneState announcement="" pollName="Sprint retro" />)
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 

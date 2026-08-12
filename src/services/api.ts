@@ -256,6 +256,23 @@ export function parseApiMessage(body: string | undefined, fallback: string): str
   return parseBodyField(body, 'message') ?? fallback
 }
 
+/**
+ * Whether a thrown value carries a particular HTTP status.
+ *
+ * Read structurally rather than with `instanceof ApiError`, for the reason `isPollGone` sets out at
+ * length (src/components/poll/index.tsx:86-94): the status is the fact that matters, and a check
+ * that depends on class identity fails quietly wherever the class is duplicated -- two copies of the
+ * module, or an automocked `@services/api`, which is exactly what a component test does. The failure
+ * mode is silent: a 404 stops reading as a 404 and falls through to the generic error path with
+ * nothing on screen to say anything is wrong.
+ *
+ * It lives here beside `ApiError` rather than in a component so callers on the landing page can
+ * reach it without importing from `@components/poll`, which would pull Poll and Share into that
+ * page's chunk.
+ */
+export const hasStatusCode = (err: unknown, statusCode: number): boolean =>
+  (err as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === statusCode
+
 export function hasErrorCode(err: unknown, code: ErrorCode): boolean {
   if (err instanceof ApiError) {
     if (err.response.statusCode !== 400 || !err.response.body) return false

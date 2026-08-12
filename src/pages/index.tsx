@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import dynamic from 'next/dynamic'
 import Head from 'next/head'
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
-import InstallPrompt from '@components/install-prompt'
+import { JoinTrigger } from '@components/join-dialog'
 import PrivacyLink from '@components/privacy-link'
 import RecentPolls from '@components/recent-polls'
 import { BackToFormCta } from '@components/story/back-to-form-cta'
@@ -13,6 +14,14 @@ import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } fro
 import { SkyBackground } from '@components/story/sky-background'
 import { defaultStorage, useRecentPolls } from '@hooks/useRecentPolls'
 import { fetchConfig } from '@services/api'
+
+// The offer renders nothing at all on a browser that cannot install, and nothing it does render is
+// in the prerendered HTML, so its HeroUI Modal has no business in the first-paint download. Not
+// prefetched: 2.9 KB gzip is below the threshold where warming it would pay for itself.
+//
+// `ssr: false` costs no markup — the banner is gated on `beforeinstallprompt` and a capability
+// check that only exist in a browser, so the export never rendered it either.
+const InstallPrompt = dynamic(() => import('@components/install-prompt'), { ssr: false })
 
 const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
 
@@ -217,6 +226,13 @@ const Index = (): React.ReactNode => {
             ) : (
               <div aria-busy="true" className="min-h-[18rem]" />
             )}
+            {/* Beneath the list and above the starter: someone who came back for a poll that isn't
+                in the list is looking here, and the sentence answers them before they reach a form
+                for starting a new one. It ships in the markup with no gate of its own, so it
+                inherits this wrapper's visibility and stays out of the pre-paint contract above. */}
+            <div className="mt-8">
+              <JoinTrigger />
+            </div>
             <div className="mt-10">{starter(handleTourStart)}</div>
             <div className="mt-10 border-t border-[var(--bone)]/10 pt-8">
               {/* The control carries the heading, not just a button. With recents at `h1` and the
@@ -279,6 +295,15 @@ const Index = (): React.ReactNode => {
           <section className={SCENE_CLASS} ref={heroSceneRef}>
             <HeroScene action={starter(handleHeroStart)} />
           </section>
+          {/* A sibling of the hero, not part of its `action`. `SceneLayout` renders `action` as a
+              single node (`story/scenes.tsx:45`), and the page's own test reads `action.props`, so
+              wrapping the starter and this trigger in one fragment would change what `action` is.
+              The grid mirrors `SceneLayout`'s, which lands the sentence under the hero's copy
+              column; the negative top margin pulls it back into the hero's own padding so it reads
+              as a footnote to the starter rather than as a scene of its own. */}
+          <div className="mx-auto -mt-8 grid max-w-[1180px] grid-cols-1 gap-12 px-5 md:-mt-20 md:grid-cols-2 md:gap-20">
+            <JoinTrigger />
+          </div>
           <section className={SCENE_CLASS} ref={createSceneRef}>
             <CreateScene
               formRef={pollFormRef}

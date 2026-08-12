@@ -1,10 +1,10 @@
 import { CalendarDate, getLocalTimeZone, today as calendarToday } from '@internationalized/date'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/router'
 import React, { useEffect, useId, useRef, useState } from 'react'
 
 import { ChecklistSection } from './checklist-section'
-import { DatePickerCalendar } from './date-picker'
 import { CreateCard, CreateCardHeader, PollNameField, WeekCountStepper, WeekdayPicker } from './elements'
 import {
   computeStartEndMinuteStep,
@@ -61,6 +61,21 @@ const waitForRecaptcha = (): Promise<void> =>
     check()
   })
 
+// HeroUI's Calendar and its react-aria tree are 20 KB gzip that cannot render until the `config`
+// query resolves, so they were 20 KB of first-paint download the page was structurally incapable of
+// using. Split out, and PREFETCHED from the mount effect below rather than fetched when the step
+// opens: the visitor spends the intervening seconds on the name field, which is ample for 20 KB.
+// `import()` is memoised by the module registry, so `dynamic()` resolves from this same promise
+// without issuing a second request.
+//
+// No `loading` placeholder is needed. The calendar mounts inside a collapsed ChecklistSection, so
+// nothing it replaces is in the layout and there is no shift to reserve space against.
+const loadDatePicker = () => import('./date-picker')
+
+const DatePickerCalendar = dynamic(async () => (await loadDatePicker()).DatePickerCalendar, {
+  ssr: false,
+})
+
 export interface PollCreateProps {
   now?: () => CalendarDate
   name?: string
@@ -75,6 +90,12 @@ const PollCreate = ({
   registerFocusName,
 }: PollCreateProps): React.ReactNode => {
   const router = useRouter()
+  // Warms the calendar chunk while the visitor is still on the name field. Fire-and-forget: a
+  // failed prefetch costs nothing, because `dynamic()` retries the same import when the date step
+  // actually opens.
+  useEffect(() => {
+    loadDatePicker().catch(() => undefined)
+  }, [])
   const [openSection, setOpenSection] = useState<OpenSection>('name')
   const [furthestIndex, setFurthestIndex] = useState(0)
   // The poll name is optionally controlled by the landing page so a hero starter can share it.

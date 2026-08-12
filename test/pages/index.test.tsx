@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useRouter } from 'next/router'
 import React from 'react'
 
 import InstallPrompt from '@components/install-prompt'
@@ -25,6 +26,9 @@ jest.mock('@components/privacy-link')
 jest.mock('@components/install-prompt')
 jest.mock('@components/poll-create')
 jest.mock('@services/api')
+// The page never routes. The join dialog it now hosts calls `useRouter` on mount, and jsdom has no
+// router mounted, so opening the dialog would throw "NextRouter was not mounted" before it rendered.
+jest.mock('next/router', () => ({ useRouter: jest.fn() }))
 jest.mock('@hooks/useRecentPolls', () => ({
   ...jest.requireActual('@hooks/useRecentPolls'),
   useRecentPolls: jest.fn(),
@@ -149,6 +153,7 @@ describe('Index page', () => {
     jest.mocked(CreateScene).mockImplementation(actualCreateScene.CreateScene)
     jest.mocked(ClosingFooter).mockImplementation(actualClosingFooter.ClosingFooter)
     jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult())
+    jest.mocked(useRouter).mockReturnValue({ push: jest.fn() } as never)
   })
 
   it('renders the sky background and the back-to-form CTA', () => {
@@ -242,6 +247,59 @@ describe('Index page', () => {
       expect(within(firstVisit).getByRole('heading', { level: 1 })).toHaveTextContent(
         "Find the minute everybody's free.",
       )
+    })
+  })
+
+  // Every query below is scoped to one composition on purpose. Both compositions are in the DOM at
+  // once -- the swap is CSS keyed off `data-recent-polls`, and jsdom applies no stylesheet -- so
+  // there are two triggers on the page and a bare `getByRole` would throw "found multiple".
+  describe('the join-a-poll trigger', () => {
+    const triggerIn = (composition: 'first-visit-composition' | 'returning-composition'): HTMLElement =>
+      within(screen.getByTestId(composition)).getByRole('button', { name: 'Enter it and join a poll' })
+
+    it('offers a way into an existing poll on a first visit (AC-001)', () => {
+      renderPage()
+      expect(triggerIn('first-visit-composition')).toBeEnabled()
+    })
+
+    it('offers the same control to a returning visitor (AC-002)', () => {
+      renderPage({ returning: true })
+      expect(triggerIn('returning-composition')).toBeEnabled()
+    })
+
+    // The control is in the served markup, not added once the store has been read. Rendering with an
+    // empty store and no attribute is the state the export was built in, and both compositions
+    // carry it there -- so nothing about it can land a frame late and shift the page (AC-004,
+    // AC-037).
+    it('is in both compositions before anything is known about the device (AC-004)', () => {
+      renderPage({ recents: { polls: [] } })
+      expect(triggerIn('first-visit-composition')).toBeInTheDocument()
+      expect(triggerIn('returning-composition')).toBeInTheDocument()
+    })
+
+    it('stays in both compositions once the device is known to have polls (AC-003)', () => {
+      renderPage({ returning: true })
+      expect(triggerIn('first-visit-composition')).toBeInTheDocument()
+      expect(triggerIn('returning-composition')).toBeInTheDocument()
+    })
+
+    it('opens the dialog from the first-visit composition', async () => {
+      renderPage()
+      await userEvent.click(triggerIn('first-visit-composition'))
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+
+    it('opens the dialog from the returning composition', async () => {
+      renderPage({ returning: true })
+      await userEvent.click(triggerIn('returning-composition'))
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+
+    // The trigger is a sentence, not a heading, and the page's outline is unchanged by it.
+    it('leaves the heading sequence alone', () => {
+      renderPage({ returning: true })
+      expect(headingLevels('returning')).toEqual(['h1', 'h2', 'h2'])
+      expect(headingLevels('first-visit')).toEqual(['h1', 'h2', 'h2', 'h2', 'h2', 'h2', 'h2', 'h2'])
     })
   })
 

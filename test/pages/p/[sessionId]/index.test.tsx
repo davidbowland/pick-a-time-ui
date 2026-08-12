@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router'
 import React from 'react'
 
 import AppBar from '@components/app-bar'
@@ -10,6 +11,7 @@ import { render } from '@testing-library/react'
 jest.mock('@components/app-bar')
 jest.mock('@components/privacy-link')
 jest.mock('@components/poll')
+jest.mock('next/router', () => ({ useRouter: jest.fn() }))
 
 describe('Poll page', () => {
   beforeAll(() => {
@@ -20,6 +22,7 @@ describe('Poll page', () => {
 
   function setup(pathname: string): void {
     Object.defineProperty(window, 'location', { value: { pathname }, writable: true })
+    jest.mocked(useRouter).mockReturnValue({ asPath: pathname } as ReturnType<typeof useRouter>)
   }
 
   it('should render AppBar', () => {
@@ -38,6 +41,16 @@ describe('Poll page', () => {
     setup('/p/amber-harbor/')
     render(<PollPage />)
     expect(Poll).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'amber-harbor' }), undefined)
+  })
+
+  it('should render Poll with the new sessionId after a client-side navigation to another poll', () => {
+    setup('/p/fleshy-skies/')
+    const { rerender } = render(<PollPage />)
+
+    setup('/p/fleshy-sky/')
+    rerender(<PollPage />)
+
+    expect(Poll).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'fleshy-sky' }), undefined)
   })
 
   it('should not render Poll when pathname has no sessionId', () => {

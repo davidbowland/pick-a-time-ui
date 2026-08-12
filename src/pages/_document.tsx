@@ -47,13 +47,12 @@ export default function Document() {
         <link href="/apple-touch-icon.png" rel="apple-touch-icon" />
         <link href="/site.webmanifest" rel="manifest" />
         <meta content="#17171a" name="theme-color" />
-        {/* Absent until now, which made every `env(safe-area-inset-*)` in the app resolve to 0 —
-            `viewport-fit=cover` is what gives those values anything to report (AC-027). It lives
-            here rather than in a page's `next/head` because it has to apply to every surface,
-            including `/p/{sessionId}` and the installed app's own chrome-less window.
-            Next logs a development-only warning about viewport tags in `_document`; this tag is
-            emitted after `next/head`'s default `width=device-width`, so it is the one that wins. */}
-        <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport" />
+        {/* Deliberately no viewport meta here. It lived in this <Head> and worked, but Next warns
+            about it in development (no-document-viewport-meta): _document renders once on the
+            server and sits outside next/head's dedupe, so a page that ever declares its own
+            viewport would ship two competing tags. It now lives in _app's next/head, which applies
+            to every surface just the same and replaces Next's default `width=device-width` by name
+            rather than racing it (AC-027). */}
       </Head>
       <body>
         <script
