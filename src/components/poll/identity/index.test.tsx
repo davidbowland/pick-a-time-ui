@@ -242,6 +242,32 @@ describe('IdentityPhase', () => {
     expect(screen.getByRole('heading', { name: 'Who are you on this poll?' })).toHaveFocus()
   })
 
+  it('shows the notice explaining why the picker is back', () => {
+    setup()
+    renderWithClient({
+      notice: 'Quiet Falcon belongs to a different Google account.',
+      onUserSelected,
+      sessionId: 'amber-harbor',
+      users,
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Quiet Falcon belongs to a different Google account.')
+  })
+
+  // The person did not click their way here -- the app moved them. Focus has to follow, or a screen
+  // reader is left wherever the unmounted phase was and never hears why the picker came back.
+  it('moves focus to the heading when a notice explains the return', () => {
+    setup()
+    renderWithClient({
+      notice: 'Quiet Falcon belongs to a different Google account.',
+      onUserSelected,
+      sessionId: 'amber-harbor',
+      users,
+    })
+
+    expect(screen.getByRole('heading', { name: 'Who are you on this poll?' })).toHaveFocus()
+  })
+
   it('shows a name field only after selecting "Join as somebody new" while signed out', async () => {
     setup()
     renderWithClient({ onUserSelected, sessionId: 'amber-harbor', users })

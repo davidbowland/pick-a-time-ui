@@ -171,9 +171,14 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
   })
@@ -196,9 +201,14 @@ describe('PaintingPhase', () => {
     await user.click(cells[0])
 
     await waitFor(() => expect(patchAvailability).toHaveBeenCalledTimes(1), DEBOUNCE_WAIT)
-    expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-      cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-    })
+    expect(patchAvailability).toHaveBeenCalledWith(
+      'amber-harbor',
+      'quiet-falcon',
+      {
+        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+      },
+      false,
+    )
   })
 
   it('should coalesce several quick individual clicks into a single PATCH instead of one per click', async () => {
@@ -228,12 +238,17 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [
-            { dateIndex: 0, slotIndex: 0, value: true },
-            { dateIndex: 0, slotIndex: 1, value: true },
-          ],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [
+              { dateIndex: 0, slotIndex: 0, value: true },
+              { dateIndex: 0, slotIndex: 1, value: true },
+            ],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
     expect(patchAvailability).toHaveBeenCalledTimes(1)
@@ -260,9 +275,14 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
     expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
@@ -285,16 +305,21 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [
-            { dateIndex: 0, slotIndex: 0, value: true },
-            { dateIndex: 0, slotIndex: 1, value: true },
-            { dateIndex: 0, slotIndex: 2, value: true },
-            { dateIndex: 1, slotIndex: 0, value: true },
-            { dateIndex: 1, slotIndex: 1, value: true },
-            { dateIndex: 1, slotIndex: 2, value: true },
-          ],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [
+              { dateIndex: 0, slotIndex: 0, value: true },
+              { dateIndex: 0, slotIndex: 1, value: true },
+              { dateIndex: 0, slotIndex: 2, value: true },
+              { dateIndex: 1, slotIndex: 0, value: true },
+              { dateIndex: 1, slotIndex: 1, value: true },
+              { dateIndex: 1, slotIndex: 2, value: true },
+            ],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
   })
@@ -323,9 +348,14 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: expect.arrayContaining([{ dateIndex: 0, slotIndex: 0, value: false }]),
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: expect.arrayContaining([{ dateIndex: 0, slotIndex: 0, value: false }]),
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
   })
@@ -373,13 +403,18 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [
-            { dateIndex: 0, slotIndex: 0, value: true },
-            { dateIndex: 0, slotIndex: 1, value: true },
-            { dateIndex: 0, slotIndex: 2, value: true },
-          ],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [
+              { dateIndex: 0, slotIndex: 0, value: true },
+              { dateIndex: 0, slotIndex: 1, value: true },
+              { dateIndex: 0, slotIndex: 2, value: true },
+            ],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
     expect(patchAvailability).toHaveBeenCalledTimes(1)
@@ -414,9 +449,15 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenNthCalledWith(1, 'amber-harbor', 'quiet-falcon', {
-          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-        }),
+        expect(patchAvailability).toHaveBeenNthCalledWith(
+          1,
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
 
@@ -427,9 +468,15 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenNthCalledWith(2, 'amber-harbor', 'quiet-falcon', {
-          cells: [{ dateIndex: 0, slotIndex: 1, value: true }],
-        }),
+        expect(patchAvailability).toHaveBeenNthCalledWith(
+          2,
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [{ dateIndex: 0, slotIndex: 1, value: true }],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
     expect(patchAvailability).toHaveBeenCalledTimes(2)
@@ -596,6 +643,42 @@ describe('PaintingPhase', () => {
     expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
   })
 
+  // A refused save is not a flaky network -- retrying paints the same grid into somebody else's
+  // record forever. It gets the reason instead of the retry.
+  it('should name the account mismatch when a save is refused', async () => {
+    mockEmptyAvailability()
+    jest.mocked(patchAvailability).mockRejectedValueOnce({ response: { statusCode: 403 } })
+
+    renderWithClient(<PaintingPhase isSignedIn poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    expect(await screen.findByRole('alert', {}, DEBOUNCE_WAIT)).toHaveTextContent(
+      "You're signed in with a different Google account",
+    )
+  })
+
+  it('should send the save through the authenticated route when signed in', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase isSignedIn poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    await waitFor(
+      () => expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', expect.anything(), true),
+      DEBOUNCE_WAIT,
+    )
+  })
+
   it('should roll back every cell from a coalesced batch, not just the last one, when the merged PATCH fails', async () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
@@ -659,9 +742,14 @@ describe('PaintingPhase', () => {
 
     await waitFor(
       () =>
-        expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-        }),
+        expect(patchAvailability).toHaveBeenCalledWith(
+          'amber-harbor',
+          'quiet-falcon',
+          {
+            cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+          },
+          false,
+        ),
       DEBOUNCE_WAIT,
     )
   })
@@ -942,9 +1030,15 @@ describe('PaintingPhase', () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
       await user.click(screen.getByRole('button', { name: 'Check again' }))
 
-      expect(patchAvailability).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', {
-        cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-      })
+      // Signed in here, so the drained paint goes out through the authenticated route.
+      expect(patchAvailability).toHaveBeenCalledWith(
+        'amber-harbor',
+        'quiet-falcon',
+        {
+          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
+        },
+        true,
+      )
       await screen.findByRole('button', { name: 'Check again' })
     })
 

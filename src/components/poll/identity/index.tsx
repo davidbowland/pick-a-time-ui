@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   ErrorMessage,
   GoogleSignInButton,
+  IdentityNotice,
   SectionContainer,
   SectionTitle,
   SignInBenefitNote,
@@ -21,9 +22,17 @@ export interface IdentityPhaseProps {
   users: User[]
   onUserSelected: (userId: string) => void
   lastUsedUserId?: string
+  /** Why the picker is showing again, when the person did not ask for it. */
+  notice?: string
 }
 
-const IdentityPhase = ({ sessionId, users, onUserSelected, lastUsedUserId }: IdentityPhaseProps): React.ReactNode => {
+const IdentityPhase = ({
+  sessionId,
+  users,
+  onUserSelected,
+  lastUsedUserId,
+  notice,
+}: IdentityPhaseProps): React.ReactNode => {
   const { isSignedIn, isLoading: isAuthLoading, handleSignIn } = useAuthContext()
   const [selected, setSelected] = useState<string | null>(null)
   const [createNew, setCreateNew] = useState(false)
@@ -50,6 +59,13 @@ const IdentityPhase = ({ sessionId, users, onUserSelected, lastUsedUserId }: Ide
     if (lastUsedInputRef.current) lastUsedInputRef.current.focus()
     else headingRef.current?.focus()
   }, [lastUsedUserId])
+
+  // Focus the heading, not an option: a notice means the app moved this person here rather than
+  // them asking for it, and the heading is where the explanation reads from the top. Without it a
+  // screen reader stays wherever the unmounted active phase left it.
+  useEffect(() => {
+    if (notice) headingRef.current?.focus()
+  }, [notice])
 
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: fetchConfig, staleTime: Infinity })
 
@@ -116,6 +132,7 @@ const IdentityPhase = ({ sessionId, users, onUserSelected, lastUsedUserId }: Ide
       <SectionTitle id={headingId} ref={headingRef}>
         Who are you on this poll?
       </SectionTitle>
+      {notice && <IdentityNotice message={notice} />}
       <UserOptions
         createNew={createNew}
         headingId={headingId}

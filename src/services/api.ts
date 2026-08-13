@@ -28,6 +28,7 @@ import {
   Slot,
   User,
 } from '@types'
+import { hasStatusCode } from '@utils/http-status'
 
 // --- Errors ---
 
@@ -183,9 +184,11 @@ export const patchUser = (
  * Somebody who joins a poll before signing in gets a participant with no account attached, and
  * signing in afterwards does not attach one. The API links the two on any authenticated PATCH of an
  * unlinked participant -- the body is beside the point, so this sends no operations and changes
- * nothing else. It is a no-op on a participant already linked to this account, and (deliberately,
- * server-side) on one linked to somebody else's: that person keeps it, and the calendar routes
- * answer 403.
+ * nothing else. It is a no-op on a participant already linked to this account.
+ *
+ * On one linked to a DIFFERENT account it answers 403, and that answer is the only way a client can
+ * learn whose participant it is: `GET /users` strips googleSub from every response. Callers should
+ * treat the refusal as "this is not you", not as a failure to retry.
  */
 export const claimUser = (sessionId: string, userId: string): Promise<User> =>
   apiSend('PATCH', userPath(sessionId, userId, true), true, [])
@@ -193,15 +196,24 @@ export const claimUser = (sessionId: string, userId: string): Promise<User> =>
 export const fetchAvailability = (sessionId: string, userId: string): Promise<AvailabilityRecord> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`)
 
+/**
+ * Writes painted cells. Signed in, this goes through the authenticated route.
+ *
+ * Not for the sake of the write -- it is the same write either way -- but for what the API can see:
+ * the anonymous route is deployed with `Authorizer: NONE`, so it cannot tell that the participant
+ * being painted belongs to a different Google account. The authenticated one refuses that, which is
+ * how somebody finds out before they have filled in a grid they will be refused the calendar on.
+ */
 export const patchAvailability = (
   sessionId: string,
   userId: string,
   body: AvailabilityPatchRequest,
+  authenticated: boolean,
 ): Promise<AvailabilityRecord> =>
   apiSend(
     'PATCH',
-    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`,
-    false,
+    `${userPath(sessionId, userId, false)}/availability${authenticated ? '/authed' : ''}`,
+    authenticated,
     body,
   )
 
@@ -272,21 +284,12 @@ export function parseApiMessage(body: string | undefined, fallback: string): str
 }
 
 /**
- * Whether a thrown value carries a particular HTTP status.
+ * Re-exported so callers already holding this module keep one import.
  *
- * Read structurally rather than with `instanceof ApiError`, for the reason `isPollGone` sets out at
- * length (src/components/poll/index.tsx:86-94): the status is the fact that matters, and a check
- * that depends on class identity fails quietly wherever the class is duplicated -- two copies of the
- * module, or an automocked `@services/api`, which is exactly what a component test does. The failure
- * mode is silent: a 404 stops reading as a 404 and falls through to the generic error path with
- * nothing on screen to say anything is wrong.
- *
- * It lives here beside `ApiError` rather than in a component so callers on the landing page can
- * reach it without importing from `@components/poll`, which would pull Poll and Share into that
- * page's chunk.
+ * The implementation lives in `@utils/http-status` because a component that mocks this module
+ * wholesale cannot use the copy exported from here -- see the note there.
  */
-export const hasStatusCode = (err: unknown, statusCode: number): boolean =>
-  (err as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === statusCode
+export { hasStatusCode }
 
 export function hasErrorCode(err: unknown, code: ErrorCode): boolean {
   if (err instanceof ApiError) {

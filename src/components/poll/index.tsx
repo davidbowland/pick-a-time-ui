@@ -22,9 +22,21 @@ import { claimUser, fetchPoll, fetchUsers } from '@services/api'
 import { PollData, User } from '@types'
 import { formatExpiration } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
+import { hasStatusCode } from '@utils/http-status'
 import { displayName } from '@utils/users'
 
 const TAB_BASE_CLASS = `rounded-full px-4 py-1.5 text-sm font-bold transition-colors duration-150 ease-out ${FOCUS_RING}`
+
+/**
+ * Shown when somebody signed in is sent back to the picker because the participant they were voting
+ * as belongs to a different Google account.
+ *
+ * States the fact and the two ways forward, in the picker's own words -- "join as somebody new" is
+ * the label on the option it points at. It does not say "error" or "sorry": nothing went wrong and
+ * nothing here is theirs to retry.
+ */
+const REFUSED_NOTICE = (name: string): string =>
+  `${name} belongs to a different Google account. Pick your own name, or join as somebody new.`
 
 /**
  * The poll-is-gone arrival state (AC-040). Approved copy, kept together so a later edit has to
@@ -96,21 +108,12 @@ export const PollGoneState = ({
 /**
  * Whether a failed poll fetch means "this poll is gone" rather than "we could not reach the API".
  *
- * Read structurally rather than with `instanceof ApiError`: the status is the fact that matters,
- * and a check that depends on class identity fails quietly wherever the class is duplicated (two
- * copies of the module, an automocked `@services/api`) — turning a gone poll back into a generic
- * error with no visible sign that anything is wrong.
- *
- * `services/api.ts` exports `hasStatusCode`, which is this function with the status as a parameter,
- * and delegating to it looks like the obvious cleanup. It is not: this file's own test does
- * `jest.mock('@services/api')`, so the delegate would resolve to an automock returning `undefined`
- * and `isPollGone` would be false for every input, forever. That is the same class of silent
- * failure the paragraph above is about, arriving by the door marked "remove duplication". The two
- * exist separately on purpose — this one for a component whose API module is mocked wholesale, that
- * one for callers that mock nothing.
+ * Delegates to `@utils/http-status`, NOT to the `hasStatusCode` re-exported from `@services/api`:
+ * this file's own test does `jest.mock('@services/api')`, so that route would resolve to an
+ * automock returning `undefined` and a gone poll would read as a generic error, forever. Nothing
+ * mocks the util. The name stays because "is this poll gone" is what the call sites mean.
  */
-export const isPollGone = (error: unknown): boolean =>
-  (error as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === 404
+export const isPollGone = (error: unknown): boolean => hasStatusCode(error, 404)
 
 function tabSkinFor(isSelected: boolean): string {
   return isSelected ? 'bg-[var(--accent)] text-[var(--ink)]' : 'text-[var(--slate)] hover:text-[var(--bone)]'
@@ -157,13 +160,19 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
     refetch: refetchUsers,
   } = useQuery<User[]>({ queryKey: ['users', sessionId], queryFn: () => fetchUsers(sessionId) })
 
+  // The participant a claim came back 403 on: it belongs to a different Google account, so this
+  // person cannot be it. Held with the name it had, because the name is what the notice says and
+  // `currentUser` is gone by the time it renders.
+  const [refused, setRefused] = useState<{ name: string; userId: string } | undefined>(undefined)
+
   const usersLoaded = users !== undefined
   const effectiveUserId = useMemo(() => {
     if (!users) return undefined
-    if (!notYouClicked && queryParamId && users.some((u) => u.userId === queryParamId)) return queryParamId
-    if (userId && users.some((u) => u.userId === userId)) return userId
+    const isUsable = (id: string): boolean => id !== refused?.userId && users.some((u) => u.userId === id)
+    if (!notYouClicked && queryParamId && isUsable(queryParamId)) return queryParamId
+    if (userId && isUsable(userId)) return userId
     return undefined
-  }, [queryParamId, userId, users, notYouClicked])
+  }, [queryParamId, userId, users, notYouClicked, refused])
 
   const currentUser = useMemo(() => users?.find((u) => u.userId === effectiveUserId), [users, effectiveUserId])
 
@@ -179,13 +188,29 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
   // explaining why. Once per participant: the ref, not the dependency list, is what survives
   // strict mode's double-invoke.
   const claimedUserIdRef = useRef<string | undefined>(undefined)
+  // The name to put in the notice if the claim is refused, captured per render: reading
+  // `currentUser` inside the effect would either stale-close over it or drag it into the
+  // dependency list, which would re-fire the claim on every refetch of the users list.
+  const currentNameRef = useRef<string | undefined>(undefined)
+  currentNameRef.current = currentUser ? displayName(currentUser) : undefined
   useEffect(() => {
     if (!isSignedIn || !effectiveUserId || claimedUserIdRef.current === effectiveUserId) return
     claimedUserIdRef.current = effectiveUserId
-    // Opportunistic: nothing here is worth interrupting a voter for. A failure costs them the
-    // calendar on this poll, and the connect button says so in words if they reach for it.
-    void claimUser(sessionId, effectiveUserId).catch(() => undefined)
-  }, [effectiveUserId, isSignedIn, sessionId])
+    const claimedUserId = effectiveUserId
+    const claimedName = currentNameRef.current
+    void claimUser(sessionId, claimedUserId).catch((err: unknown) => {
+      // 403 is the only answer that says anything about WHOSE participant this is: it means
+      // another Google account holds it. Anything else -- a dropped connection, a 500 -- says
+      // nothing, and throwing somebody out of their own poll over it would be worse than the
+      // failure. Those are swallowed: the calendar is the only thing they cost, and the connect
+      // button explains itself in words if the person reaches for it.
+      if (!hasStatusCode(err, 403) || !claimedName) return
+      setRefused({ name: claimedName, userId: claimedUserId })
+      // The cookie points at somebody else's participant. Left alone, every later visit lands on
+      // this same refusal.
+      clearUserId()
+    })
+  }, [clearUserId, effectiveUserId, isSignedIn, sessionId])
 
   // A newly-created/selected user is set on the cookie immediately, but the `users` list is only
   // updated by the server on its own schedule — without invalidating it here, a brand-new user's
@@ -302,6 +327,7 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
           )}
           <IdentityPhase
             lastUsedUserId={lastUsedUserId}
+            notice={refused && REFUSED_NOTICE(refused.name)}
             onUserSelected={handleUserSelected}
             sessionId={sessionId}
             users={users ?? []}

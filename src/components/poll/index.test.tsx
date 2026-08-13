@@ -310,6 +310,45 @@ describe('Poll', () => {
       expect(claimUser).not.toHaveBeenCalled()
     })
 
+    // A refusal is not a failure to shrug off: it means this participant is somebody else's, and
+    // every write the active phase can make -- painting, renaming, the calendar -- is refused for
+    // it. So the person goes back to the picker and is told why, instead of being left on a screen
+    // where nothing they do will save.
+    it('should return to the picker when the claim is refused', async () => {
+      arrangeActivePhase()
+      signIn()
+      jest.mocked(claimUser).mockRejectedValueOnce({ response: { statusCode: 403 } })
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      expect(await screen.findByText('Who are you on this poll?')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Quiet Falcon belongs to a different Google account. Pick your own name, or join as somebody new.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Your hours' })).not.toBeInTheDocument()
+    })
+
+    it('should not put the person back into a refused participant when they pick it again', async () => {
+      arrangeActivePhase()
+      signIn()
+      jest.mocked(claimUser).mockRejectedValueOnce({ response: { statusCode: 403 } })
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+      await screen.findByText('Who are you on this poll?')
+      await userEvent.click(screen.getByRole('radio', { name: 'Quiet Falcon' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+      expect(await screen.findByText('Who are you on this poll?')).toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Your hours' })).not.toBeInTheDocument()
+      // No second attempt at a participant already known to belong to somebody else.
+      expect(claimUser).toHaveBeenCalledTimes(1)
+    })
+
+    // A refusal is specific. Anything else -- a dropped connection, a 500 -- says nothing about
+    // whose participant this is, and throwing somebody out of their own poll over it would be
+    // worse than the failure.
     // The claim is opportunistic: it links a participant that has no account yet, and there is
     // nothing for the voter to do about a failure. Painting must carry on regardless.
     it('should stay in the active phase when the claim fails', async () => {

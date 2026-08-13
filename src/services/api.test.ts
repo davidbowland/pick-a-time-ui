@@ -403,17 +403,32 @@ describe('API service', () => {
   })
 
   describe('patchAvailability', () => {
+    const body = { cells: [{ dateIndex: 0, slotIndex: 0, value: true }] }
+
     it('should PATCH the availability body as-is (not JSON Patch)', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse({ userId: 'quiet-falcon' }))
 
-      const body = { cells: [{ dateIndex: 0, slotIndex: 0, value: true }] }
-      await patchAvailability('amber-harbor', 'quiet-falcon', body)
+      await patchAvailability('amber-harbor', 'quiet-falcon', body, false)
 
       expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/sessions/amber-harbor/users/quiet-falcon/availability`, {
         body: JSON.stringify(body),
         headers: { 'Content-Type': 'application/json' },
         method: 'PATCH',
       })
+    })
+
+    // Signed in, the write goes through the authenticated route so the API can refuse a
+    // participant that belongs to a different Google account -- which it cannot tell on the
+    // anonymous one, since that route strips the token before the handler sees it.
+    it('should use the authenticated endpoint when signed in', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ userId: 'quiet-falcon' }))
+
+      await patchAvailability('amber-harbor', 'quiet-falcon', body, true)
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${baseUrl}/sessions/amber-harbor/users/quiet-falcon/availability/authed`,
+        { body: JSON.stringify(body), headers: jsonHeaders, method: 'PATCH' },
+      )
     })
   })
 

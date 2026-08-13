@@ -81,14 +81,17 @@ const PaintingPhase = ({
     const editCountAtFlush = editCountRef.current
 
     try {
-      const updated = await patchAvailability(sessionId, userId, { cells })
+      const updated = await patchAvailability(sessionId, userId, { cells }, isSignedIn)
       // Server response wins over the optimistic guess if the two ever disagree — but only when
       // nothing newer has been painted since; otherwise the still-pending batch owns the cache
       // and its own PATCH response will reconcile with the server.
       if (editCountRef.current === editCountAtFlush) queryClient.setQueryData(queryKey, updated)
-    } catch {
+    } catch (err) {
       if (editCountRef.current === editCountAtFlush) queryClient.setQueryData(queryKey, previous)
-      setErrorMessage(SAVE_ERROR_MESSAGE)
+      // A refusal is not a flaky connection, and "try again" would be a lie: every later paint on
+      // this participant is refused too. Only the authenticated route can answer 403, so this is
+      // reachable only while signed in.
+      setErrorMessage(isWrongAccount(err) ? WRONG_ACCOUNT_MESSAGE : SAVE_ERROR_MESSAGE)
     }
   }
 

@@ -78,6 +78,19 @@ export const ErrorMessage = ({ message }: { message: string }): React.ReactNode 
   <p className="text-sm text-red-400">{message}</p>
 )
 
+/**
+ * Why this picker is showing again after somebody had already been identified.
+ *
+ * Not an ErrorMessage: nothing failed and nothing is theirs to retry — they were voting as a person
+ * who turned out to belong to somebody else. It is stated as a fact, in the same voice as the rest
+ * of the card, and announced because the person did not ask to be back here.
+ */
+export const IdentityNotice = ({ message }: { message: string }): React.ReactNode => (
+  <p className="text-sm text-[var(--slate)]" role="status">
+    {message}
+  </p>
+)
+
 export const GoogleSignInButton = ({ onPress }: { onPress: () => void }): React.ReactNode => (
   <Button
     className="w-full rounded-full border-[var(--hair)] bg-[var(--bone)]/[0.05] text-[var(--bone)]"
