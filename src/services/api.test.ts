@@ -1,5 +1,6 @@
 import {
   ApiError,
+  claimUser,
   connectCalendar,
   createPoll,
   createPollAuthed,
@@ -344,12 +345,15 @@ describe('API service', () => {
     const operations = [{ op: 'replace' as const, path: '/name', value: 'Alice' }]
     const updatedUser = { name: 'Alice', userId }
 
+    // The /authed suffix is the whole point of the flag, not the header: the unsuffixed route is
+    // deployed with `Authorizer: NONE`, so API Gateway drops the Authorization header before the
+    // handler sees it and the participant is never linked to the signed-in Google account.
     it('should use authenticated endpoint when signed in', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(updatedUser))
 
       const result = await patchUser(sessionId, userId, operations, true)
 
-      expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/sessions/${sessionId}/users/${userId}`, {
+      expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/sessions/${sessionId}/users/${userId}/authed`, {
         body: JSON.stringify(operations),
         headers: jsonHeaders,
         method: 'PATCH',
@@ -368,6 +372,20 @@ describe('API service', () => {
         method: 'PATCH',
       })
       expect(result).toEqual(updatedUser)
+    })
+  })
+
+  describe('claimUser', () => {
+    it('should PATCH the authenticated route with no operations', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ name: 'Alice', userId }))
+
+      await claimUser(sessionId, userId)
+
+      expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/sessions/${sessionId}/users/${userId}/authed`, {
+        body: JSON.stringify([]),
+        headers: jsonHeaders,
+        method: 'PATCH',
+      })
     })
   })
 

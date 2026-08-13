@@ -1030,6 +1030,38 @@ describe('PaintingPhase', () => {
       expect(redirectTo).not.toHaveBeenCalled()
     })
 
+    // A failed connect used to do nothing at all -- no redirect, no message, a button that looked
+    // ignored. The 403 case is the one worth naming: the API answers it only when the participant
+    // belongs to a different Google account, which "try again" will never fix.
+    it('should name the account mismatch when the connect is refused', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+      jest.mocked(connectCalendar).mockRejectedValueOnce({ response: { statusCode: 403 } })
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+
+      expect(
+        await screen.findByText(
+          "You're signed in with a different Google account than the one that joined this poll. Sign out, then sign in with that account.",
+        ),
+      ).toBeInTheDocument()
+      expect(redirectTo).not.toHaveBeenCalled()
+    })
+
+    it('should report a connect that failed for any other reason', async () => {
+      mockEmptyAvailability()
+      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+      jest.mocked(connectCalendar).mockRejectedValueOnce({ response: { statusCode: 500 } })
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+
+      expect(await screen.findByText("Couldn't connect Google Calendar. Please try again.")).toBeInTheDocument()
+    })
+
     it('should hide the invitation once it is dismissed', async () => {
       mockEmptyAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })

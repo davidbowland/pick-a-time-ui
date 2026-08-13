@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { ErrorState, LoadingState } from './elements'
 import { derivePhase } from './helpers'
@@ -18,7 +18,7 @@ import { FOCUS_RING } from '@components/ui/focus-ring'
 import { usePollOnboarding } from '@hooks/usePollOnboarding'
 import { useRecentPolls } from '@hooks/useRecentPolls'
 import { useSessionCookie } from '@hooks/useSessionCookie'
-import { fetchPoll, fetchUsers } from '@services/api'
+import { claimUser, fetchPoll, fetchUsers } from '@services/api'
 import { PollData, User } from '@types'
 import { formatExpiration } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
@@ -166,6 +166,26 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
   }, [queryParamId, userId, users, notYouClicked])
 
   const currentUser = useMemo(() => users?.find((u) => u.userId === effectiveUserId), [users, effectiveUserId])
+
+  // Somebody who opens the poll link first and signs in afterwards is voting as a participant with
+  // no Google account attached -- joining signed-out stores none, and signing in does not go back
+  // and attach one. Every calendar route then answers 403 ("You can only connect your own
+  // calendar") for that participant, for the life of the poll. The API links the two on any
+  // authenticated PATCH of an unlinked participant, so this is that PATCH: no operations, no other
+  // effect, and a no-op on a participant already linked to this account.
+  //
+  // Fired here rather than at the connect button because the calendar CHECK hits the same rule --
+  // an unlinked participant on a second poll fails its automatic check with nothing on screen
+  // explaining why. Once per participant: the ref, not the dependency list, is what survives
+  // strict mode's double-invoke.
+  const claimedUserIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!isSignedIn || !effectiveUserId || claimedUserIdRef.current === effectiveUserId) return
+    claimedUserIdRef.current = effectiveUserId
+    // Opportunistic: nothing here is worth interrupting a voter for. A failure costs them the
+    // calendar on this poll, and the connect button says so in words if they reach for it.
+    void claimUser(sessionId, effectiveUserId).catch(() => undefined)
+  }, [effectiveUserId, isSignedIn, sessionId])
 
   // A newly-created/selected user is set on the cookie immediately, but the `users` list is only
   // updated by the server on its own schedule — without invalidating it here, a brand-new user's

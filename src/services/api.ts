@@ -162,18 +162,33 @@ export const createUser = async (sessionId: string, authenticated: boolean): Pro
   }
 }
 
+// The authenticated variant is a different ROUTE, not the same route with a header: the unsuffixed
+// one is deployed with `Authorizer: NONE`, so API Gateway strips Authorization before the handler
+// runs and every authed-only side effect is silently skipped. See `claimUser` for the one that
+// matters.
+const userPath = (sessionId: string, userId: string, authenticated: boolean): string =>
+  `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}${authenticated ? '/authed' : ''}`
+
 export const patchUser = (
   sessionId: string,
   userId: string,
   operations: PatchOperation[],
   authenticated: boolean,
-): Promise<User> =>
-  apiSend(
-    'PATCH',
-    `/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}`,
-    authenticated,
-    operations,
-  )
+): Promise<User> => apiSend('PATCH', userPath(sessionId, userId, authenticated), authenticated, operations)
+
+/**
+ * Links a participant to the signed-in Google account, so the calendar routes recognize it as
+ * theirs.
+ *
+ * Somebody who joins a poll before signing in gets a participant with no account attached, and
+ * signing in afterwards does not attach one. The API links the two on any authenticated PATCH of an
+ * unlinked participant -- the body is beside the point, so this sends no operations and changes
+ * nothing else. It is a no-op on a participant already linked to this account, and (deliberately,
+ * server-side) on one linked to somebody else's: that person keeps it, and the calendar routes
+ * answer 403.
+ */
+export const claimUser = (sessionId: string, userId: string): Promise<User> =>
+  apiSend('PATCH', userPath(sessionId, userId, true), true, [])
 
 export const fetchAvailability = (sessionId: string, userId: string): Promise<AvailabilityRecord> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`)

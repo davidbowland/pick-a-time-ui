@@ -8,6 +8,7 @@ import { useInstallPrompt } from '@hooks/useInstallPrompt'
 import { RECENT_POLLS_KEY, RecentPoll } from '@hooks/useRecentPolls'
 import { useSessionCookie } from '@hooks/useSessionCookie'
 import {
+  claimUser,
   createUser,
   fetchAvailability,
   fetchConfig,
@@ -229,6 +230,97 @@ describe('Poll', () => {
         'No overlap yet. Once everybody paints their availability, the best time will show up here.',
       ),
     ).toBeInTheDocument()
+  })
+
+  describe('claiming a participant for the signed-in account', () => {
+    // Somebody who opens the poll link first and signs in afterwards is voting as a participant
+    // with no Google account attached, and every calendar route answers 403 for it ("You can only
+    // connect your own calendar"). Nothing else in the app ever attaches one, so without this the
+    // connect button is unusable for the rest of that poll's life.
+    function arrangeActivePhase(): void {
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      jest.mocked(fetchPoll).mockResolvedValue(poll)
+      jest.mocked(fetchUsers).mockResolvedValue([existingUser])
+      jest.mocked(fetchAvailability).mockResolvedValue({
+        userId: existingUser.userId,
+        free: [
+          [false, false],
+          [false, false],
+          [false, false],
+        ],
+        expiration: 1725453600,
+      })
+      jest.mocked(fetchOverlap).mockResolvedValue({
+        grid: { bestSlot: { dateIndex: 0, freeCount: 0, freeUserIds: [], slotIndex: 0 }, cells: [] },
+        recommendedMeetings: [],
+      })
+      jest.mocked(claimUser).mockResolvedValue(existingUser)
+    }
+
+    function signIn(): void {
+      jest.mocked(useAuthContext).mockReturnValue({
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+        isLoading: false,
+        isSignedIn: true,
+        user: { name: 'Quiet Falcon' },
+      })
+    }
+
+    // Teardown, not arrangement: `clearMocks` clears calls but keeps implementations, so a
+    // signed-in return value would leak into every test after this block.
+    afterEach(() => {
+      jest.mocked(useAuthContext).mockReturnValue({
+        handleSignIn: jest.fn(),
+        handleSignOut: jest.fn(),
+        isLoading: false,
+        isSignedIn: false,
+        user: null,
+      })
+    })
+
+    it('should claim the participant once identity resolves while signed in', async () => {
+      arrangeActivePhase()
+      signIn()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      await waitFor(() => expect(claimUser).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon'))
+    })
+
+    it('should claim only once however many times the poll re-renders', async () => {
+      arrangeActivePhase()
+      signIn()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      await waitFor(() => expect(claimUser).toHaveBeenCalledTimes(1))
+      await userEvent.click(await screen.findByRole('tab', { name: 'The overlap' }))
+      await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
+      expect(claimUser).toHaveBeenCalledTimes(1)
+    })
+
+    it('should not claim the participant when signed out', async () => {
+      arrangeActivePhase()
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
+      await screen.findByText('Select all')
+      expect(claimUser).not.toHaveBeenCalled()
+    })
+
+    // The claim is opportunistic: it links a participant that has no account yet, and there is
+    // nothing for the voter to do about a failure. Painting must carry on regardless.
+    it('should stay in the active phase when the claim fails', async () => {
+      arrangeActivePhase()
+      signIn()
+      jest.mocked(claimUser).mockRejectedValueOnce(new Error('network'))
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      expect(await screen.findByText('Select all')).toBeInTheDocument()
+    })
   })
 
   it('should refetch the poll and users when opening the overlap tab, so participant totals are not stale', async () => {

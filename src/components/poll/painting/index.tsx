@@ -23,6 +23,22 @@ export interface PaintingPhaseProps {
 }
 
 const SAVE_ERROR_MESSAGE = "Couldn't save your availability. Please try again."
+const CONNECT_ERROR_MESSAGE = "Couldn't connect Google Calendar. Please try again."
+// The API refuses with 403 for exactly one reason: this participant is linked to another Google
+// account. Retrying cannot fix that, so the message names the cause and the only move that does.
+const WRONG_ACCOUNT_MESSAGE =
+  "You're signed in with a different Google account than the one that joined this poll. Sign out, then sign in with that account."
+
+/**
+ * Whether a failed connect was refused as somebody else's participant.
+ *
+ * Read structurally rather than with `instanceof ApiError`, and deliberately not delegated to
+ * `hasStatusCode` in `@services/api`: this file's own test mocks that module wholesale, so the
+ * delegate would resolve to an automock returning `undefined` and every refusal would fall through
+ * to the generic message. See the longer note on `isPollGone` in ../index.tsx.
+ */
+const isWrongAccount = (err: unknown): boolean =>
+  (err as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === 403
 const PATCH_DEBOUNCE_MS = 1250
 // The API's OAuth callback lands on a fixed /calendar-connected path carrying no session context,
 // so stashing the current path here is the only way back to the poll the person left.
@@ -128,6 +144,9 @@ const PaintingPhase = ({
       sessionStorage.setItem(CALENDAR_RETURN_KEY, window.location.pathname + window.location.search)
       redirectTo(authUrl)
     },
+    // Without this the whole failure is invisible: the button neither redirects nor says anything,
+    // which reads as a click that never registered.
+    onError: (err: unknown) => setErrorMessage(isWrongAccount(err) ? WRONG_ACCOUNT_MESSAGE : CONNECT_ERROR_MESSAGE),
   })
 
   // Fire once per mount and let the server decide whether it does anything: an unforced check is a
