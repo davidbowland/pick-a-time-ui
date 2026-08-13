@@ -1,6 +1,9 @@
+import { KeyRound, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import React, { useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 
+import { JOIN_COPY } from './copy'
+import { STARTER_ROW_HEIGHT } from '@components/story/hero-starter'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 
 /**
@@ -38,13 +41,48 @@ const JoinDialogImpl = dynamic(async () => (await import('./join-dialog')).JoinD
   ssr: false,
 })
 
+/**
+ * The panel the `door` and `dock` variants open. Split for the same reason the dialog is: a static
+ * import of `./join-panel` — and through it `./elements` — would drag HeroUI's `Modal` and the
+ * react-aria overlay tree into the landing page's first-paint chunk, which is the entire cost this
+ * split exists to avoid. The two labels the triggers need come from `./copy` instead, which carries
+ * no HeroUI import; reading them from `./elements` reintroduces the leak, measured.
+ */
+const JoinPanelLazy = dynamic(async () => (await import('./join-panel')).JoinPanelImpl, {
+  loading: () => (
+    <p className="sr-only" role="status">
+      Loading…
+    </p>
+  ),
+  ssr: false,
+})
+
 export interface JoinTriggerProps {
+  /**
+   * `door` and `dock` only: the id of an element that explains the trigger, forwarded straight to
+   * the button's `aria-describedby`. `DoorPair` uses it to hang `Have a poll code?` off the door —
+   * undescribed, the door announces as a bare `Join a poll` button, which tells the one visitor who
+   * is not here to create anything nothing at all.
+   */
+  describedBy?: string
   /**
    * `sentence` (the default) is the quiet inline line used beside a create affordance. `pill` is
    * the bordered control for a page that has nothing else on it — bordered rather than filled,
-   * because entering a code can still miss.
+   * because entering a code can still miss. `door` is the hero's second way in, sized to the
+   * starter row beside it. `dock` is the fixed corner pill that appears once the door scrolls away.
    */
-  variant?: 'sentence' | 'pill'
+  variant?: 'sentence' | 'pill' | 'door' | 'dock'
+  /**
+   * `door` and `dock` only, and required for them: both are **controlled**, because the landing
+   * page coordinates them with each other, with the paste listener and with `BackToFormCta`.
+   * `sentence` and `pill` keep owning their own state and ignore these.
+   */
+  isOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Forwarded to the panel. One-shot explanation of a panel the visitor did not open. */
+  notice?: string
+  /** Forwarded to the panel. Pre-entered poll code, selected so one keystroke replaces it. */
+  prefill?: string
 }
 
 /**
@@ -56,22 +94,125 @@ export interface JoinTriggerProps {
  *    mounts, so a wrapper left mounted-but-closed downloads HeroUI's `Modal` and the react-aria
  *    overlay tree on every landing visit and defeats the split entirely. `null` while closed is
  *    what keeps the chunk unfetched. Same shape as `recent-polls/elements.tsx`.
- * 2. **`isOpen` lives here, not in the page.** Both landing compositions are always in the DOM and
- *    swapped with CSS, so there are two triggers; each owning its own dialog is what makes focus
- *    return to the trigger that was actually pressed.
+ * 2. **For `sentence` and `pill`, `isOpen` lives here, not in the page.** Both landing compositions
+ *    are always in the DOM and swapped with CSS, so there are two triggers; each owning its own
+ *    dialog is what makes focus return to the trigger that was actually pressed. `door` and `dock`
+ *    are the exception and are **controlled**, because on `/` the two of them, the paste listener
+ *    and `BackToFormCta` all have to agree on which single surface is open.
  *
  * The trigger itself ships in the prerendered markup with no storage gate and no CSS toggle of its
  * own, so it stays out of the page's pre-paint layout contract.
  */
-export const JoinTrigger = ({ variant = 'sentence' }: JoinTriggerProps): React.ReactNode => {
-  const [isOpen, setIsOpen] = useState(false)
+export const JoinTrigger = ({
+  describedBy,
+  isOpen = false,
+  notice,
+  onOpenChange,
+  prefill,
+  variant = 'sentence',
+}: JoinTriggerProps): React.ReactNode => {
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const panelId = `${useId()}-panel`
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const wasOpenRef = useRef(isOpen)
+
+  // Focus return on every close path, and it has to live HERE rather than in the panel. The panel
+  // closes by calling `onOpenChange(false)` and is then unmounted by this component — at which
+  // instant the focused element is inside the subtree being removed, so the browser drops focus to
+  // `<body>` and a keyboard visitor who pressed Escape restarts the page. The trigger is the one
+  // control guaranteed to still be mounted, so it is the one that can take focus back.
+  //
+  // Open-to-closed only, AND only when focus was actually lost. The narrower guard is the whole
+  // point: "did it just close?" is not the same question as "was focus mine to give back?", and the
+  // page closes this panel for reasons the visitor did not ask for -- pasting a poll link into "Name
+  // your poll" closes the door's panel so the dock's can open. With the broad guard, that paste rips
+  // the caret out of the field mid-paste and, on a scrolled page, scrolls to the trigger. A control
+  // that steals focus from wherever you were is worse than one that drops it.
+  //
+  // `document.body`/`null` is exactly the state the browser leaves behind when it removes the
+  // focused node, which is the only case this effect exists to repair. Escape-from-inside still
+  // returns focus; the `Close` press is a no-op because focus is already on the trigger.
+  useEffect(() => {
+    const lostFocus = document.activeElement === null || document.activeElement === document.body
+    if (wasOpenRef.current && !isOpen && lostFocus) {
+      triggerRef.current?.focus()
+    }
+    wasOpenRef.current = isOpen
+  }, [isOpen])
+
+  if (variant === 'door' || variant === 'dock') {
+    // Hierarchy is fill and width, never altitude. The door is full-width in its own column with a
+    // resting --bone/6% wash; the dock is opaque. --copy-color for the door because, unlike the
+    // 404's pill, it sits on SkyBackground and the page colour moves as the visitor scrolls — and
+    // deliberately NOT for the dock, because --copy-color is a guarantee for text sitting *on* the
+    // page, and the page slides underneath a fixed element. An opaque --field-background makes the
+    // dock page-independent.
+    const skin =
+      variant === 'door'
+        ? 'w-full bg-[var(--bone)]/[0.06] text-[var(--copy-color,var(--bone))]'
+        : 'bg-[var(--field-background)] text-[var(--bone)] shadow-[0_10px_28px_rgba(0,0,0,0.4)]'
+
+    return (
+      // `relative` is the panel's positioning context: the panel is absolutely positioned and grows
+      // out of flow, so opening it can never move the page.
+      <div className="relative">
+        <button
+          // Only while open: the panel is mounted only when open, so a permanent `aria-controls` is
+          // an IDREF pointing at nothing for most of the page's life -- JAWS offers to move to the
+          // controlled element and lands nowhere. `aria-expanded` already carries the state.
+          aria-controls={isOpen ? panelId : undefined}
+          aria-describedby={describedBy}
+          aria-expanded={isOpen}
+          className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[var(--field-border)] px-5 text-sm font-bold ${skin} ${FOCUS_RING}`}
+          onClick={() => onOpenChange?.(!isOpen)}
+          ref={triggerRef}
+          style={variant === 'door' ? { minHeight: STARTER_ROW_HEIGHT } : undefined}
+          type="button"
+        >
+          {isOpen ? (
+            // The panel's only *visible* dismissal — Escape is invisible — and the swap removes
+            // every state where `Have a poll code?` is asked twice on one screen. Same shape as the
+            // app's own `Show how it works` / `Hide how it works`.
+            <>
+              <X aria-hidden="true" className="h-4 w-4" />
+              {JOIN_COPY.closeLabel}
+            </>
+          ) : variant === 'door' ? (
+            JOIN_COPY.heading
+          ) : (
+            <>
+              <KeyRound aria-hidden="true" className="h-4 w-4" />
+              {JOIN_TRIGGER_COPY.preface}
+              {/* The visible words are a literal prefix of the accessible name (WCAG 2.5.3), which
+                  is why the extension is sr-only text and not an aria-label. `srSuffix` opens with
+                  its own space, so the one literal space here sits before `control`. */}
+              <span className="sr-only">
+                {' '}
+                {JOIN_TRIGGER_COPY.control}
+                {JOIN_TRIGGER_COPY.srSuffix}
+              </span>
+            </>
+          )}
+        </button>
+        {isOpen ? (
+          <JoinPanelLazy
+            anchor={variant}
+            id={panelId}
+            notice={notice}
+            onOpenChange={(open) => onOpenChange?.(open)}
+            prefill={prefill}
+          />
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <>
       {variant === 'pill' ? (
         <button
           className={`inline-flex min-h-11 items-center justify-center rounded-full border border-[var(--field-border)] px-5 text-sm font-bold text-[var(--bone)] hover:bg-[var(--bone)]/[0.06] ${FOCUS_RING}`}
-          onClick={() => setIsOpen(true)}
+          onClick={() => setIsDialogOpen(true)}
           type="button"
         >
           {JOIN_TRIGGER_COPY.pillLabel}
@@ -102,7 +243,7 @@ export const JoinTrigger = ({ variant = 'sentence' }: JoinTriggerProps): React.R
           {JOIN_TRIGGER_COPY.preface}{' '}
           <button
             className={`inline-flex min-h-6 items-center rounded-md px-0.5 font-semibold text-[var(--copy-color,var(--bone))] underline underline-offset-[3px] hover:opacity-80 ${FOCUS_RING}`}
-            onClick={() => setIsOpen(true)}
+            onClick={() => setIsDialogOpen(true)}
             type="button"
           >
             {JOIN_TRIGGER_COPY.control}
@@ -110,7 +251,7 @@ export const JoinTrigger = ({ variant = 'sentence' }: JoinTriggerProps): React.R
           </button>
         </p>
       )}
-      {isOpen ? <JoinDialogImpl isOpen={isOpen} onOpenChange={setIsOpen} /> : null}
+      {isDialogOpen ? <JoinDialogImpl isOpen={isDialogOpen} onOpenChange={setIsDialogOpen} /> : null}
     </>
   )
 }

@@ -10,18 +10,25 @@ export const BackToFormCta = ({
   formRef,
   footerRef,
   onJump,
+  suppressed = false,
 }: {
   heroRef: RefObject<HTMLDivElement | null>
   formRef: RefObject<HTMLDivElement | null>
   footerRef: RefObject<HTMLDivElement | null>
   onJump: () => void
+  /**
+   * Set while the join panel owns the bottom edge below `md`, where the two corners are close enough
+   * that the open panel and this button overlap and the button reads as a control inside the panel.
+   * Note the negation: this hides the button, so it is ANDed in as `!suppressed`.
+   */
+  suppressed?: boolean
 }): React.ReactNode => {
   const heroInView = useIsIntersecting(heroRef)
   const formInView = useIsIntersecting(formRef)
   const footerInView = useIsIntersecting(footerRef)
   // Stay hidden on the hero (the starter row already lives above the fold there) and while the
   // create form or footer is in view — only surface once the user has scrolled past the form.
-  const visible = !heroInView && !formInView && !footerInView
+  const visible = !heroInView && !formInView && !footerInView && !suppressed
 
   if (!visible) return null
 

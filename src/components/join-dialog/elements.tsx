@@ -1,40 +1,15 @@
 import { Modal } from '@heroui/react'
-import { Check, CircleAlert, WifiOff } from 'lucide-react'
+import { Check, CircleAlert, KeyRound, WifiOff } from 'lucide-react'
 import React from 'react'
 
+import { JOIN_COPY } from './copy'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { PillButton } from '@components/ui/pill-button'
 
-/**
- * Every string the dialog can put on screen, in one place.
- *
- * Final after a three-lens copy review (UX, Pinker, voice-against-sample). The diagnosis comes
- * first and the recovery is an imperative; pre-request validation is a fragment with no stop, and
- * post-request failures are full sentences with one. Changing a string here is a copy decision, not
- * a code change.
- */
-export const JOIN_COPY = {
-  closeLabel: 'Close',
-  empty: 'Enter your poll code or link',
-  fieldLabel: 'Poll code or link',
-  /** Shown while the lookup is in flight, on the submit button and in the status region. */
-  finding: 'Finding your poll…',
-  firstMiss: (spokenCode: string): string => `Couldn't find ${spokenCode}. Check the spelling and try again.`,
-  firstMissLong: "Couldn't find that poll code. Check the spelling and try again.",
-  firstMissNote: "If it's right, the poll may have closed.",
-  heading: 'Join a poll',
-  hint: 'Like lazy giraffe. A whole poll link works too.',
-  offline: "Couldn't look that up. Check your connection and try again.",
-  placeholder: 'lazy giraffe',
-  refusal: "Couldn't read that as a poll code.",
-  refusalNote: 'Enter the poll code, like lazy giraffe, or paste the whole poll link.',
-  secondMiss: 'Still no poll with that code. Check it against what you were sent.',
-  secondMissNote: 'If it matches, the poll may have closed. Ask whoever sent it for the link.',
-  serverFailure: 'Something went wrong looking that up. Try again.',
-  submit: 'Join poll',
-  successCode: (spokenCode: string): string => `Poll code: ${spokenCode}`,
-  successHeadline: (pollName: string): string => `Opening ${pollName}…`,
-}
+// Re-exported so every `from './elements'` import keeps working. The strings themselves live in
+// `./copy`, with no HeroUI import above them, because `JoinTrigger` — statically imported by the
+// landing page — needs two of them and must not pull `Modal` in with them. See `copy.ts`.
+export { JOIN_COPY } from './copy'
 
 /**
  * The shell every overlay in this app wears: blurred backdrop, small container, corner close.
@@ -141,31 +116,55 @@ export const JoinHint = ({ id }: { id: string }): React.ReactNode => (
 export interface JoinErrorState {
   lines: string[]
   /** Picks the glyph only. The words carry the state; nothing here depends on colour. */
-  variant: 'alert' | 'offline'
+  variant: 'alert' | 'offline' | 'notice'
 }
 
 /**
- * The error region, mounted on the dialog's first commit with nothing in it.
- *
- * A `role="alert"` that enters the DOM already populated is announced by nothing at all — NVDA,
- * JAWS and VoiceOver watch regions that already exist for changes. So this element is always here
- * and `error` arrives on a later commit.
+ * Glyph and skin per variant, in one place. Three variants keyed on one discriminant were three
+ * separate nested ternaries; adding a fourth meant getting the nesting right in two of them. The
+ * class strings stay static literals, so Tailwind's extractor still sees them.
  */
-export const JoinError = ({ error, id }: { error?: JoinErrorState; id: string }): React.ReactNode => (
-  <div id={id} role="alert">
+const ERROR_VARIANT: Record<JoinErrorState['variant'], { Glyph: typeof CircleAlert; box: string; tint: string }> = {
+  alert: { Glyph: CircleAlert, box: 'border-[var(--danger)] bg-[var(--danger)]/10', tint: 'text-[var(--danger)]' },
+  notice: { Glyph: KeyRound, box: 'border-[var(--accent)] bg-[var(--accent)]/10', tint: 'text-[var(--accent)]' },
+  offline: { Glyph: WifiOff, box: 'border-[var(--slate)] bg-[var(--slate)]/10', tint: 'text-[var(--bone)]' },
+}
+
+/**
+ * The error region, mounted on the surface's first commit with nothing in it.
+ *
+ * A live region that enters the DOM already populated is announced by nothing at all — NVDA, JAWS
+ * and VoiceOver watch regions that already exist for changes. So this element is always here and
+ * `error` arrives on a later commit.
+ *
+ * `live` is a property of the REGION and is fixed for its whole lifetime — it is deliberately not
+ * derived from `variant`. Deriving it would make the role a function of the content, so the commit
+ * that gave the region its role would always be the same commit that filled it: the empty-then-
+ * populated contract above becomes unreachable, and changing `role` on a live node rebuilds the
+ * accessible object anyway, which reads to the AT as a brand-new region that already has content in
+ * it. It also produced a second, sharper bug — a notice slot that reverted to `role="alert"` when
+ * cleared, leaving two alert regions on one surface.
+ *
+ * So: the error slot is assertive, because cutting a screen reader off mid-sentence is the right
+ * rudeness for a refusal. A notice slot is polite, because it explains a displacement rather than
+ * reporting a failure. The call site decides, once.
+ */
+export const JoinError = ({
+  error,
+  id,
+  live = 'assertive',
+}: {
+  error?: JoinErrorState
+  id: string
+  live?: 'assertive' | 'polite'
+}): React.ReactNode => (
+  <div id={id} role={live === 'polite' ? 'status' : 'alert'}>
     {error ? (
-      <div
-        className={`flex gap-2.5 rounded-2xl border p-3 ${
-          error.variant === 'offline'
-            ? 'border-[var(--slate)] bg-[var(--slate)]/10'
-            : 'border-[var(--danger)] bg-[var(--danger)]/10'
-        }`}
-      >
-        {error.variant === 'offline' ? (
-          <WifiOff aria-hidden="true" className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[var(--bone)]" />
-        ) : (
-          <CircleAlert aria-hidden="true" className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[var(--danger)]" />
-        )}
+      <div className={`flex gap-2.5 rounded-2xl border p-3 ${ERROR_VARIANT[error.variant].box}`}>
+        {React.createElement(ERROR_VARIANT[error.variant].Glyph, {
+          'aria-hidden': 'true',
+          className: `mt-0.5 h-[18px] w-[18px] shrink-0 ${ERROR_VARIANT[error.variant].tint}`,
+        })}
         <div className="flex flex-col gap-1">
           {error.lines.map((line, index) => (
             <p

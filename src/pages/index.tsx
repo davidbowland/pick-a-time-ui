@@ -4,16 +4,22 @@ import Head from 'next/head'
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import { JoinTrigger } from '@components/join-dialog'
+// From `./copy` and not from `./elements`, which opens with HeroUI's `Modal` -- a static import of
+// that here would put the whole react-aria overlay tree in `/`'s first-paint chunk.
+import { JOIN_COPY } from '@components/join-dialog/copy'
 import PrivacyLink from '@components/privacy-link'
 import RecentPolls from '@components/recent-polls'
 import { BackToFormCta } from '@components/story/back-to-form-cta'
 import { ClosingFooter } from '@components/story/closing-footer'
 import { CreateScene } from '@components/story/create-scene'
-import { HeroStarter } from '@components/story/hero-starter'
+import { DoorPair } from '@components/story/door-pair'
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from '@components/story/scenes'
 import { SkyBackground } from '@components/story/sky-background'
+import { useIsIntersecting } from '@hooks/useIsIntersecting'
+import { useNarrowViewport } from '@hooks/useNarrowViewport'
 import { defaultStorage, useRecentPolls } from '@hooks/useRecentPolls'
 import { fetchConfig } from '@services/api'
+import { extractPollLinkCode } from '@utils/poll-link'
 
 // The offer renders nothing at all on a browser that cannot install, and nothing it does render is
 // in the prerendered HTML, so its HeroUI Modal has no business in the first-paint download. Not
@@ -99,9 +105,132 @@ const Index = (): React.ReactNode => {
   const [startRequests, setStartRequests] = useState(0)
   const hasReadStore = useRef(false)
 
+  // One flag per composition, not one shared between them. Both compositions are always in the DOM
+  // -- the swap is CSS keyed off `data-recent-polls` -- so a single flag would open both doors at
+  // once, mounting two panels with duplicate ids and two live regions on the same page.
+  const [firstVisitJoinOpen, setFirstVisitJoinOpen] = useState(false)
+  const [returningJoinOpen, setReturningJoinOpen] = useState(false)
+
+  // The dock: the way in for everyone who has scrolled past the hero's door. One observer per
+  // composition, pointed at that composition's own door row.
+  const firstVisitDoorRef = useRef<HTMLDivElement>(null)
+  const returningDoorRef = useRef<HTMLDivElement>(null)
+  const firstVisitDoorInView = useIsIntersecting(firstVisitDoorRef)
+  const returningDoorInView = useIsIntersecting(returningDoorRef)
+  const [isDockOpen, setIsDockOpen] = useState(false)
+  const isNarrowViewport = useNarrowViewport()
+
+  // ORed, not picked. Both compositions are always in the DOM and the swap is `display: none` keyed
+  // off `data-recent-polls`, so the hidden one's door never intersects and reports `false` forever;
+  // the visible one's `true` absorbs it. That is what lets the dock decide without ever READING the
+  // attribute, which is what keeps it clear of the page's pre-paint layout contract.
+  const doorInView = firstVisitDoorInView || returningDoorInView
+
+  // `useIsIntersecting` starts `false` and only corrects on its observer's first callback, which
+  // never fires during the static export. Without this gate `!doorInView` is true in the served HTML
+  // and on the first client render, so the dock would ship VISIBLE over the hero. Suppressed has to
+  // be the INITIAL state, so the dock waits for proof the door was ever on screen. Held here rather
+  // than inside the hook: every other caller wants the plain "is it on screen now?" answer.
+  const hasObservedDoor = useRef(false)
+  if (doorInView) hasObservedDoor.current = true
+
+  // Open wins. A visitor who opened the dock and then scrolled back to the hero keeps the panel they
+  // are typing in; unmounting it under them would throw away the code they had entered.
+  const isDockVisible = isDockOpen || (hasObservedDoor.current && !doorInView)
+
+  // The paste reach. One piece of state carries both halves of it -- the code to seed the field with
+  // and, by its presence, the notice that explains why a panel the visitor never opened is on screen
+  // holding it. Clearing it therefore clears both, which is what the dock's close has to do.
+  const [pastePrefill, setPastePrefill] = useState<string | undefined>(undefined)
+
+  // One join surface at a time, on every path -- not only the paste reach. Both compositions stay
+  // mounted and the dock is independent of them, so without this a visitor can press the door, scroll,
+  // and press the dock: two panels, two fields both named "Poll code or link", two alert regions and
+  // two status regions on one page, and a code typed into a panel that has scrolled out of sight.
+  const handleDoorOpenChange = (setOpen: (open: boolean) => void) => (open: boolean) => {
+    setOpen(open)
+    if (!open) return
+    setIsDockOpen(false)
+    if (setOpen !== setFirstVisitJoinOpen) setFirstVisitJoinOpen(false)
+    if (setOpen !== setReturningJoinOpen) setReturningJoinOpen(false)
+  }
+
+  const handleDockOpenChange = (open: boolean): void => {
+    setIsDockOpen(open)
+    if (open) {
+      setFirstVisitJoinOpen(false)
+      setReturningJoinOpen(false)
+    }
+    // The reach is a one-shot. Left set, the next open of the dock -- pressed deliberately, by
+    // someone who wants to type -- would arrive pre-filled with a code from minutes ago and a notice
+    // explaining a displacement that is no longer happening.
+    if (!open) setPastePrefill(undefined)
+
+    // Closing the dock can UNMOUNT it in the same commit: `isDockVisible` is only true through the
+    // `isDockOpen` disjunct whenever the door is on screen, which is every close at scroll 0 and
+    // every close after scrolling back up to the hero. Effects do not run on unmounting components,
+    // so `JoinTrigger`'s own focus return never fires and the browser parks focus on `<body>` --
+    // a keyboard visitor is dropped at the top of the page.
+    //
+    // The dock is not the right place to send focus anyway when it is about to vanish. The door is
+    // the same control by another name, and it is on screen precisely when this happens.
+    if (open || !doorInView) return
+    const container = firstVisitDoorInView ? firstVisitDoorRef.current : returningDoorRef.current
+    // The door is the only control in the pair carrying `aria-expanded`; Start does not.
+    container?.querySelector<HTMLButtonElement>('button[aria-expanded]')?.focus()
+  }
+
   useEffect(() => {
     setIsStoryOpen(readLandingView())
   }, [])
+
+  // Someone is holding a poll link that will not open for them -- an installed PWA that hands taps
+  // back to the browser, a link that landed on the wrong device, a message with the link intact but
+  // no way to follow it. Pasting it onto this page is the obvious next thing to try, and until now
+  // it did nothing at all.
+  //
+  // The gate is PROVENANCE, never shape (`extractPollLinkCode`). Shape would fire on every two-word
+  // paste on the page, `lazy giraffe` included -- and that is also a poll NAME, so the reach must
+  // stay silent for it: no flicker, no notice, nothing.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent): void => {
+      // Legitimately null in some browsers, so it is read defensively rather than trusted.
+      const text = event.clipboardData?.getData('text')
+      if (!text) return
+      // A paste into the open panel is the visitor using the field it opened. The field handles it,
+      // and no notice renders -- the panel would otherwise explain a displacement that did not
+      // happen. A paste into "Name your poll" DOES fire: that visitor is unambiguously lost.
+      const target = event.target instanceof Element ? event.target : undefined
+      if (target?.closest('[data-join-panel]')) return
+      // Already open, so there is nothing to explain and nowhere to put the code: the panel applies
+      // its prefill on mount only, deliberately, so that a later one cannot overwrite what the
+      // visitor has typed. Reaching again would render a notice promising a code over an empty
+      // field. The visitor has the field in front of them; let them paste into it.
+      if (isDockOpen) return
+      const code = extractPollLinkCode(text)
+      if (!code) return
+      // The reach is taking over, so the paste must not also land where it was aimed. Without this,
+      // the documented case -- someone pastes their poll link into "Name your poll" -- ends with the
+      // create form pre-named `https://pick-a-time.com/p/lazy-giraffe`, which is the name they get
+      // if they abandon the join and press Start. On a phone this is the ONLY way a paste happens
+      // at all, since there is no non-editable paste target.
+      if (target?.closest('input, textarea, [contenteditable]')) event.preventDefault()
+      // Spoken form, because that is the form the panel's own hint, placeholder and error copy all
+      // use -- the field says `lazy giraffe`, never `lazy-giraffe`.
+      setPastePrefill(code.replace(/-/g, ' '))
+      // The DOCK's panel, at any scroll position, never the door's. `isDockOpen` also makes the dock
+      // visible, so this works at scroll 0 with the door still in view. The door's anchor is
+      // reserved for a visitor who deliberately pressed the door.
+      setIsDockOpen(true)
+      // One surface at a time. Closing the door's panel here is a PAGE-driven close, which is
+      // exactly why `JoinTrigger`'s focus return is guarded on focus having actually been lost --
+      // without that guard this rips the caret out of the field being pasted into.
+      setFirstVisitJoinOpen(false)
+      setReturningJoinOpen(false)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [isDockOpen])
 
   // The pre-paint script owns FIRST PAINT and nothing else. It runs once per full document load, so
   // on a client-side navigation -- tapping the brand link from a poll you just answered, or either
@@ -175,8 +304,25 @@ const Index = (): React.ReactNode => {
     focusTourFormName.current?.()
   }, [startRequests, isStoryOpen])
 
-  const starter = (onStart: () => void): React.ReactNode => (
-    <HeroStarter maxLength={config?.pollNameMaxLength} name={pollName} onNameChange={setPollName} onStart={onStart} />
+  // Both ways in as one node, because `SceneLayout` renders `action` as a single node and the
+  // page's own test reads `action.props.onStart` -- which is why `onStart` is a direct prop of
+  // `DoorPair` rather than a field on an options object. The open flag is passed in rather than
+  // owned here so each composition keeps its own.
+  const waysIn = (
+    onStart: () => void,
+    isJoinOpen: boolean,
+    onJoinOpenChange: (open: boolean) => void,
+    containerRef: React.RefObject<HTMLDivElement | null>,
+  ): React.ReactNode => (
+    <DoorPair
+      containerRef={containerRef}
+      isJoinOpen={isJoinOpen}
+      maxLength={config?.pollNameMaxLength}
+      name={pollName}
+      onJoinOpenChange={onJoinOpenChange}
+      onNameChange={setPollName}
+      onStart={onStart}
+    />
   )
 
   return (
@@ -229,14 +375,16 @@ const Index = (): React.ReactNode => {
             ) : (
               <div aria-busy="true" className="min-h-[18rem]" />
             )}
-            {/* Beneath the list and above the starter: someone who came back for a poll that isn't
-                in the list is looking here, and the sentence answers them before they reach a form
-                for starting a new one. It ships in the markup with no gate of its own, so it
-                inherits this wrapper's visibility and stays out of the pre-paint contract above. */}
+            {/* Beneath the list: someone who came back for a poll that isn't in the list is
+                looking here, and joining has to answer them before they reach a form for starting a
+                new one. That worry was about SEQUENCE, and the pair settles it -- join now sits
+                level with the starter rather than after it, so there is no longer an order to get
+                wrong. Two blocks became one, in the slot the join sentence used to hold. It ships
+                in the markup with no gate of its own, so it inherits this wrapper's visibility and
+                stays out of the pre-paint contract above. */}
             <div className="mt-8">
-              <JoinTrigger />
+              {waysIn(handleTourStart, returningJoinOpen, handleDoorOpenChange(setReturningJoinOpen), returningDoorRef)}
             </div>
-            <div className="mt-10">{starter(handleTourStart)}</div>
             <div className="mt-10 border-t border-[var(--bone)]/10 pt-8">
               {/* The control carries the heading, not just a button. With recents at `h1` and the
                   scenes below dropped to `h3`, a bare `<button>` here would leave the document
@@ -296,17 +444,15 @@ const Index = (): React.ReactNode => {
         </div>
         <div className={FIRST_VISIT_CLASS} data-testid="first-visit-composition">
           <section className={SCENE_CLASS} ref={heroSceneRef}>
-            <HeroScene action={starter(handleHeroStart)} />
+            <HeroScene
+              action={waysIn(
+                handleHeroStart,
+                firstVisitJoinOpen,
+                handleDoorOpenChange(setFirstVisitJoinOpen),
+                firstVisitDoorRef,
+              )}
+            />
           </section>
-          {/* A sibling of the hero, not part of its `action`. `SceneLayout` renders `action` as a
-              single node (`story/scenes.tsx:45`), and the page's own test reads `action.props`, so
-              wrapping the starter and this trigger in one fragment would change what `action` is.
-              The grid mirrors `SceneLayout`'s, which lands the sentence under the hero's copy
-              column; the negative top margin pulls it back into the hero's own padding so it reads
-              as a footnote to the starter rather than as a scene of its own. */}
-          <div className="mx-auto -mt-8 grid max-w-[1180px] grid-cols-1 gap-12 px-5 md:-mt-20 md:grid-cols-2 md:gap-20">
-            <JoinTrigger />
-          </div>
           <section className={SCENE_CLASS} ref={createSceneRef}>
             <CreateScene
               formRef={pollFormRef}
@@ -342,8 +488,33 @@ const Index = (): React.ReactNode => {
             formRef={createSceneRef}
             heroRef={heroSceneRef}
             onJump={scrollToCreateScene}
+            // Below `md` the two bottom corners are close enough that the open panel and this button
+            // overlap by 56x4px, and the button then reads as a control inside the panel's corner
+            // notch. `useNarrowViewport` seeds `false` during the export, so it is only ever safe
+            // ANDed with client state -- `isDockOpen`, which seeds `false` too, is that state.
+            suppressed={isDockOpen && isNarrowViewport}
           />
         </div>
+        {/* A sibling of both composition wrappers, not inside either. The swap is `display: none` on
+            the wrappers, which takes the whole subtree with it including `position: fixed`
+            descendants -- which is exactly why the FAB above is inside its wrapper on purpose. Out
+            here the dock has no hidden ancestor, so it can serve whichever composition is showing.
+            It mounts and unmounts rather than hiding: a hidden-but-present dock would be a phantom
+            tab stop. No transition -- `BackToFormCta` is the prior art and it appears instantly. */}
+        {isDockVisible ? (
+          <div className="fixed bottom-5 left-5 z-40">
+            <JoinTrigger
+              isOpen={isDockOpen}
+              // The notice rides the same state as the prefill rather than a flag of its own: they
+              // are one fact -- "this panel opened because you pasted a link" -- and two flags could
+              // drift into a notice with nothing beneath it to explain.
+              notice={pastePrefill ? JOIN_COPY.pasteNotice : undefined}
+              onOpenChange={handleDockOpenChange}
+              prefill={pastePrefill}
+              variant="dock"
+            />
+          </div>
+        ) : null}
         {/* Shared by both compositions, and deliberately outside them. Mounted inside the
             returning one, a first-visit visitor -- the large majority of visitors -- would never
             see an install offer at all, and AC-023/AC-032/AC-034 are about offering installation

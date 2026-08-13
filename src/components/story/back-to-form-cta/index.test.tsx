@@ -37,6 +37,22 @@ describe('BackToFormCta', () => {
     expect(screen.getByRole('button', { name: /start a poll/i })).toBeInTheDocument()
   })
 
+  it('stays visible when nothing else claims the bottom edge', () => {
+    jest.mocked(useIsIntersecting).mockImplementation(() => false)
+    render(
+      <BackToFormCta footerRef={footerRef} formRef={formRef} heroRef={heroRef} onJump={jest.fn()} suppressed={false} />,
+    )
+    expect(screen.getByRole('button', { name: /start a poll/i })).toBeInTheDocument()
+  })
+
+  it('yields the bottom edge while the join panel is open', () => {
+    jest.mocked(useIsIntersecting).mockImplementation(() => false)
+    render(
+      <BackToFormCta footerRef={footerRef} formRef={formRef} heroRef={heroRef} onJump={jest.fn()} suppressed={true} />,
+    )
+    expect(screen.queryByRole('button', { name: /start a poll/i })).not.toBeInTheDocument()
+  })
+
   it('calls onJump when clicked', async () => {
     jest.mocked(useIsIntersecting).mockImplementation(() => false)
     const onJump = jest.fn()

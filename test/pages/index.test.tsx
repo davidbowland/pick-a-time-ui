@@ -1,8 +1,12 @@
+/**
+ * @jest-environment-options {"url": "https://pick-a-time.com/"}
+ */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRouter } from 'next/router'
 import React from 'react'
 
 import InstallPrompt from '@components/install-prompt'
+import { JOIN_COPY } from '@components/join-dialog/copy'
 import PollCreate from '@components/poll-create'
 import PrivacyLink from '@components/privacy-link'
 import { BackToFormCta } from '@components/story/back-to-form-cta'
@@ -10,11 +14,13 @@ import { ClosingFooter } from '@components/story/closing-footer'
 import { CreateScene } from '@components/story/create-scene'
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from '@components/story/scenes'
 import { SkyBackground } from '@components/story/sky-background'
+import { useIsIntersecting } from '@hooks/useIsIntersecting'
+import { useNarrowViewport } from '@hooks/useNarrowViewport'
 import { RecentPoll, useRecentPolls } from '@hooks/useRecentPolls'
 import Index, { LANDING_VIEW_KEY, RECENT_POLLS_ATTRIBUTE, readLandingView, writeLandingView } from '@pages/index'
-import { fetchConfig } from '@services/api'
+import { fetchConfig, fetchPoll } from '@services/api'
 import '@testing-library/jest-dom'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('@components/story/sky-background')
@@ -29,6 +35,12 @@ jest.mock('@services/api')
 // The page never routes. The join dialog it now hosts calls `useRouter` on mount, and jsdom has no
 // router mounted, so opening the dialog would throw "NextRouter was not mounted" before it rendered.
 jest.mock('next/router', () => ({ useRouter: jest.fn() }))
+// jsdom's IntersectionObserver is a deliberate no-op stub (`jest.setup-test-env.js`), so the hook is
+// the only place a test can say where the page is scrolled to. The dock reads it for both doors.
+jest.mock('@hooks/useIsIntersecting')
+// Seeds `false` off `matchMedia` in the real thing, which jsdom answers `false` to for every query —
+// so it is mocked here rather than left to a stub that can only ever report a wide viewport.
+jest.mock('@hooks/useNarrowViewport')
 jest.mock('@hooks/useRecentPolls', () => ({
   ...jest.requireActual('@hooks/useRecentPolls'),
   useRecentPolls: jest.fn(),
@@ -96,13 +108,64 @@ const headingLevels = (composition: 'first-visit' | 'returning'): string[] => {
     .map((heading) => heading.tagName.toLowerCase())
 }
 
+/** What the page's two door observers report. One answer per ref, so the OR over them is reachable. */
+type DoorObserver = typeof useIsIntersecting
+
+const doorsOffScreen: DoorObserver = () => false
+const doorsOnScreen: DoorObserver = () => true
+
+/**
+ * Reports whichever door ref is asked about first as on screen and the other as permanently off —
+ * which is how the hidden composition really behaves, since `display: none` means its door never
+ * intersects at all. Which of the two comes first does not matter: the page ORs them.
+ */
+const oneDoorOnScreen = (): DoorObserver => {
+  const seen: unknown[] = []
+  return (ref) => {
+    const index = seen.indexOf(ref)
+    return index === -1 ? seen.push(ref) === 1 : index === 0
+  }
+}
+
+/** Scrolls both doors out of view on the next render. Pair it with `rerenderPage`. */
+const scrollDoorsAway = (): void => {
+  jest.mocked(useIsIntersecting).mockImplementation(doorsOffScreen)
+}
+
+/** Scrolls both doors back into view on the next render. Pair it with `rerenderPage`. */
+const scrollDoorsBack = (): void => {
+  jest.mocked(useIsIntersecting).mockImplementation(doorsOnScreen)
+}
+
+const page = (): React.ReactElement => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <Index />
+  </QueryClientProvider>
+)
+
+/**
+ * Re-renders the same tree rather than mounting a fresh one, so the page keeps the component
+ * instance — and with it the has-observed-door flag, which is a ref and would otherwise reset.
+ */
+const rerenderPage = (rerender: ReturnType<typeof render>['rerender']): void => rerender(page())
+
 function renderPage({
+  narrowViewport = false,
+  observeDoors = doorsOffScreen,
   recents,
   returning = false,
   storyOpen = false,
-}: { recents?: Partial<ReturnType<typeof useRecentPolls>>; returning?: boolean; storyOpen?: boolean } = {}): ReturnType<
-  typeof render
-> {
+}: {
+  narrowViewport?: boolean
+  observeDoors?: DoorObserver
+  recents?: Partial<ReturnType<typeof useRecentPolls>>
+  returning?: boolean
+  storyOpen?: boolean
+} = {}): ReturnType<typeof render> {
+  // Off screen by default, which is the state the static export renders in: the observer's first
+  // callback has not run, so nothing has been seen yet and the dock stays away.
+  jest.mocked(useIsIntersecting).mockImplementation(observeDoors)
+  jest.mocked(useNarrowViewport).mockReturnValue(narrowViewport)
   // Reset on every render, never set only when true, so no test inherits another's document state.
   // Absence is the false case in production — the script deletes the attribute rather than writing
   // "false" — so the first-visit path here is the same state a blocked or thrown script leaves.
@@ -116,12 +179,36 @@ function renderPage({
   jest.mocked(useRecentPolls).mockReturnValue(recentPollsResult(recents ?? (returning ? {} : { polls: [] })))
   window.localStorage.setItem(LANDING_VIEW_KEY, storyOpen ? 'story-open' : 'story-closed')
 
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <Index />
-    </QueryClientProvider>,
-  )
+  return render(page())
+}
+
+/**
+ * A paste, the only way jsdom allows one to be made.
+ *
+ * jsdom implements neither `ClipboardEvent` nor `DataTransfer`, so a real paste event cannot be
+ * constructed — a plain `Event` with a `clipboardData` stand-in bolted on is the whole of what is
+ * available. `userEvent.paste()` covers the in-field case only, which is why the target is a
+ * parameter: the page's own listener is on `document`, and the exclusion it applies depends entirely
+ * on where the paste landed.
+ */
+const pasteOn = (target: EventTarget, text: string): void => {
+  const event = Object.assign(new Event('paste', { bubbles: true }), { clipboardData: { getData: () => text } })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+}
+
+/** A paste that landed on the page at large — no field, no panel. */
+const pasteOnDocument = (text: string): void => pasteOn(document, text)
+
+/**
+ * Two animation frames. The panel shows its notice one frame after mount and selects the prefill one
+ * frame after that, so a negative assertion made any sooner would pass for the wrong reason.
+ */
+const settlePanel = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))))
+  })
 }
 
 describe('Index page', () => {
@@ -252,19 +339,22 @@ describe('Index page', () => {
 
   // Every query below is scoped to one composition on purpose. Both compositions are in the DOM at
   // once -- the swap is CSS keyed off `data-recent-polls`, and jsdom applies no stylesheet -- so
-  // there are two triggers on the page and a bare `getByRole` would throw "found multiple".
-  describe('the join-a-poll trigger', () => {
-    const triggerIn = (composition: 'first-visit-composition' | 'returning-composition'): HTMLElement =>
-      within(screen.getByTestId(composition)).getByRole('button', { name: 'Enter it and join a poll' })
+  // there are two doors on the page and a bare `getByRole` would throw "found multiple".
+  describe('the join-a-poll door', () => {
+    const doorIn = (composition: 'first-visit-composition' | 'returning-composition'): HTMLElement =>
+      within(screen.getByTestId(composition)).getByRole('button', { name: 'Join a poll' })
 
     it('offers a way into an existing poll on a first visit (AC-001)', () => {
       renderPage()
-      expect(triggerIn('first-visit-composition')).toBeEnabled()
+      expect(doorIn('first-visit-composition')).toBeEnabled()
     })
 
-    it('offers the same control to a returning visitor (AC-002)', () => {
+    it('offers the same control to a returning visitor, once (AC-002)', () => {
       renderPage({ returning: true })
-      expect(triggerIn('returning-composition')).toBeEnabled()
+      const composition = within(screen.getByTestId('returning-composition'))
+      expect(composition.getByRole('button', { name: 'Join a poll' })).toBeEnabled()
+      // The sentence the door replaced. Two ways in, not three.
+      expect(composition.queryByRole('button', { name: 'Enter it and join a poll' })).not.toBeInTheDocument()
     })
 
     // The control is in the served markup, not added once the store has been read. Rendering with an
@@ -273,33 +363,371 @@ describe('Index page', () => {
     // AC-037).
     it('is in both compositions before anything is known about the device (AC-004)', () => {
       renderPage({ recents: { polls: [] } })
-      expect(triggerIn('first-visit-composition')).toBeInTheDocument()
-      expect(triggerIn('returning-composition')).toBeInTheDocument()
+      expect(doorIn('first-visit-composition')).toBeInTheDocument()
+      expect(doorIn('returning-composition')).toBeInTheDocument()
     })
 
     it('stays in both compositions once the device is known to have polls (AC-003)', () => {
       renderPage({ returning: true })
-      expect(triggerIn('first-visit-composition')).toBeInTheDocument()
-      expect(triggerIn('returning-composition')).toBeInTheDocument()
+      expect(doorIn('first-visit-composition')).toBeInTheDocument()
+      expect(doorIn('returning-composition')).toBeInTheDocument()
     })
 
-    it('opens the dialog from the first-visit composition', async () => {
+    // Not a dialog, deliberately: the panel promises no modality, so it takes neither the role nor
+    // the focus trap that role would claim.
+    it('opens the join surface from the first-visit composition', async () => {
       renderPage()
-      await userEvent.click(triggerIn('first-visit-composition'))
-      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+      await userEvent.click(doorIn('first-visit-composition'))
+      expect(await screen.findByLabelText('Poll code or link')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    it('opens the dialog from the returning composition', async () => {
+    it('opens the join surface from the returning composition', async () => {
       renderPage({ returning: true })
-      await userEvent.click(triggerIn('returning-composition'))
-      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+      await userEvent.click(doorIn('returning-composition'))
+      expect(await screen.findByLabelText('Poll code or link')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
-    // The trigger is a sentence, not a heading, and the page's outline is unchanged by it.
+    // One composition's door does not open the other's panel -- they are always both mounted, so a
+    // single shared flag would put two panels, two field ids and two live regions on one page.
+    it('opens exactly one panel, in the composition whose door was pressed', async () => {
+      renderPage({ recents: { polls: [] } })
+      await userEvent.click(doorIn('first-visit-composition'))
+      expect(await screen.findByLabelText('Poll code or link')).toBeInTheDocument()
+      expect(screen.getAllByLabelText('Poll code or link')).toHaveLength(1)
+      expect(doorIn('returning-composition')).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    // The door is a button, not a heading, and the page's outline is unchanged by it.
     it('leaves the heading sequence alone', () => {
       renderPage({ returning: true })
       expect(headingLevels('returning')).toEqual(['h1', 'h2', 'h2'])
       expect(headingLevels('first-visit')).toEqual(['h1', 'h2', 'h2', 'h2', 'h2', 'h2', 'h2', 'h2'])
+    })
+  })
+
+  // The dock is a sibling of both compositions, so unlike the doors there is only ever one of it and
+  // the queries below are unscoped on purpose.
+  describe('the join dock', () => {
+    const DOCK_NAME = 'Have a poll code? Enter it and join a poll'
+
+    const dock = (): HTMLElement | null => screen.queryByRole('button', { name: DOCK_NAME })
+
+    const openDock = async (): Promise<void> => {
+      await userEvent.click(screen.getByRole('button', { name: DOCK_NAME }))
+      await screen.findByLabelText('Poll code or link')
+    }
+
+    const suppression = (): boolean | undefined => jest.mocked(BackToFormCta).mock.calls.at(-1)?.[0].suppressed
+
+    // The one that matters most. `useIsIntersecting` starts false and its observer never runs during
+    // the static export, so without the has-observed gate `!doorInView` is true in the served HTML
+    // and the dock ships visible over the hero.
+    it('stays off the page until a door has actually been observed', () => {
+      renderPage()
+      expect(dock()).not.toBeInTheDocument()
+    })
+
+    it('stays off the page while the door is in view', () => {
+      renderPage({ observeDoors: doorsOnScreen })
+      expect(dock()).not.toBeInTheDocument()
+    })
+
+    it('arrives once the door has scrolled away', () => {
+      const { rerender } = renderPage({ observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      expect(dock()).toBeInTheDocument()
+    })
+
+    // One door on screen has to be proof enough. Both compositions are always in the DOM and the
+    // hidden one is `display: none`, so its door reports false forever — ANDing the two observers
+    // would mean nothing was ever observed and the dock would never arrive at all.
+    it('takes a single door on screen as proof the door was seen', () => {
+      const { rerender } = renderPage({ observeDoors: oneDoorOnScreen() })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      expect(dock()).toBeInTheDocument()
+    })
+
+    it('serves a returning visitor the same way', () => {
+      const { rerender } = renderPage({ observeDoors: doorsOnScreen, returning: true })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      expect(dock()).toBeInTheDocument()
+    })
+
+    it('opens its own join surface, which is not a dialog', async () => {
+      const { rerender } = renderPage({ observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      await openDock()
+      expect(screen.getByLabelText('Poll code or link')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    // Scrolling back to the hero while the panel is open would otherwise unmount it and throw away
+    // the code the visitor had already typed.
+    it('keeps an open panel when the door scrolls back into view', async () => {
+      const { rerender } = renderPage({ observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      await openDock()
+
+      scrollDoorsBack()
+      rerenderPage(rerender)
+
+      expect(screen.getByLabelText('Poll code or link')).toBeInTheDocument()
+    })
+
+    it('leaves the back-to-form button alone while it is only a closed pill', () => {
+      const { rerender } = renderPage({ narrowViewport: true, observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      expect(suppression()).toBe(false)
+    })
+
+    it('takes the bottom edge from the back-to-form button below md', async () => {
+      const { rerender } = renderPage({ narrowViewport: true, observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      await openDock()
+      expect(suppression()).toBe(true)
+    })
+
+    it('shares the bottom edge above md, where the two corners do not meet', async () => {
+      const { rerender } = renderPage({ observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rerender)
+      await openDock()
+      expect(suppression()).toBe(false)
+    })
+  })
+
+  // Someone holding a poll link that will not open for them — an installed PWA that hands taps back
+  // to the browser, a link that landed on another device — pastes it onto this page. The gate is
+  // PROVENANCE, never shape: `parseSessionCode` alone accepts `lazy giraffe`, so gating on it would
+  // fire on every two-word paste on the page, and two words are also a poll NAME.
+  describe('the paste reach', () => {
+    it('hands focus to the door when closing the dock also removes it', async () => {
+      // Closing at scroll 0 unmounts the dock in the same commit, so its own focus return cannot
+      // run. Without the page stepping in, the browser drops focus to <body> and a keyboard visitor
+      // restarts the page from the top.
+      // Doors on screen: this is scroll 0, where the paste reach actually happens, and where the
+      // dock exists ONLY through `isDockOpen` -- so closing it removes it.
+      renderPage({ observeDoors: doorsOnScreen })
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+      await settlePanel()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+      expect(document.body).not.toHaveFocus()
+      expect(
+        within(screen.getByTestId('first-visit-composition')).getByRole('button', { name: 'Join a poll' }),
+      ).toHaveFocus()
+    })
+
+    it('never leaves two join panels open at once', async () => {
+      // Both compositions stay mounted and the dock is independent of them, so without an explicit
+      // rule a visitor can end up with two fields both named "Poll code or link", two alert regions
+      // and two status regions on one page -- and a code typed into whichever one scrolled away.
+      renderPage({ observeDoors: doorsOnScreen })
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+      await settlePanel()
+      expect(await screen.findByLabelText('Poll code or link')).toBeInTheDocument()
+
+      await userEvent.click(
+        within(screen.getByTestId('first-visit-composition')).getByRole('button', { name: 'Join a poll' }),
+      )
+      await settlePanel()
+
+      expect(screen.getAllByLabelText('Poll code or link')).toHaveLength(1)
+    })
+
+    it('ignores a paste that arrives while the panel is already open', async () => {
+      // The panel applies its prefill on mount only -- deliberately, so a later one cannot overwrite
+      // what the visitor has typed. So a reach into an ALREADY-OPEN panel would render a notice
+      // promising "here's the code to join it" over a field that never receives one: a promise the
+      // surface then fails to keep, announced to a screen reader as part of the field's description.
+      renderScrolledPast()
+      // Opened deliberately, by pressing the DOCK -- so the field starts empty. Pressing the door
+      // would open the door's panel instead, which the reach is entitled to close.
+      await userEvent.click(screen.getByRole('button', { name: /^Have a poll code\?/ }))
+      await settlePanel()
+      expect(await screen.findByLabelText('Poll code or link')).toHaveValue('')
+
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+      await settlePanel()
+
+      expect(screen.queryByText("That link goes to a poll — here's the code to join it.")).not.toBeInTheDocument()
+    })
+
+    it('keeps the pasted URL out of the poll name it was aimed at', async () => {
+      // The reach takes over, so the paste must not also land in "Name your poll" -- that value is
+      // lifted into the mid-page create form, and would become the poll's name.
+      renderPage()
+      const nameField = within(screen.getByTestId('first-visit-composition')).getByLabelText('Name your poll')
+      nameField.focus()
+      const event = Object.assign(new Event('paste', { bubbles: true, cancelable: true }), {
+        clipboardData: { getData: () => 'https://pick-a-time.com/p/lazy-giraffe' },
+      })
+      act(() => {
+        nameField.dispatchEvent(event)
+      })
+      await settlePanel()
+
+      expect(event.defaultPrevented).toBe(true)
+      expect(nameField).toHaveValue('')
+    })
+
+    const DOCK_NAME = 'Have a poll code? Enter it and join a poll'
+
+    const field = (): HTMLElement => screen.getByLabelText('Poll code or link')
+
+    const doorIn = (composition: 'first-visit-composition' | 'returning-composition'): HTMLElement =>
+      within(screen.getByTestId(composition)).getByRole('button', { name: 'Join a poll' })
+
+    /** The page with both doors on screen — the state the reach has to work in anyway. */
+    const renderAtTheTop = (): ReturnType<typeof render> => renderPage({ observeDoors: doorsOnScreen })
+
+    /** The page scrolled past the doors, so the dock survives being closed. */
+    const renderScrolledPast = (): ReturnType<typeof render> => {
+      const rendered = renderPage({ observeDoors: doorsOnScreen })
+      scrollDoorsAway()
+      rerenderPage(rendered.rerender)
+      return rendered
+    }
+
+    it('reaches for someone who pasted a poll link', async () => {
+      renderAtTheTop()
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+
+      expect(await screen.findByLabelText('Poll code or link')).toHaveValue('lazy giraffe')
+      expect(await screen.findByText(JOIN_COPY.pasteNotice)).toBeInTheDocument()
+    })
+
+    // The dock, never the door — at any scroll position, including this one, where the door is still
+    // on screen and would otherwise be the closer surface. The door's anchor is reserved for a
+    // visitor who deliberately pressed it.
+    it('opens the dock even with the door still in view', async () => {
+      renderAtTheTop()
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+
+      await screen.findByLabelText('Poll code or link')
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+      expect(doorIn('first-visit-composition')).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    // The host is discarded by the gate, so a link claiming any origin at all resolves to a code this
+    // origin will route — never to somewhere else entirely.
+    // Stricter than the join FIELD's rule, deliberately. Typing a code into the field is a considered
+    // act, so taking the segment from any host is right there. This listener pre-empts the visitor's
+    // own paste, and every `.../p/...` URL on the web has the shape of a poll link -- so a foreign
+    // host here would swallow an Instagram paste and announce a poll that does not exist.
+    it("stays out of the way of a poll-shaped link on somebody else's host", async () => {
+      renderAtTheTop()
+      pasteOnDocument('https://www.instagram.com/p/DAbc_123/')
+      await settlePanel()
+
+      expect(screen.queryByLabelText('Poll code or link')).not.toBeInTheDocument()
+      expect(screen.queryByText(JOIN_COPY.pasteNotice)).not.toBeInTheDocument()
+    })
+
+    it('does not swallow a paste it has declined', async () => {
+      renderAtTheTop()
+      const nameField = within(screen.getByTestId('first-visit-composition')).getByLabelText('Name your poll')
+      nameField.focus()
+      const event = Object.assign(new Event('paste', { bubbles: true, cancelable: true }), {
+        clipboardData: { getData: () => 'https://www.instagram.com/p/DAbc_123/' },
+      })
+      act(() => {
+        nameField.dispatchEvent(event)
+      })
+      await settlePanel()
+
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    // The one that decides the design. Nothing at all — no panel, no flicker, no notice.
+    it('stays silent for two words, which are also a poll name', async () => {
+      renderAtTheTop()
+      pasteOnDocument('lazy giraffe')
+      await settlePanel()
+
+      expect(screen.queryByLabelText('Poll code or link')).not.toBeInTheDocument()
+      expect(screen.queryByText(JOIN_COPY.pasteNotice)).not.toBeInTheDocument()
+    })
+
+    it('refuses text carrying two poll paths, because it names no single poll', async () => {
+      renderAtTheTop()
+      pasteOnDocument('/p/one and /p/two')
+      await settlePanel()
+
+      expect(screen.queryByLabelText('Poll code or link')).not.toBeInTheDocument()
+    })
+
+    // Legitimately null in some real browsers.
+    it('survives a paste event carrying no clipboard at all', async () => {
+      renderAtTheTop()
+      act(() => {
+        document.dispatchEvent(new Event('paste', { bubbles: true }))
+      })
+      await settlePanel()
+
+      expect(screen.queryByLabelText('Poll code or link')).not.toBeInTheDocument()
+    })
+
+    // The field handles it, and explaining a displacement that did not happen would be nonsense.
+    it('renders no notice for a paste inside the open panel', async () => {
+      renderScrolledPast()
+      await userEvent.click(screen.getByRole('button', { name: DOCK_NAME }))
+      await screen.findByLabelText('Poll code or link')
+
+      pasteOn(field(), 'https://pick-a-time.com/p/lazy-giraffe')
+      await settlePanel()
+
+      expect(screen.queryByText(JOIN_COPY.pasteNotice)).not.toBeInTheDocument()
+    })
+
+    // A visitor who was already typing into "Name your poll" is unambiguously lost, so this one DOES
+    // fire — and the door's panel closes with it, because one surface is open at a time.
+    it('fires for a paste into the create form and closes the door it displaced', async () => {
+      renderAtTheTop()
+      await userEvent.click(doorIn('first-visit-composition'))
+      await screen.findByLabelText('Poll code or link')
+
+      pasteOn(screen.getAllByLabelText('Name your poll')[0], 'https://pick-a-time.com/p/lazy-giraffe')
+
+      expect(await screen.findByText(JOIN_COPY.pasteNotice)).toBeInTheDocument()
+      expect(screen.getAllByLabelText('Poll code or link')).toHaveLength(1)
+      expect(doorIn('first-visit-composition')).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    // Inference opens a door; it never walks through it. The visitor still presses Join poll.
+    it('never submits on the visitor’s behalf', async () => {
+      renderAtTheTop()
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+      await screen.findByText(JOIN_COPY.pasteNotice)
+
+      expect(jest.mocked(fetchPoll)).not.toHaveBeenCalled()
+    })
+
+    // A one-shot. The next deliberate press of the dock is someone who wants to type, and a code from
+    // minutes ago sitting in the field under a notice explaining a displacement that is over would be
+    // a worse start than an empty one.
+    it('forgets the prefill and the notice once the dock is closed', async () => {
+      renderScrolledPast()
+      pasteOnDocument('https://pick-a-time.com/p/lazy-giraffe')
+      await screen.findByText(JOIN_COPY.pasteNotice)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+      await userEvent.click(screen.getByRole('button', { name: DOCK_NAME }))
+      await screen.findByLabelText('Poll code or link')
+      await settlePanel()
+
+      expect(field()).toHaveValue('')
+      expect(screen.queryByText(JOIN_COPY.pasteNotice)).not.toBeInTheDocument()
     })
   })
 

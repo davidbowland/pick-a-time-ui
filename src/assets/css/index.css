@@ -56,6 +56,22 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Tailwind v4's Preflight deliberately stopped setting `cursor: pointer` on buttons, so every
+   hand-rolled `<button>` in the app falls back to the UA default and gives no hover affordance at
+   all. Restoring it here rather than sprinkling `cursor-pointer` per component: the alternative is
+   ~30 call sites and a rule nobody remembers on the 31st.
+
+   `[role='button']` covers the wrappers HeroUI's `Modal.Trigger` renders, which are clickable but
+   are not <button> elements. Disabled controls are excluded — a pointer on something that will not
+   respond is a lie — and this sits in `base`, below both `components` and `utilities`, so HeroUI's
+   own button styles and any local `cursor-*` utility still win. */
+@layer base {
+  button:not(:disabled):not([aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}
+
 body {
   font-family: var(--font-body);
 }
