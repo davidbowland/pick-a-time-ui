@@ -74,7 +74,14 @@ const PaintingPhase = ({
   // into the cache would visibly revert those newer paints until their own PATCH lands.
   const editCountRef = useRef(0)
 
-  const flushCommit = async (cells: AvailabilityCell[]): Promise<void> => {
+  // The most recent PATCH, whether this component started it or the debounce timer did. A check
+  // has to wait on it: `flushPending()` only drains what is still queued, and a batch whose timer
+  // fired a moment earlier is already in flight where the queue can no longer see it. Reading the
+  // record back before that write lands is how a check comes to mark hours busy against a grid
+  // that predates the paint which triggered it.
+  const inFlightPatchRef = useRef<Promise<void> | undefined>(undefined)
+
+  const commitCells = async (cells: AvailabilityCell[]): Promise<void> => {
     const previous = batchStartRef.current
     batchStartRef.current = undefined
     if (!previous) return
@@ -95,6 +102,12 @@ const PaintingPhase = ({
     }
   }
 
+  const flushCommit = (cells: AvailabilityCell[]): Promise<void> => {
+    const patch = commitCells(cells)
+    inFlightPatchRef.current = patch
+    return patch
+  }
+
   const { commit: debouncedFlush, flush: flushPending } = useDebouncedAvailabilityCommit(flushCommit, PATCH_DEBOUNCE_MS)
 
   const { data: calendar } = useQuery({
@@ -113,7 +126,10 @@ const PaintingPhase = ({
     mutationFn: async (force: boolean) => {
       // Drain anything the debounce is still holding: the check rewrites this record server-side,
       // and paints left sitting in the debounce would be thrown away by the record it returns.
-      flushPending()
+      // Awaited, along with any batch already in flight -- "sent" is not "landed", and this check
+      // may have been triggered by the very paint it needs the server to have stored.
+      await flushPending()
+      await inFlightPatchRef.current
       return syncCalendar(sessionId, userId, force)
     },
     onMutate: () => {
@@ -152,19 +168,30 @@ const PaintingPhase = ({
     onError: (err: unknown) => setErrorMessage(isWrongAccount(err) ? WRONG_ACCOUNT_MESSAGE : CONNECT_ERROR_MESSAGE),
   })
 
-  // Fire once per mount and let the server decide whether it does anything: an unforced check is a
-  // no-op if this poll was already checked. The ref is what makes strict mode's double-invoke, and
-  // any later re-render, unable to fire a second one. The availability record deliberately carries
-  // no checked-at timestamp to consult -- it is served unauthenticated, so a visible value would
-  // tell anyone holding the poll link which participants have a calendar connected.
+  // A check can only turn a free cell busy, so against a grid with nothing free it cannot change
+  // anything no matter what the calendar holds.
+  const hasFreeCells = useMemo(() => availability?.free.some((row) => row.some(Boolean)) ?? false, [availability])
+
+  // Fire once, and let the server decide whether it does anything: an unforced check is a no-op if
+  // this poll was already checked. The ref is what makes strict mode's double-invoke, and any later
+  // re-render, unable to fire a second one. The availability record deliberately carries no
+  // checked-at timestamp to consult -- it is served unauthenticated, so a visible value would tell
+  // anyone holding the poll link which participants have a calendar connected.
+  //
+  // Gated on hasFreeCells rather than firing on mount, because somebody who connects a calendar
+  // before painting anything -- the natural order, since connecting is the thing that promises to
+  // save them the painting -- would otherwise spend this one check on an empty grid it could not
+  // touch, and never get another. The server refuses to bank an inert check too (see
+  // post-calendar-sync.ts); this is the half that stops one being asked for in the first place, and
+  // is what makes the check land on the paint instead of the connection.
   const checkFiredRef = useRef(false)
   const { mutate: runSync } = syncMutation
   useEffect(() => {
-    if (calendar?.status === 'connected' && !checkFiredRef.current) {
+    if (calendar?.status === 'connected' && hasFreeCells && !checkFiredRef.current) {
       checkFiredRef.current = true
       runSync(false)
     }
-  }, [calendar?.status, runSync])
+  }, [calendar?.status, hasFreeCells, runSync])
 
   const handleCommit = (cells: AvailabilityCell[]): void => {
     const previous = availability
@@ -241,7 +268,9 @@ const PaintingPhase = ({
     <div className="flex flex-col gap-4">
       {showsCalendarStrip && (
         <CalendarStrip
+          hasFreeCells={hasFreeCells}
           isChecking={syncMutation.isPending}
+          isConnecting={connectMutation.isPending}
           lastSyncedAt={calendar?.lastSyncedAt ?? null}
           markedBusyCount={markedBusyCount}
           onCheckAgain={() => syncMutation.mutate(true)}

@@ -25,7 +25,9 @@ describe('CalendarStrip', () => {
   const now = () => 1_754_006_400_000
   const noop = (): void => undefined
   const base = {
+    hasFreeCells: true,
     isChecking: false,
+    isConnecting: false,
     lastSyncedAt: 1_754_006_280,
     markedBusyCount: 4,
     now,
@@ -174,5 +176,67 @@ describe('CalendarStrip', () => {
     render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} status="error" />)
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onCheckAgain).toHaveBeenCalledTimes(1)
+  })
+
+  it('should say it is connecting while the hand-off is in flight', () => {
+    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
+    expect(screen.getByText('Connecting to Google Calendar…')).toBeInTheDocument()
+  })
+
+  it('should refuse a second press while connecting', () => {
+    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
+    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
+  })
+
+  it('should keep the pressed control on screen while connecting', () => {
+    // Unlike a check, which starts by itself, connecting is always a deliberate press. A control
+    // that disappears under the pointer reads as a mis-click.
+    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
+    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeInTheDocument()
+  })
+
+  it('should announce the connecting state in the live region', () => {
+    const { container } = render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
+    expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent('Connecting to Google Calendar…')
+  })
+
+  // Nothing free and nothing reported: a grid nobody has filled in yet.
+  const untouchedGrid = { hasFreeCells: false, markedBusyCount: null }
+
+  it('should ask for free time rather than report a check when the grid is empty', () => {
+    render(<CalendarStrip {...base} {...untouchedGrid} />)
+    expect(
+      screen.getByText("Mark when you're free and we'll mark you busy wherever your calendar says you're booked."),
+    ).toBeInTheDocument()
+  })
+
+  it('should not claim a check ran when there was nothing for it to mark', () => {
+    render(<CalendarStrip {...base} {...untouchedGrid} />)
+    expect(screen.queryByText(/^Checked /)).not.toBeInTheDocument()
+  })
+
+  it('should still confirm the calendar is connected when the grid is empty', () => {
+    render(<CalendarStrip {...base} {...untouchedGrid} />)
+    expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
+  })
+
+  it('should keep the empty-grid guidance on the additive side', () => {
+    // Same rule the connect offer is held to: this feature only ever adds busy time.
+    render(<CalendarStrip {...base} {...untouchedGrid} />)
+    expect(screen.queryByText(/take out|remove|clear/i)).not.toBeInTheDocument()
+  })
+
+  it('should report the count when a check emptied the grid by marking every free hour busy', () => {
+    // Also no free cells, but for the opposite reason. Asking for free time right after taking it
+    // away would read as the feature undoing itself.
+    render(<CalendarStrip {...base} hasFreeCells={false} markedBusyCount={4} />)
+    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBeInTheDocument()
+    expect(screen.queryByText(/Mark when you're free/)).not.toBeInTheDocument()
+  })
+
+  it('should report the check normally once the grid has free time', () => {
+    render(<CalendarStrip {...base} hasFreeCells={true} />)
+    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBeInTheDocument()
   })
 })

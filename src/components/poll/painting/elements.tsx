@@ -26,6 +26,15 @@ export interface CalendarStripProps {
   lastSyncedAt: number | null
   usesTimes: boolean
   isChecking: boolean
+  // Whether the OAuth hand-off is in flight. Connecting is always a deliberate press, so unlike
+  // `isChecking` -- which fires by itself on mount, with nobody looking at a control -- this state
+  // keeps the pressed control on screen rather than removing it out from under the pointer.
+  isConnecting: boolean
+  // Whether the grid has anything for a check to act on. The calendar only ever turns a free cell
+  // busy (see markBusyHours in the API), so against a grid with nothing free a check is incapable
+  // of changing anything -- and saying "Checked just now" after one reads as a feature that ran and
+  // found nothing, which is the opposite of what happened.
+  hasFreeCells: boolean
   onConnect: () => void
   onCheckAgain: () => void
   onDismiss: () => void
@@ -47,7 +56,11 @@ const detailFor = (props: CalendarStripProps, checked: string): string => {
 }
 
 const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail: React.ReactNode } => {
-  const { status, lastSyncedAt, isChecking, now = Date.now } = props
+  const { status, lastSyncedAt, isChecking, isConnecting, hasFreeCells, now = Date.now } = props
+
+  if (isConnecting) {
+    return { detail: 'Connecting to Google Calendar…', title: null }
+  }
 
   if (isChecking) {
     return { detail: 'Checking your calendar…', title: null }
@@ -72,6 +85,22 @@ const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail
     return { detail: 'Nothing on your grid changed.', title: <>We couldn&apos;t reach Google Calendar</> }
   }
 
+  // Nothing has failed here, so this is guidance rather than an apology: it names the one thing the
+  // person has to do, and what they get for doing it. Reporting a check instead would be worse than
+  // useless -- a check against an empty grid cannot mark anything, so "Checked just now" would
+  // describe a search of an empty room as having found nobody home.
+  //
+  // The count is what distinguishes an empty grid nobody has filled in from one a check just
+  // emptied by marking every free hour busy. Both have no free cells; only the first has nothing to
+  // report. Asking for free time right after taking it away would read as the feature undoing
+  // itself.
+  if (!hasFreeCells && !props.markedBusyCount) {
+    return {
+      detail: "Mark when you're free and we'll mark you busy wherever your calendar says you're booked.",
+      title: 'Google Calendar connected',
+    }
+  }
+
   return {
     // 0 is the API's never-synced sentinel (get-calendar-callback.ts stamps it at connect), and it
     // is not null, so `?? null` misses it and formatCheckedAgo(0) renders a date in 1970.
@@ -81,8 +110,13 @@ const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail
 }
 
 const actionsFor = (props: CalendarStripProps): React.ReactNode => {
-  const { status, isChecking, onConnect, onCheckAgain, onDismiss } = props
+  const { status, isChecking, isConnecting, onConnect, onCheckAgain, onDismiss } = props
 
+  // Disabled rather than removed, and relabelled rather than spinner-only: the live region above
+  // carries the announcement, so this only has to stop a second press and stay put while it does.
+  if (isConnecting) {
+    return <Chip disabled>Connecting…</Chip>
+  }
   if (isChecking) {
     return null
   }

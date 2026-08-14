@@ -1,6 +1,6 @@
 import { AlertDialog, Button, Dropdown, Header, Menu } from '@heroui/react'
 import { CalendarDays, ChevronDown, LogOut, Unplug } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { GoogleLogo } from '@components/google-logo'
 import { Mark } from '@components/mark'
@@ -57,6 +57,7 @@ export interface UserMenuProps {
   name: string
   calendarStatus?: CalendarStatus
   lastSyncedAt: number | null
+  isDisconnecting: boolean
   onDisconnect: () => void
   onSignOut: () => void
   now?: () => number
@@ -66,16 +67,27 @@ export const UserMenu = ({
   name,
   calendarStatus,
   lastSyncedAt,
+  isDisconnecting,
   onDisconnect,
   onSignOut,
   now = Date.now,
 }: UserMenuProps): React.ReactNode => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
 
+  // The dialog stays open for the duration of the request instead of closing on press. Closing
+  // first would put the only progress this action has behind a menu the person has to reopen, and
+  // would make a failure arrive with nothing on screen that it obviously belongs to.
   const handleConfirm = (): void => {
-    setIsConfirmOpen(false)
     onDisconnect()
   }
+
+  // Closes on settle, success or failure alike -- a failure is reported by the toast the parent
+  // raises, and holding a dead dialog open behind it would leave two things to dismiss.
+  const wasDisconnectingRef = useRef(false)
+  useEffect(() => {
+    if (wasDisconnectingRef.current && !isDisconnecting) setIsConfirmOpen(false)
+    wasDisconnectingRef.current = isDisconnecting
+  }, [isDisconnecting])
 
   return (
     <>
@@ -136,13 +148,28 @@ export const UserMenu = ({
                   We&apos;ll delete your calendar data and stop checking it. Hours we already marked busy stay busy.
                   This applies to every poll you&apos;re in.
                 </p>
+                {/* Always mounted, like the calendar strip's live region and for the same reason: a
+                    region that appears along with its text is frequently never announced. */}
+                <p aria-live="polite" className="mt-2 text-sm text-[var(--slate)]">
+                  {isDisconnecting ? 'Disconnecting…' : ''}
+                </p>
               </AlertDialog.Body>
               <AlertDialog.Footer>
-                <Button className={DIALOG_BUTTON_CLASS} onPress={() => setIsConfirmOpen(false)} variant="outline">
+                <Button
+                  className={DIALOG_BUTTON_CLASS}
+                  isDisabled={isDisconnecting}
+                  onPress={() => setIsConfirmOpen(false)}
+                  variant="outline"
+                >
                   Cancel
                 </Button>
-                <Button className={DIALOG_BUTTON_CLASS} onPress={handleConfirm} variant="primary">
-                  Disconnect
+                <Button
+                  className={DIALOG_BUTTON_CLASS}
+                  isDisabled={isDisconnecting}
+                  onPress={handleConfirm}
+                  variant="primary"
+                >
+                  {isDisconnecting ? 'Disconnecting…' : 'Disconnect'}
                 </Button>
               </AlertDialog.Footer>
             </AlertDialog.Dialog>

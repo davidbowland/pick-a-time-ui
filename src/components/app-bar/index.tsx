@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import React from 'react'
+import React, { useState } from 'react'
 
 import { BrandLink, GoogleSignInButton, NavContainer, UserMenu } from './elements'
 import { useAuthContext } from '@components/auth-context'
+import FeedbackMessage from '@components/feedback-message'
 import { clearSessionCookie } from '@hooks/useSessionCookie'
 import { disconnectCalendar, fetchCalendarState } from '@services/api'
+
+const DISCONNECT_ERROR_MESSAGE = "Couldn't disconnect Google Calendar. Please try again."
 
 export interface AppBarProps {
   sessionId?: string
@@ -20,8 +23,14 @@ const AppBar = ({ sessionId, now }: AppBarProps): React.ReactNode => {
   // painting screen and this menu read the same cache entry and one disconnect refreshes both.
   const { data: calendar } = useQuery({ enabled: isSignedIn, queryFn: fetchCalendarState, queryKey: ['calendar'] })
 
+  const [errorMessage, setErrorMessage] = useState<string | undefined>()
+
   const disconnectMutation = useMutation({
     mutationFn: disconnectCalendar,
+    // Without this a failed disconnect was completely silent: the dialog closed, the invalidate
+    // below never ran, and the menu went on reporting the calendar as connected -- so the one
+    // reading available to the person was that they had disconnected it. They had not.
+    onError: () => setErrorMessage(DISCONNECT_ERROR_MESSAGE),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar'] }),
   })
 
@@ -49,6 +58,7 @@ const AppBar = ({ sessionId, now }: AppBarProps): React.ReactNode => {
           {isSignedIn ? (
             <UserMenu
               calendarStatus={calendar?.status}
+              isDisconnecting={disconnectMutation.isPending}
               lastSyncedAt={calendar?.lastSyncedAt ?? null}
               name={user?.name ?? 'User'}
               now={now}
@@ -60,6 +70,7 @@ const AppBar = ({ sessionId, now }: AppBarProps): React.ReactNode => {
           )}
         </>
       )}
+      <FeedbackMessage message={errorMessage} onClose={() => setErrorMessage(undefined)} severity="error" />
     </NavContainer>
   )
 }

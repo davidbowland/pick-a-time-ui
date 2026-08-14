@@ -323,4 +323,81 @@ describe('AppBar', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     await waitFor(() => expect(trigger()).toHaveFocus())
   })
+
+  it('should say it is disconnecting while the request is in flight', async () => {
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockImplementationOnce(() => new Promise(() => {}))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+
+    expect(await screen.findByRole('button', { name: 'Disconnecting…' })).toBeInTheDocument()
+  })
+
+  // Drawn on the button AND spoken through the live region. A label that changes under a screen
+  // reader's cursor is not reliably announced on its own.
+  it('should announce that the disconnect is under way', async () => {
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockImplementationOnce(() => new Promise(() => {}))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+
+    const live = document.querySelector('[aria-live="polite"]')
+    await waitFor(() => expect(live).toHaveTextContent('Disconnecting…'))
+  })
+
+  it('should hold the dialog open for the duration rather than closing on press', async () => {
+    // Closing first would put the only progress this action has behind a menu the person has to
+    // reopen, and would make a failure arrive with nothing on screen it obviously belongs to.
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockImplementationOnce(() => new Promise(() => {}))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+
+    expect(await screen.findByRole('heading', { name: 'Disconnect Google Calendar?' })).toBeInTheDocument()
+  })
+
+  it('should refuse a second disconnect while the first is still in flight', async () => {
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockImplementationOnce(() => new Promise(() => {}))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnecting…' }))
+
+    expect(disconnectCalendar).toHaveBeenCalledTimes(1)
+  })
+
+  // This used to fail in total silence: the dialog closed, the cache was never invalidated, and the
+  // menu went on reporting the calendar as connected -- so the only reading available to the person
+  // was that they had disconnected it. They had not.
+  it('should say so when the disconnect fails', async () => {
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockRejectedValueOnce(new Error('network error'))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+
+    expect(await screen.findByText("Couldn't disconnect Google Calendar. Please try again.")).toBeInTheDocument()
+  })
+
+  it('should keep reporting the calendar as connected when the disconnect fails', async () => {
+    setupConnected()
+    jest.mocked(disconnectCalendar).mockRejectedValueOnce(new Error('network error'))
+
+    renderAppBar()
+    await openConfirmDialog()
+    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+    await screen.findByText("Couldn't disconnect Google Calendar. Please try again.")
+    await openMenu()
+
+    expect(await screen.findByRole('menuitem', { name: /disconnect/i })).toBeInTheDocument()
+  })
 })
