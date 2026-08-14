@@ -86,15 +86,15 @@ describe('CalendarStrip', () => {
     expect(screen.queryByText(/marked .* busy/)).not.toBeInTheDocument()
   })
 
-  it('should not explain the all-day rule when the count is unknown', () => {
+  it('should not explain the full-day rule when the count is unknown', () => {
     render(<CalendarStrip {...base} markedBusyCount={null} usesTimes={false} />)
     expect(screen.getByText('Checked 2 minutes ago')).toBeInTheDocument()
   })
 
-  it('should explain the all-day rule on a date-only poll', () => {
+  it('should explain the full-day rule on a date-only poll', () => {
     render(<CalendarStrip {...base} usesTimes={false} />)
     expect(
-      screen.getByText("Checked 2 minutes ago · on date-only polls we mark a day busy only when you're booked all day"),
+      screen.getByText('Checked 2 minutes ago · on date-only polls we mark a day busy once 8 hours of it are booked'),
     ).toBeInTheDocument()
   })
 

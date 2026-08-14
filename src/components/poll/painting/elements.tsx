@@ -49,7 +49,7 @@ const detailFor = (props: CalendarStripProps, checked: string): string => {
     return `Checked ${checked}`
   }
   if (!props.usesTimes) {
-    return `Checked ${checked} · on date-only polls we mark a day busy only when you're booked all day`
+    return `Checked ${checked} · on date-only polls we mark a day busy once 8 hours of it are booked`
   }
   const hours = props.markedBusyCount === 1 ? 'hour' : 'hours'
   return `Checked ${checked} · marked ${props.markedBusyCount} ${hours} busy`
