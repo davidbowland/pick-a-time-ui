@@ -26,7 +26,13 @@ describe('PaintingPhase', () => {
   // default 1000ms timeout is shorter than the debounce, so assertions that wait on a PATCH pass
   // an explicit longer timeout via DEBOUNCE_WAIT.
   const PATCH_DEBOUNCE_MS = 1250
+  // Mirrors CHECK_SETTLE_MS in the component: how long painting must stop before the one automatic
+  // calendar check is spent.
+  const CHECK_SETTLE_MS = 3000
   const DEBOUNCE_WAIT = { timeout: 2000 }
+  // Long enough to cover the paint debounce and the settle window that follows it, so a check
+  // waiting on both has landed by the time this expires.
+  const IDLE_WAIT = { timeout: 8000 }
 
   beforeAll(() => {
     jest.useFakeTimers()
@@ -1233,6 +1239,32 @@ describe('PaintingPhase', () => {
       expect(syncCalendar).not.toHaveBeenCalled()
     })
 
+    // The poll grants one automatic check, and the server will not re-run it unforced. Firing it the
+    // instant the first cell turns free spent it on a one-cell grid and left everything painted
+    // afterwards -- which is to say the whole grid -- never checked against the calendar at all. From
+    // the painter's side that is a calendar connection that does nothing.
+    it('should not spend the check on the first cell while painting is still going', async () => {
+      mockEmptyAvailability()
+      jest.mocked(patchAvailability).mockResolvedValue({
+        userId: 'quiet-falcon',
+        free: [
+          [true, false, false],
+          [false, false, false],
+        ],
+        expiration: 1725453600,
+      })
+
+      renderSignedIn()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      const cells = await screen.findAllByRole('button', { pressed: false })
+      await user.click(cells[0])
+
+      // Waited out the PATCH debounce, so the paint has landed server-side: any check that was going
+      // to fire on this first cell has had every chance to.
+      await waitFor(() => expect(patchAvailability).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      expect(syncCalendar).not.toHaveBeenCalled()
+    })
+
     it('should tell somebody who connected first what to do next', async () => {
       mockEmptyAvailability()
 
@@ -1245,7 +1277,7 @@ describe('PaintingPhase', () => {
       ).toBeInTheDocument()
     })
 
-    it('should check as soon as the first cell is painted', async () => {
+    it('should check once painting stops', async () => {
       mockEmptyAvailability()
       jest.mocked(patchAvailability).mockResolvedValueOnce({
         userId: 'quiet-falcon',
@@ -1264,10 +1296,7 @@ describe('PaintingPhase', () => {
         cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
       })
 
-      await waitFor(
-        () => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', false),
-        DEBOUNCE_WAIT,
-      )
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', false), IDLE_WAIT)
     })
 
     it('should land the painted cell on the server before the check reads the record back', async () => {
@@ -1292,7 +1321,7 @@ describe('PaintingPhase', () => {
         cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
       })
 
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), IDLE_WAIT)
       expect(jest.mocked(patchAvailability).mock.invocationCallOrder[0]).toBeLessThan(
         jest.mocked(syncCalendar).mock.invocationCallOrder[0],
       )
@@ -1316,14 +1345,16 @@ describe('PaintingPhase', () => {
         cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
         cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
       })
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), IDLE_WAIT)
 
       act(() => {
         cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
         cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
       })
+      // Past the paint debounce AND the settle window: if a second check were ever going to fire,
+      // this is where it would.
       act(() => {
-        jest.advanceTimersByTime(PATCH_DEBOUNCE_MS + 100)
+        jest.advanceTimersByTime(PATCH_DEBOUNCE_MS + CHECK_SETTLE_MS + 100)
       })
 
       expect(syncCalendar).toHaveBeenCalledTimes(1)

@@ -40,6 +40,10 @@ const WRONG_ACCOUNT_MESSAGE =
 const isWrongAccount = (err: unknown): boolean =>
   (err as { response?: { statusCode?: number } } | null | undefined)?.response?.statusCode === 403
 const PATCH_DEBOUNCE_MS = 1250
+// How long painting has to stop before the poll's one automatic check is spent on the result.
+// Comfortably longer than PATCH_DEBOUNCE_MS: the check has to land on a finished grid, and the pause
+// between two cells of the same painting session is far shorter than the pause that ends one.
+const CHECK_SETTLE_MS = 3000
 // The API's OAuth callback lands on a fixed /calendar-connected path carrying no session context,
 // so stashing the current path here is the only way back to the poll the person left.
 const CALENDAR_RETURN_KEY = 'pat_calendar_return'
@@ -184,14 +188,31 @@ const PaintingPhase = ({
   // touch, and never get another. The server refuses to bank an inert check too (see
   // post-calendar-sync.ts); this is the half that stops one being asked for in the first place, and
   // is what makes the check land on the paint instead of the connection.
+  //
+  // Gating on hasFreeCells alone was not enough: it turns true on the FIRST cell painted, so the one
+  // check went out against a one-cell grid while the person was still painting, and every cell added
+  // after it -- the rest of the grid -- was never checked against the calendar at all. A record that
+  // arrived already painted has no paint in progress and is checked at once; a grid being filled in
+  // right now waits for the painting to stop, each new cell restarting the wait via `availability`,
+  // which the optimistic update replaces on every stroke.
   const checkFiredRef = useRef(false)
+  const arrivedPaintedRef = useRef<boolean | undefined>(undefined)
   const { mutate: runSync } = syncMutation
   useEffect(() => {
-    if (calendar?.status === 'connected' && hasFreeCells && !checkFiredRef.current) {
+    if (availability && arrivedPaintedRef.current === undefined) arrivedPaintedRef.current = hasFreeCells
+    if (checkFiredRef.current || calendar?.status !== 'connected' || !hasFreeCells) return
+
+    const fire = (): void => {
       checkFiredRef.current = true
       runSync(false)
     }
-  }, [calendar?.status, hasFreeCells, runSync])
+    if (arrivedPaintedRef.current) {
+      fire()
+      return
+    }
+    const settleTimer = setTimeout(fire, CHECK_SETTLE_MS)
+    return () => clearTimeout(settleTimer)
+  }, [availability, calendar?.status, hasFreeCells, runSync])
 
   const handleCommit = (cells: AvailabilityCell[]): void => {
     const previous = availability
