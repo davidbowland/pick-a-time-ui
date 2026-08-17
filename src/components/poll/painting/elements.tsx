@@ -1,3 +1,4 @@
+import { CalendarClock, Check } from 'lucide-react'
 import React from 'react'
 
 import { BOOKED_CELL_FRAGMENT, CONFLICT_CELL_FRAGMENT } from '../slot-columns'
@@ -17,6 +18,14 @@ export const Toolbar = ({
     <Chip onPress={onClear}>Clear all</Chip>
   </div>
 )
+
+// A swatch is a cell at 16px, not a colour chip. Every mark below is the one grid.tsx draws in the
+// cell, at the same proportions the 32px cell uses (a half-width glyph; a 2px bar inset from the
+// bottom and both sides), because the fills cannot carry this key by themselves: a conflict's fill
+// is *identical* to an ordinary painted cell's, and booked sits a deliberate 6% off unpainted so
+// the calendar never shouts. A fill-only swatch therefore points at a square the reader cannot
+// find, which is the failure AC-035 is about. `relative` so the bar can be positioned inside.
+const KEY_SWATCH_FRAGMENT = 'relative flex h-4 w-4 shrink-0 items-center justify-center rounded'
 
 /**
  * The legend for the two calendar treatments, rendered only for what is actually on screen.
@@ -40,13 +49,27 @@ export const GridKey = ({
     <ul aria-label="Key" className="flex flex-wrap items-center gap-3 text-[10px] text-[var(--slate)]">
       {unmarkedBookedCount > 0 && (
         <li className="flex items-center gap-1">
-          <span aria-hidden="true" className={`h-3 w-3 rounded ${BOOKED_CELL_FRAGMENT}`} />
+          <span aria-hidden="true" className={`${KEY_SWATCH_FRAGMENT} ${BOOKED_CELL_FRAGMENT}`}>
+            {/* No `text-` class, exactly as in the cell: lucide strokes `currentColor`, so the
+              glyph takes BOOKED_CELL_FRAGMENT's `--slate` and the swatch inherits the 3.80:1
+              pairing booked-contrast.test.ts measures rather than restating a colour here. */}
+            <CalendarClock className="h-2.5 w-2.5" data-testid="key-booked-glyph" />
+          </span>
           Booked on your calendar
         </li>
       )}
       {markedBookedCount > 0 && (
         <li className="flex items-center gap-1">
-          <span aria-hidden="true" className={`h-3 w-3 rounded ${CONFLICT_CELL_FRAGMENT}`} />
+          <span aria-hidden="true" className={`${KEY_SWATCH_FRAGMENT} ${CONFLICT_CELL_FRAGMENT}`}>
+            <Check className="h-2.5 w-2.5 text-[var(--ink)]/70" data-testid="key-conflict-check" />
+            {/* `bg-current` so the bar inherits CONFLICT_CELL_FRAGMENT's `--ink` (6.50:1 on
+              `--accent`), the same trick the cell uses. Without it the swatch is a plain accent
+              square, indistinguishable from a slot the participant merely marked free. */}
+            <span
+              className="absolute inset-x-0.5 bottom-0.5 h-0.5 rounded-full bg-current"
+              data-testid="key-conflict-bar"
+            />
+          </span>
           Marked free, but booked
         </li>
       )}

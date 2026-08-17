@@ -44,6 +44,32 @@ describe('GridKey', () => {
     render(<GridKey markedBookedCount={1} unmarkedBookedCount={1} />)
     expect(screen.getByRole('list', { name: 'Key' })).toBeInTheDocument()
   })
+
+  // Each swatch draws the mark its cell draws, not just its fill. The fills alone cannot carry the
+  // key: a conflict's fill IS an ordinary painted cell's fill, and booked sits a deliberate 6%
+  // off unpainted, so a fill-only swatch names a square the reader cannot find on the grid. Same
+  // WCAG 1.4.1 reasoning the cells themselves follow.
+  it('should draw the calendar mark on the booked swatch', () => {
+    render(<GridKey markedBookedCount={0} unmarkedBookedCount={2} />)
+    expect(screen.getByTestId('key-booked-glyph')).toBeInTheDocument()
+  })
+
+  it('should draw the check on the marked-and-booked swatch', () => {
+    render(<GridKey markedBookedCount={3} unmarkedBookedCount={0} />)
+    expect(screen.getByTestId('key-conflict-check')).toBeInTheDocument()
+  })
+
+  // The bar is the whole difference between a conflict and an ordinary painted cell, so a swatch
+  // without it is the bug this key already had.
+  it('should draw the bar on the marked-and-booked swatch', () => {
+    render(<GridKey markedBookedCount={3} unmarkedBookedCount={0} />)
+    expect(screen.getByTestId('key-conflict-bar')).toBeInTheDocument()
+  })
+
+  it('should draw no marks for a treatment no cell is drawing', () => {
+    render(<GridKey markedBookedCount={0} unmarkedBookedCount={2} />)
+    expect(screen.queryByTestId('key-conflict-bar')).not.toBeInTheDocument()
+  })
 })
 
 describe('CalendarStrip', () => {
