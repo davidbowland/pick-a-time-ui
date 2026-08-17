@@ -198,18 +198,27 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
     claimedUserIdRef.current = effectiveUserId
     const claimedUserId = effectiveUserId
     const claimedName = currentNameRef.current
-    void claimUser(sessionId, claimedUserId).catch((err: unknown) => {
-      // 403 is the only answer that says anything about WHOSE participant this is: it means
-      // another Google account holds it. Anything else -- a dropped connection, a 500 -- says
-      // nothing, and throwing somebody out of their own poll over it would be worse than the
-      // failure. Those are swallowed: the calendar is the only thing they cost, and the connect
-      // button explains itself in words if the person reaches for it.
-      if (!hasStatusCode(err, 403) || !claimedName) return
-      setRefused({ name: claimedName, userId: claimedUserId })
-      // The cookie points at somebody else's participant. Left alone, every later visit lands on
-      // this same refusal.
-      clearUserId()
-    })
+    void claimUser(sessionId, claimedUserId)
+      .then(() => {
+        // The availability read fires during the first render, before this claim lands, so for an
+        // unlinked participant it 403s and falls back to the open route -- which knows nothing about
+        // a calendar. Without this the record stays layer-less for the whole visit (nothing else
+        // refetches it: refetchOnWindowFocus is off and no staleTime is set), so the calendar was
+        // connected, the grid never showed it, and the fill had nothing to skip.
+        void queryClient.invalidateQueries({ queryKey: ['availability', sessionId, claimedUserId] })
+      })
+      .catch((err: unknown) => {
+        // 403 is the only answer that says anything about WHOSE participant this is: it means
+        // another Google account holds it. Anything else -- a dropped connection, a 500 -- says
+        // nothing, and throwing somebody out of their own poll over it would be worse than the
+        // failure. Those are swallowed: the calendar is the only thing they cost, and the connect
+        // button explains itself in words if the person reaches for it.
+        if (!hasStatusCode(err, 403) || !claimedName) return
+        setRefused({ name: claimedName, userId: claimedUserId })
+        // The cookie points at somebody else's participant. Left alone, every later visit lands on
+        // this same refusal.
+        clearUserId()
+      })
   }, [clearUserId, effectiveUserId, isSignedIn, sessionId])
 
   // A newly-created/selected user is set on the cookie immediately, but the `users` list is only

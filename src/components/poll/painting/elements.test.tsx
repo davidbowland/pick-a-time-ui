@@ -229,6 +229,16 @@ describe('CalendarStrip', () => {
       expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     })
 
+    // The distinction the count alone cannot draw: fillableCount is high here precisely BECAUSE no
+    // layer arrived, since a slot nothing knows to be booked counts as fillable. Offering the
+    // control on that number promises to skip booked hours and skips none, having seen none --
+    // Select all wearing the calendar's name. Reachable for real: a signed-in participant whose
+    // record is not yet linked gets a 403 on the authed read and falls back to the open one.
+    it('should withhold the fill when no busy layer arrived, however many slots look fillable', () => {
+      render(<CalendarStrip {...base} fillableCount={12} hasBusyLayer={false} />)
+      expect(screen.queryByRole('button', { name: "Fill in what's free" })).not.toBeInTheDocument()
+    })
+
     it('should drop the fill when every slot is already marked or booked', () => {
       render(<CalendarStrip {...base} fillableCount={0} />)
       expect(screen.queryByRole('button', { name: "Fill in what's free" })).not.toBeInTheDocument()

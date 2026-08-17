@@ -221,6 +221,7 @@ const actionsFor = (props: CalendarStripProps): React.ReactNode => {
     conflictCount,
     fillableCount,
     fillReasonId,
+    hasBusyLayer,
     onConnect,
     onCheckAgain,
     onDismiss,
@@ -291,7 +292,10 @@ const actionsFor = (props: CalendarStripProps): React.ReactNode => {
   // a control sitting inside one poll would misrepresent how far it reaches.
   return (
     <>
-      {fillableCount > 0 && (
+      {/* A fill offered without a layer is Select all wearing the calendar's name: with no busy data
+          every unmarked slot counts as fillable, so the control would promise to skip booked hours
+          and skip none, having seen none. Withheld until there is a calendar to have consulted. */}
+      {hasBusyLayer && fillableCount > 0 && (
         <Chip onPress={onFill} primary>
           {FILL_LABEL}
         </Chip>

@@ -34,6 +34,9 @@ export interface PaintingPhaseProps {
 
 const SAVE_ERROR_MESSAGE = "Couldn't save your availability. Please try again."
 const CONNECT_ERROR_MESSAGE = "Couldn't connect Google Calendar. Please try again."
+// Said when a check fails for any reason other than the wrong account. It names the reassurance
+// that matters -- a failed check cannot have changed anything, because a check no longer writes.
+const CHECK_ERROR_MESSAGE = "Couldn't check your calendar. Nothing on your grid changed."
 // The API refuses with 403 for exactly one reason: this participant is linked to another Google
 // account. Retrying cannot fix that, so the message names the cause and the only move that does.
 const WRONG_ACCOUNT_MESSAGE =
@@ -212,6 +215,10 @@ const PaintingPhase = ({
   const syncMutation = useMutation({
     mutationFn: (force: boolean) => syncCalendar(sessionId, userId, force),
     onMutate: () => setReport(undefined),
+    // Without this every failure reads as `We couldn't reach Google Calendar`, including a 403,
+    // which means the participant is not linked to this account and Google was never called at all.
+    // That leaves a Try again that can only fail the same way.
+    onError: (err: unknown) => setErrorMessage(isWrongAccount(err) ? WRONG_ACCOUNT_MESSAGE : CHECK_ERROR_MESSAGE),
     onSuccess: (result) => {
       // Read back out of the cache rather than off a closure: this resolves a network round trip
       // after the render that started it, and the record may well have moved since.
