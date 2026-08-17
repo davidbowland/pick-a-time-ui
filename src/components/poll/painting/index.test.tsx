@@ -1134,6 +1134,63 @@ describe('PaintingPhase', () => {
       ).not.toBeInTheDocument()
     })
 
+    it('should ask for a reconnect, not a retry, when the record reports a revoked grant', async () => {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        busy: THU_SEVEN_BOOKED,
+        busyWindow: null,
+        calendarStatus: 'revoked',
+        expiration: 1725453600,
+        free: NOTHING,
+        userId: 'quiet-falcon',
+      })
+
+      renderSignedIn()
+
+      expect(await screen.findByText('Reconnect Google Calendar')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+      // Same rule as a failed check: the layer is in the record and stays withheld, because a broken
+      // connection's last-good intervals cannot be told apart from current ones.
+      expect(screen.queryByRole('button', { name: /booked/ })).not.toBeInTheDocument()
+    })
+
+    // A check is how somebody with a healthy-looking connection first finds out. The API answers this
+    // 200 rather than a failure -- Google replied perfectly promptly, it just replied that the grant is
+    // gone -- so the strip has to read the status out of a SUCCESSFUL check and swap the retry it just
+    // offered for a Reconnect.
+    it('should ask for a reconnect when a check comes back reporting a revoked grant', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest
+        .mocked(syncCalendar)
+        .mockResolvedValueOnce({ busy: NOTHING, busyWindow: null, calendarStatus: 'revoked', lastSyncedAt: CHECKED_AT })
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
+
+      expect(await screen.findByText('Reconnect Google Calendar')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument()
+      // Not an outage, and never described as one: nothing failed and no retry is on offer.
+      expect(screen.queryByText("We couldn't reach Google Calendar")).not.toBeInTheDocument()
+    })
+
+    it('should say on screen why the fill is inert while the grant is revoked', async () => {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        busy: NOTHING,
+        busyWindow: null,
+        calendarStatus: 'revoked',
+        expiration: 1725453600,
+        free: THU_SEVEN_BOOKED,
+        userId: 'quiet-falcon',
+      })
+
+      renderSignedIn()
+
+      const fill = await screen.findByRole('button', { name: "Fill in what's free" })
+      expect(fill).toHaveAttribute('aria-disabled', 'true')
+      expect(screen.getByText("You can fill in what's free once you reconnect your calendar.")).toBeInTheDocument()
+    })
+
     it('should say the check failed and that the grid is untouched', async () => {
       mockOwnerAvailability(THU_SEVEN_BOOKED, NOTHING)
       jest.mocked(syncCalendar).mockRejectedValueOnce(new Error('network error'))

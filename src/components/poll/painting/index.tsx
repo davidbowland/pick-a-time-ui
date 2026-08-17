@@ -302,9 +302,16 @@ const PaintingPhase = ({
   // names the real cause; the strip stays out of it.
   const checkFailed = syncMutation.isError && !isWrongAccount(syncMutation.error)
   const failed = checkFailed || availability.calendarStatus === 'error'
-  const calendarStatus: CalendarStatus | undefined = failed
-    ? 'error'
-    : (calendar?.status ?? availability.calendarStatus)
+  // Outranks `failed`, and is read from either source. A revoked grant is permanent and belongs to the
+  // account rather than to this poll, so whichever of the two read it first is right, and it cannot
+  // later turn out to have been transient. Letting a failed check paint over it is what would put a
+  // `Try again` in front of the one person for whom no retry can ever work.
+  const revoked = availability.calendarStatus === 'revoked' || calendar?.status === 'revoked'
+  const calendarStatus: CalendarStatus | undefined = revoked
+    ? 'revoked'
+    : failed
+      ? 'error'
+      : (calendar?.status ?? availability.calendarStatus)
   /**
    * The layer, and the whole of the mechanism behind AC-030.
    *
@@ -392,7 +399,9 @@ const PaintingPhase = ({
     ? "You can fill in what's free once the check finishes."
     : calendarStatus === 'error'
       ? "You can fill in what's free once we reach your calendar."
-      : undefined
+      : calendarStatus === 'revoked'
+        ? "You can fill in what's free once you reconnect your calendar."
+        : undefined
 
   return (
     <div className="flex flex-col gap-4">

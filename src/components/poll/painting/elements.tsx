@@ -226,6 +226,18 @@ const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail
     }
   }
 
+  // Says what happened, in the active voice, without guessing which of the several causes it was --
+  // the permission may have been withdrawn in Google's own settings, or expired on Google's side --
+  // and without implying the person did something wrong, since usually they did not. What it does
+  // promise is that reconnecting is the whole fix, and that nothing they painted was touched.
+  if (status === 'revoked') {
+    return {
+      detail:
+        'Google ended the permission we were using, so we stopped checking. Nothing on your grid changed. Reconnect to see your booked squares again.',
+      title: 'Reconnect Google Calendar',
+    }
+  }
+
   // A live conflict outranks the report of whatever was resolved a moment ago: the count is the
   // one thing on this strip that is a question rather than a statement (AC-029).
   if (conflictCount > 0) {
@@ -296,6 +308,22 @@ const actionsFor = (props: CalendarStripProps): React.ReactNode => {
         </Chip>
         <Chip onPress={onCheckAgain} primary>
           Try again
+        </Chip>
+      </>
+    )
+  }
+
+  // `Reconnect`, and deliberately no `Try again`. This is the one broken state a retry cannot mend:
+  // the permission is gone at Google, so another check would fail identically every time it was
+  // pressed. Offering it would be a control that is guaranteed not to work.
+  if (status === 'revoked') {
+    return (
+      <>
+        <Chip aria-describedby={fillReasonId} aria-disabled>
+          {FILL_LABEL}
+        </Chip>
+        <Chip onPress={onConnect} primary>
+          Reconnect
         </Chip>
       </>
     )

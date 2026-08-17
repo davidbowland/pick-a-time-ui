@@ -68,10 +68,15 @@ export interface AvailabilityRecord {
   expiration: number
 }
 
-// Three states, not two, and the distinction is load-bearing: an errored connection and a connected
+// Four states, not two, and every distinction is load-bearing: an errored connection and a connected
 // calendar with nothing booked both arrive as an all-false grid, so without this the client cannot
 // tell "we could not reach your calendar" from "your calendar is clear".
-export type CalendarStatus = 'connected' | 'error' | 'not_connected'
+//
+// 'revoked' is separate from 'error' because the two need opposite controls. An error is transient
+// and worth another press of "Try again"; a revoked grant is permanent -- Google has forgotten the
+// permission, and only connecting again can replace it -- so offering a retry there sends somebody
+// round a loop that cannot end.
+export type CalendarStatus = 'connected' | 'error' | 'not_connected' | 'revoked'
 
 // The range the calendar was actually read over. Not the poll's own dates: a poll outside the
 // server's retention window comes back 'connected' with a window that does not reach it.

@@ -386,6 +386,49 @@ describe('CalendarStrip', () => {
     })
   })
 
+  // The state a retry cannot mend. Google has dropped the permission, so the only control that can
+  // change anything is Connect -- and a `Try again` here would be a button guaranteed to fail.
+  describe('revoked', () => {
+    it('should ask for a reconnect and say the grid is untouched', () => {
+      render(<CalendarStrip {...base} status="revoked" />)
+      expect(screen.getByText('Reconnect Google Calendar')).toBeInTheDocument()
+      expect(liveText()).toBe(
+        'Google ended the permission we were using, so we stopped checking. Nothing on your grid changed. Reconnect to see your booked squares again.',
+      )
+    })
+
+    it('should offer Reconnect and never a retry', () => {
+      render(<CalendarStrip {...base} status="revoked" />)
+      expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+    })
+
+    it('should start the connect flow when Reconnect is pressed', async () => {
+      const onConnect = jest.fn()
+      const onCheckAgain = jest.fn()
+      render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} onConnect={onConnect} status="revoked" />)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+
+      expect(onConnect).toHaveBeenCalledTimes(1)
+      expect(onCheckAgain).not.toHaveBeenCalled()
+    })
+
+    it('should keep the fill reachable but inert, with its reason named', async () => {
+      const onFill = jest.fn()
+      render(<CalendarStrip {...base} onFill={onFill} status="revoked" />)
+      const fill = screen.getByRole('button', { name: "Fill in what's free" })
+
+      fill.focus()
+      await userEvent.click(fill)
+
+      expect(fill).toHaveAttribute('aria-disabled', 'true')
+      expect(fill).toHaveAttribute('aria-describedby', 'fill-reason')
+      expect(fill).toHaveFocus()
+      expect(onFill).not.toHaveBeenCalled()
+    })
+  })
+
   // AC-036. A live region that is unmounted and remounted with new text is frequently not
   // announced at all, so every state has to update this one node rather than replace it.
   it('should keep one live region across every state transition', () => {
@@ -396,6 +439,7 @@ describe('CalendarStrip', () => {
     rerender(<CalendarStrip {...base} isChecking />)
     rerender(<CalendarStrip {...base} conflictCount={2} />)
     rerender(<CalendarStrip {...base} report={{ count: 2, kind: 'cleared' }} />)
+    rerender(<CalendarStrip {...base} status="revoked" />)
     rerender(<CalendarStrip {...base} status="error" />)
 
     expect(screen.getByTestId('calendar-strip-detail')).toBe(live)

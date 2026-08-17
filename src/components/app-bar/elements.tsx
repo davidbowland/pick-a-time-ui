@@ -7,7 +7,7 @@ import { Mark } from '@components/mark'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { formatCheckedAgo } from '@utils/dates'
 
-export type CalendarStatus = 'not_connected' | 'connected' | 'error'
+export type CalendarStatus = 'not_connected' | 'connected' | 'error' | 'revoked'
 
 const MENU_ITEM_CLASS = `flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--bone)] outline-none data-[focused=true]:bg-[var(--bone)]/[0.1] ${FOCUS_RING}`
 
@@ -17,6 +17,11 @@ const DIALOG_BUTTON_CLASS = `rounded-full px-4 text-sm font-bold ${FOCUS_RING}`
 // as "Not connected" would strand someone with a broken link and no Disconnect.
 const calendarDetail = (status: CalendarStatus, lastSyncedAt: number | null, now: () => number): string => {
   if (status === 'not_connected') return 'Not connected'
+  // Never "Connected": Google has dropped the permission, so this connection cannot read anything and
+  // saying otherwise would leave someone waiting for booked squares that are never coming. It names
+  // where to fix it, because this menu has no Connect of its own -- only Disconnect, which stays
+  // available so a dead record can still be cleared.
+  if (status === 'revoked') return 'Reconnect from any poll'
   if (status === 'error') return 'Connected · last check failed'
   // The API stamps 0, not null, when an account has connected but never synced -- see
   // get-calendar-callback.ts. `?? null` does not catch it, and formatCheckedAgo(0) renders a

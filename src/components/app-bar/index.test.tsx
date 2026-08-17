@@ -245,6 +245,21 @@ describe('AppBar', () => {
     expect(screen.getByRole('menuitem', { name: /disconnect/i })).toBeInTheDocument()
   })
 
+  // Never "Connected": a revoked grant reads nothing, and saying otherwise leaves someone waiting for
+  // booked squares that are not coming. Disconnect has to stay reachable -- it is how a dead record
+  // gets cleared so it can be connected again.
+  it('should say to reconnect, and still offer disconnect, when Google dropped the permission', async () => {
+    setupSignedIn()
+    jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt, status: 'revoked' })
+
+    renderAppBar()
+    await openMenu()
+
+    expect(await screen.findByText('Reconnect from any poll')).toBeInTheDocument()
+    expect(screen.queryByText(/^Connected/)).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /disconnect/i })).toBeInTheDocument()
+  })
+
   it('should name the blast radius before disconnecting', async () => {
     setupConnected()
 
