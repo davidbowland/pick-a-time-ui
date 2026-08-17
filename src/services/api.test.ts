@@ -7,6 +7,7 @@ import {
   createUser,
   disconnectCalendar,
   fetchAvailability,
+  fetchAvailabilityAuthed,
   fetchCalendarState,
   fetchConfig,
   fetchOverlap,
@@ -402,6 +403,77 @@ describe('API service', () => {
     })
   })
 
+  describe('fetchAvailabilityAuthed', () => {
+    const openPath = `${baseUrl}/sessions/amber-harbor/users/quiet-falcon/availability`
+    const authedPath = `${openPath}/authed`
+    // Ragged on purpose. Row 0 belongs to a date with three slots and row 1 to a per-date override
+    // with one, which is exactly the shape a reshape into union columns would quietly rectangle.
+    const busy = [[true, false, true], [false]]
+    const ownerRecord = {
+      busy,
+      busyWindow: { end: '2025-09-06', start: '2025-09-04' },
+      calendarStatus: 'connected',
+      expiration: 1_756_000_000,
+      free: [[false, true, false], [true]],
+      userId: 'quiet-falcon',
+    }
+    const openRecord = { expiration: 1_756_000_000, free: [[false, true, false], [true]], userId: 'quiet-falcon' }
+
+    it('should GET the authed availability route with the bearer token', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(ownerRecord))
+
+      await fetchAvailabilityAuthed('amber-harbor', 'quiet-falcon')
+
+      expect(mockFetch).toHaveBeenCalledWith(authedPath, { body: undefined, headers: authHeaders, method: 'GET' })
+    })
+
+    // busy[dateIndex][slotIndex] is indexed within its OWN date's window, not against the union
+    // columns the grid draws, and PaintGrid already reads it that way. Anything this client did to
+    // it would misalign every poll that has a per-date override.
+    it('should pass the busy grid through untouched', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(ownerRecord))
+
+      const result = await fetchAvailabilityAuthed('amber-harbor', 'quiet-falcon')
+
+      expect(result).toEqual(ownerRecord)
+    })
+
+    // AC-044. A signed-in participant whose record has a null googleSub is refused until the
+    // parent's claim lands, and that claim races this read on every first load. Rejecting would
+    // render nothing at all, so the refusal resolves as "a grid, no calendar".
+    it.each([401, 403])('should fall back to the open read on %s', async (statusCode) => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ message: 'You can only read your own calendar' }, statusCode))
+        .mockResolvedValueOnce(jsonResponse(openRecord))
+
+      const result = await fetchAvailabilityAuthed('amber-harbor', 'quiet-falcon')
+
+      expect(mockFetch).toHaveBeenCalledWith(openPath, { body: undefined, headers: {}, method: 'GET' })
+      expect(result).toEqual(openRecord)
+    })
+
+    it.each([401, 403])('should resolve with no busy layer when the authed read answers %s', async (statusCode) => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({ message: 'You can only read your own calendar' }, statusCode))
+        .mockResolvedValueOnce(jsonResponse(openRecord))
+
+      const result = await fetchAvailabilityAuthed('amber-harbor', 'quiet-falcon')
+
+      expect(result.busy).toBeUndefined()
+      expect(result.calendarStatus).toBeUndefined()
+      expect(result.busyWindow).toBeUndefined()
+    })
+
+    // Only 401 and 403 mean "not yours (yet)". Everything else is a real failure and has to reach
+    // the caller, or an outage would silently render as a calendar-less grid forever.
+    it.each([404, 500, 502])('should reject rather than fall back on %s', async (statusCode) => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ message: 'Nope' }, statusCode))
+
+      await expect(fetchAvailabilityAuthed('amber-harbor', 'quiet-falcon')).rejects.toBeInstanceOf(ApiError)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('patchAvailability', () => {
     const body = { cells: [{ dateIndex: 0, slotIndex: 0, value: true }] }
 
@@ -473,17 +545,33 @@ describe('API service', () => {
       expect(result).toEqual({ alreadyConnected: true })
     })
 
-    it('should post force to the sync endpoint', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse({ applied: true, markedBusyCount: 4 }))
+    // A check writes nothing now, so its response is the same three calendar values the authed read
+    // serves plus the timestamp -- no `applied`, no `markedBusyCount`, no availability record.
+    const syncResponse = {
+      busy: [[true, false, true], [false]],
+      busyWindow: { end: '2025-09-06', start: '2025-09-04' },
+      calendarStatus: 'connected',
+      lastSyncedAt: 1_754_006_400,
+    }
 
-      const result = await syncCalendar('spring-owl', 'brave-tiger', true)
+    it('should post force to the sync endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(syncResponse))
+
+      await syncCalendar('spring-owl', 'brave-tiger', true)
 
       expect(mockFetch).toHaveBeenCalledWith(`${baseUrl}/sessions/spring-owl/users/brave-tiger/calendar/sync`, {
         body: JSON.stringify({ force: true }),
         headers: jsonHeaders,
         method: 'POST',
       })
-      expect(result.markedBusyCount).toEqual(4)
+    })
+
+    it('should return the refreshed busy grid untouched', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse(syncResponse))
+
+      const result = await syncCalendar('spring-owl', 'brave-tiger', true)
+
+      expect(result).toEqual(syncResponse)
     })
 
     it('should get calendar state with no path parameters', async () => {
