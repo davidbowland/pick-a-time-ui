@@ -9,8 +9,9 @@ process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY = 'oiuytfghjmnbvcdsdrty'
 
 window.URL.createObjectURL = jest.fn()
 
-// Polyfill scrollIntoView for jsdom (not implemented)
+// Polyfill scrollIntoView and scrollTo for jsdom (neither is implemented)
 Element.prototype.scrollIntoView = jest.fn()
+window.scrollTo = jest.fn()
 
 // Polyfill getAnimations for jsdom (not implemented). HeroUI's Tabs indicator
 // (react-aria-components' SharedElementTransition) calls this unconditionally whenever

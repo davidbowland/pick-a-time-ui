@@ -8,7 +8,7 @@ import { useAuthContext } from '@components/auth-context'
 import { setSessionCookie } from '@hooks/useSessionCookie'
 import { ApiError, createPoll, createPollAuthed, createUser, fetchConfig, patchUser } from '@services/api'
 import '@testing-library/jest-dom'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 jest.mock('@components/auth-context')
@@ -50,6 +50,18 @@ function renderWithClient(): ReturnType<typeof render> {
 }
 
 const continueButton = (): HTMLElement => screen.getByRole('button', { name: /^continue$/i })
+
+const daysTimesSection = (): HTMLElement => screen.getByText('Days & times').closest('.scroll-mt-7') as HTMLElement
+
+/**
+ * Gives a section wrapper the layout jsdom has none of: `offsetTop` is where the section sits in
+ * the document, and the inline `scroll-margin-top` is what `getComputedStyle` reports for the
+ * `scroll-mt-*` class the real wrapper carries.
+ */
+const layOutSection = (section: HTMLElement, offsetTop: number, scrollMarginTop = ''): void => {
+  Object.defineProperty(section, 'offsetTop', { configurable: true, value: offsetTop })
+  section.style.scrollMarginTop = scrollMarginTop
+}
 
 const recaptchaScripts = (): HTMLScriptElement[] =>
   Array.from(document.querySelectorAll<HTMLScriptElement>('script[src*="recaptcha/api.js"]'))
@@ -110,16 +122,43 @@ describe('PollCreate', () => {
   it('scrolls the newly-opened section to the top of the viewport when advancing, but not on initial render', async () => {
     setup()
     renderWithClient()
+    layOutSection(daysTimesSection(), 900)
 
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+    expect(window.scrollTo).not.toHaveBeenCalled()
 
     await userEvent.click(continueButton())
 
-    // `block: 'start'` (rather than 'nearest' on the whole multi-section card) is what actually
-    // fixes this: Name -> Days & times *grows* the card well past the viewport, so a 'nearest'
-    // scroll of the whole card can find its top edge already onscreen and do nothing, stranding
-    // the view mid-scroll in the newly-revealed section instead of at its top.
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }))
+    // The whole section, not the card: Name -> Days & times *grows* the card well past the
+    // viewport, so aligning the card's top edge (already onscreen) does nothing at all and strands
+    // the view mid-scroll inside the newly-revealed section instead of at its top.
+    expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 900 }))
+  })
+
+  // The card fades and rises 14px into place under a one-time entrance animation (see CreateCard).
+  // While that is running, the step's painted box sits below where it will come to rest, so a
+  // scroll aimed at the painted box overshoots the step by the distance still left to travel.
+  // Reading the settled position from layout is what makes the first advance land where the
+  // second one does.
+  it('lands on the step where it will come to rest, not where an entrance animation is painting it', async () => {
+    setup()
+    renderWithClient()
+    const section = daysTimesSection()
+    layOutSection(section, 900)
+    section.getBoundingClientRect = () => ({ height: 948, top: 914 }) as DOMRect
+
+    await userEvent.click(continueButton())
+
+    expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 900 }))
+  })
+
+  it('subtracts the section wrapper scroll margin, so the finished step above stays visible', async () => {
+    setup()
+    renderWithClient()
+    layOutSection(daysTimesSection(), 900, '28px')
+
+    await userEvent.click(continueButton())
+
+    expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 872 }))
   })
 
   // 'instant' specifically, not 'auto': the site sets `html { scroll-behavior: smooth }`, and
@@ -131,8 +170,69 @@ describe('PollCreate', () => {
 
     await userEvent.click(continueButton())
 
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'instant' }))
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+    expect(window.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'instant' }))
+    expect(window.scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+  })
+
+  // A nested block so the fake clock covers only the tests that need it: the hold is bounded in
+  // milliseconds, and on a real clock a slow machine would end it before the assertions run.
+  describe('while the layout around a newly-opened step is still settling', () => {
+    beforeAll(() => {
+      jest.useFakeTimers()
+    })
+
+    afterAll(() => {
+      jest.useRealTimers()
+    })
+
+    const advanceFrames = async (ms: number): Promise<void> => {
+      await act(async () => {
+        jest.advanceTimersByTime(ms)
+      })
+    }
+
+    const openDaysTimes = async (): Promise<HTMLElement> => {
+      setup()
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      renderWithClient()
+      const section = daysTimesSection()
+      layOutSection(section, 900)
+      await user.click(continueButton())
+      return section
+    }
+
+    it('re-aligns the step when something above it arrives and moves it', async () => {
+      const section = await openDaysTimes()
+
+      expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 900 }))
+
+      // The calendar chunk lands, the config query resolves, a webfont swaps in: anything that
+      // changes height above the step moves the step with it, after the scroll has already aimed.
+      layOutSection(section, 720)
+      await advanceFrames(50)
+
+      expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 720 }))
+    })
+
+    it('hands the page back at the first sign the visitor is scrolling it themselves', async () => {
+      const section = await openDaysTimes()
+
+      fireEvent.wheel(window)
+      layOutSection(section, 720)
+      await advanceFrames(50)
+
+      expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 900 }))
+    })
+
+    it('lets go of the page once it has had time to settle', async () => {
+      const section = await openDaysTimes()
+
+      await advanceFrames(600)
+      layOutSection(section, 720)
+      await advanceFrames(50)
+
+      expect(window.scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({ top: 900 }))
+    })
   })
 
   it('scrolls the calendar into view when a quick-fill preset is applied, so the result is visible', async () => {

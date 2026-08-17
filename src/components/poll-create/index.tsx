@@ -76,6 +76,56 @@ const DatePickerCalendar = dynamic(async () => (await loadDatePicker()).DatePick
   ssr: false,
 })
 
+// How long a newly-opened step stays pinned to the top of the viewport. Long enough to cover the
+// commit that mounts the calendar and the queries and webfonts that land just after a tap; short
+// enough that it is over before anyone has read the step they were taken to.
+const SECTION_SETTLE_MS = 500
+
+// The events that mean the visitor has taken the scroll back. Any one of them ends the hold, so it
+// can never fight a deliberate scroll.
+const SCROLL_HANDOVER_EVENTS = ['keydown', 'pointerdown', 'touchstart', 'wheel'] as const
+
+// Where the section sits in the document, read from LAYOUT rather than from
+// `getBoundingClientRect()`. The card fades and rises 14px into place under a one-time entrance
+// animation (see `CreateCard`), and a rect reports the box where it is currently *painted* — so
+// mid-animation the section reads 14px lower than where it will come to rest, and a scroll aimed
+// there overshoots the step by whatever is left of the rise. That animation runs exactly once, on
+// the first advance after the card comes into view, which is why stepping back and advancing again
+// always looked right. `offsetTop` is a layout offset and ignores transforms entirely.
+const sectionLayoutTop = (section: HTMLElement): number => {
+  let top = 0
+  for (let node: HTMLElement | null = section; node; node = node.offsetParent as HTMLElement | null) {
+    top += node.offsetTop
+  }
+  return top
+}
+
+/**
+ * Puts `section` at the top of the viewport and holds it there while the page settles.
+ *
+ * One scroll is only right if nothing else moves afterwards, and plenty still can: the calendar
+ * chunk mounts a commit late, the config query resolves, a webfont swaps. Anything that changes
+ * height above the step takes the step with it and leaves the visitor looking at the middle of it.
+ * So re-aim every frame for the settle window, and stop the moment the visitor scrolls themselves
+ * (or the step changes again, via the returned teardown).
+ */
+const holdSectionAtTop = (section: HTMLElement, now: () => number = Date.now): (() => void) => {
+  const scrollMarginTop = parseFloat(getComputedStyle(section).scrollMarginTop) || 0
+  const deadline = now() + SECTION_SETTLE_MS
+  let frame = 0
+  const stop = (): void => {
+    cancelAnimationFrame(frame)
+    SCROLL_HANDOVER_EVENTS.forEach((type) => window.removeEventListener(type, stop))
+  }
+  const align = (): void => {
+    window.scrollTo({ behavior: 'instant', top: sectionLayoutTop(section) - scrollMarginTop })
+    if (now() < deadline) frame = requestAnimationFrame(align)
+  }
+  SCROLL_HANDOVER_EVENTS.forEach((type) => window.addEventListener(type, stop, { passive: true }))
+  align()
+  return stop
+}
+
 export interface PollCreateProps {
   now?: () => CalendarDate
   name?: string
@@ -191,11 +241,11 @@ const PollCreate = ({
   // position by hundreds of pixels (e.g. the Days & times editor expanding from a one-line
   // summary, or collapsing back to one). scrollTop doesn't move when that happens, so the content
   // that reflows into view at that same offset can land well above or below the section that was
-  // just opened. Scrolling the whole (multi-section) card with `block: 'nearest'` only fixes the
-  // shrinking case — when the newly-open section is the tall one, the card is taller than the
-  // viewport and already partly onscreen, so 'nearest' has nothing to do. Scrolling the
-  // newly-opened section itself to the top of the viewport works in both directions. Skipped on
-  // the very first render, since 'name' is already in view then.
+  // just opened. Aligning the whole (multi-section) card's nearest edge only fixes the shrinking
+  // case — when the newly-open section is the tall one, the card is taller than the viewport and
+  // already partly onscreen, so there is no nearest edge left to move. Putting the newly-opened
+  // section itself at the top of the viewport works in both directions. Skipped on the very first
+  // render, since 'name' is already in view then.
   //
   // `behavior: 'instant'`, not 'smooth': this scroll isn't a journey the visitor asked to watch,
   // it's a correction for content that moved under them. Animating it means several hundred ms of
@@ -212,7 +262,7 @@ const PollCreate = ({
       return
     }
     const sectionRef = { name: nameSectionRef, daysTimes: daysTimesSectionRef, review: reviewSectionRef }[openSection]
-    sectionRef.current?.scrollIntoView({ behavior: 'instant', block: 'start' })
+    return sectionRef.current ? holdSectionAtTop(sectionRef.current) : undefined
   }, [openSection])
 
   // reCAPTCHA costs ~670 KiB of script and ~900 ms of CPU on a mid-range phone, and this form is
