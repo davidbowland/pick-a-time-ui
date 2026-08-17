@@ -34,12 +34,25 @@ export const DISABLED_CELL_CLASS =
 // booked-contrast.test.ts composites each fill over the page and then measures the indicator
 // against that fill, which is the ground the reader actually sees it on.
 //
+// Two things the call site has to honor, neither of which any test can catch:
+//
+// FRAGMENT, not a class list. Unlike DISABLED_CELL_CLASS below, these are the varying half of a
+// cell and are composed with the shared button base. There is no tailwind-merge in this project, so
+// two `bg-*` utilities on one element are resolved by CSS source order, NOT by which came later in
+// the string — layering a fragment over the base's `bg-[var(--bone)]/10` produces whichever the
+// stylesheet happens to emit last. Pick exactly one `bg-*` in a ternary instead.
+//
+// Do not restate the `text-` color at the glyph. `currentColor` inheritance is the whole mechanism,
+// and hard-coding a color there (as the existing `Check` does) leaves the contrast test measuring a
+// value nothing renders. It cannot be asserted here: reading it back would be a class-string
+// assertion, which CLAUDE.md bars.
+//
 // AC-015: the fill is decorative and the GLYPH carries the meaning. The `--bone` family cannot
 // clear 3:1 against the page below roughly a=0.40, and a fill that loud reads as a warning — the
 // calendar is not entitled to shout. So the fill only has to separate three states by eye
 // (0.03 out-of-window < 0.10 unpainted < 0.16 booked, AC-013/AC-014), while `--slate` on the
 // composited booked fill does the accessible work at 3.80:1.
-export const BOOKED_CELL_CLASS = 'bg-[var(--bone)]/16 text-[var(--slate)]'
+export const BOOKED_CELL_FRAGMENT = 'bg-[var(--bone)]/16 text-[var(--slate)]'
 
 // A conflict is a painted cell that is also booked, so it keeps the painted fill exactly — dimming
 // it would say the participant's own mark had been overruled, which is the one thing this feature
@@ -47,7 +60,7 @@ export const BOOKED_CELL_CLASS = 'bg-[var(--bone)]/16 text-[var(--slate)]'
 // rather than chosen: no color in the palette clears 3:1 against BOTH `--ink` and `--accent` (the
 // ceiling is about 2.17:1), so any marker legible on the page would disappear on the accent fill it
 // is actually drawn on. `--ink` on `--accent` is 6.50:1.
-export const CONFLICT_CELL_CLASS = 'bg-[var(--accent)] text-[var(--ink)]'
+export const CONFLICT_CELL_FRAGMENT = 'bg-[var(--accent)] text-[var(--ink)]'
 
 export function buildUnionColumns(rows: TimeWindow[][]): TimeWindow[] {
   const byKey = new Map<string, TimeWindow>()

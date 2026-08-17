@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-import { BOOKED_CELL_CLASS, CONFLICT_CELL_CLASS, DISABLED_CELL_CLASS } from '../slot-columns'
+import { BOOKED_CELL_FRAGMENT, CONFLICT_CELL_FRAGMENT, DISABLED_CELL_CLASS } from '../slot-columns'
 import { contrastRatio } from '@utils/contrast'
 
 // Same shape as poll/identity/radio-contrast.test.ts and share/border-contrast.test.ts: this repo
@@ -71,26 +71,31 @@ const cssTokens = readFileSync(join(process.cwd(), 'src/assets/css/index.css'), 
 const PAGE = resolveVar(cssTokens, readCssVar(cssTokens, 'background'))
 
 // The ground each indicator sits on, not the page. This is the whole point of the file.
-const BOOKED_FILL = paintedColor(BOOKED_CELL_CLASS, 'bg', PAGE)
-const CONFLICT_FILL = paintedColor(CONFLICT_CELL_CLASS, 'bg', PAGE)
+const BOOKED_FILL = paintedColor(BOOKED_CELL_FRAGMENT, 'bg', PAGE)
+const CONFLICT_FILL = paintedColor(CONFLICT_CELL_FRAGMENT, 'bg', PAGE)
 // Both non-color channels inherit `currentColor` from the cell — the `Clock` glyph through lucide's
 // stroke, the conflict marker through `bg-current` — so the cell's own text utility IS the
 // indicator color, and reading it here measures what the reader sees rather than a parallel copy.
-const BOOKED_GLYPH = paintedColor(BOOKED_CELL_CLASS, 'text', BOOKED_FILL)
-const CONFLICT_MARKER = paintedColor(CONFLICT_CELL_CLASS, 'text', CONFLICT_FILL)
+const BOOKED_GLYPH = paintedColor(BOOKED_CELL_FRAGMENT, 'text', BOOKED_FILL)
+const CONFLICT_MARKER = paintedColor(CONFLICT_CELL_FRAGMENT, 'text', CONFLICT_FILL)
 
 // The fill PaintGrid gives an unpainted, unbooked cell, read from the grid rather than restated:
 // AC-014 is a comparison against that specific value, and a copy of it here would keep passing
 // after the grid's own fill changed.
-const UNPAINTED_FILL = over(
-  readCssVar(cssTokens, 'bone'),
-  Number(
-    readFileSync(join(process.cwd(), 'src/components/poll/painting/grid.tsx'), 'utf-8').match(
-      /bg-\[var\(--bone\)\]\/(\d+)/,
-    )?.[1] ?? 'NaN',
-  ) / 100,
-  PAGE,
-)
+const unpaintedAlpha = (): number => {
+  const source = readFileSync(join(process.cwd(), 'src/components/poll/painting/grid.tsx'), 'utf-8')
+  const matches = [...source.matchAll(/bg-\[var\(--bone\)\]\/\[?([\d.]+)\]?/g)].map((match) => Number(match[1]))
+  // Throwing beats degrading: a missed match used to become NaN, which composites to `#NaNNaNNaN`
+  // and fails as a wrong-color comparison rather than as the missing-source-line it really is.
+  // More than one match is equally fatal — the second could be the booked fill, and silently
+  // measuring against that would make the ordering assertion below compare a value with itself.
+  if (matches.length !== 1) {
+    throw new Error(`expected exactly one --bone fill in grid.tsx, found ${matches.length}`)
+  }
+  return matches[0] > 1 ? matches[0] / 100 : matches[0]
+}
+
+const UNPAINTED_FILL = over(readCssVar(cssTokens, 'bone'), unpaintedAlpha(), PAGE)
 
 const NON_TEXT_MINIMUM = 3
 
@@ -129,16 +134,6 @@ describe('booked and conflict cell contrast', () => {
     // borrowed either channel would read as an inert placeholder.
     const disabledFill = paintedColor(DISABLED_CELL_CLASS, 'bg', PAGE)
 
-    expect(BOOKED_CELL_CLASS).not.toContain('dashed')
     expect(contrastRatio(BOOKED_FILL, PAGE)).toBeGreaterThan(contrastRatio(disabledFill, PAGE))
-  })
-
-  it('gives each treatment a currentColor for its non-color channel', () => {
-    // AC-015. The fills are decorative — the `--bone` family cannot clear 3:1 below about a=0.40,
-    // and a fill that loud would misread as a warning — so the glyph and the marker carry the
-    // meaning. They can only do that if the cell declares a color for them to inherit, and the two
-    // ratios above are only about the real indicator while that inheritance holds.
-    expect(colorUtility(BOOKED_CELL_CLASS, 'text').token).toBe('slate')
-    expect(colorUtility(CONFLICT_CELL_CLASS, 'text').token).toBe('ink')
   })
 })
