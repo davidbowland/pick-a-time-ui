@@ -4,7 +4,7 @@ import { TimeWindow } from '../slot-columns'
 import { mockColumnLayout } from '../test-column-layout-mock'
 import PaintGrid, { PaintGridProps } from './grid'
 import '@testing-library/jest-dom'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { formatShortDate } from '@utils/dates'
 
 function windowFor(startMinute: number): TimeWindow {
@@ -239,6 +239,147 @@ describe('PaintGrid single-date polls', () => {
   it('renders a row header once there is more than one date', () => {
     renderGrid({ dates: ['2026-07-28', '2026-07-29'] })
     expect(screen.getAllByRole('rowheader')).toHaveLength(2)
+  })
+})
+
+// AC-017, AC-018 and AC-030. Everything here is asserted through accessible names, pressed state
+// and operability, never through a class string: the fills are proven by booked-contrast.test.ts,
+// which measures the real token values out of the stylesheet, and a class assertion would keep
+// passing after a token moved. What no contrast test can see is whether the state reached a screen
+// reader at all, and whether the cell is still a button once it is drawn as booked — which is what
+// this block is for.
+describe('PaintGrid booked cells', () => {
+  // usePaintGesture defers clearing its overlay by a real macrotask, so painting a cell below
+  // schedules a state update that would otherwise land after the test finished.
+  beforeAll(() => {
+    jest.useFakeTimers()
+  })
+
+  afterAll(() => {
+    jest.useRealTimers()
+  })
+
+  const busyColumns = [0, 30].map(windowFor)
+  const busySlots = busyColumns.map((column, slotIndex) => ({ ...column, slotIndex }))
+  const busyLabels = ['5:30–7:00 PM', '6:00–7:30 PM']
+  // Aug 12 is booked in both slots and has the second painted, so one render carries a booked cell,
+  // a conflict cell and — on Aug 20 — both plain states, which is the comparison AC-013 describes.
+  const busy = [
+    [true, true],
+    [false, false],
+  ]
+
+  function renderBusyGrid(overrides: Partial<PaintGridProps> = {}): ReturnType<typeof render> {
+    return renderGrid({
+      busy,
+      columns: busyColumns,
+      dates: ['2026-08-12', '2026-08-20'],
+      grid: [
+        [false, true],
+        [false, false],
+      ],
+      slotAriaLabels: busyLabels,
+      slotLabels: busyColumns.map((column, index) => ({ dayOffset: 0, label: `${index}` })),
+      slots: [busySlots, busySlots],
+      ...overrides,
+    })
+  }
+
+  it('appends the booked suffix to the name of an unpainted booked cell', () => {
+    renderBusyGrid()
+    expect(screen.getByRole('button', { name: 'Wed, Aug 12, 5:30–7:00 PM, booked' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  // A conflict is both things at once, and the name has to say both: dropping the suffix would hide
+  // the disagreement, and dropping the pressed state would say the participant's own mark had been
+  // overruled.
+  it('keeps both the booked suffix and the pressed state on a cell that is booked and painted', () => {
+    renderBusyGrid()
+    expect(screen.getByRole('button', { name: 'Wed, Aug 12, 6:00–7:30 PM, booked' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('leaves the name of a cell the calendar knows nothing about untouched', () => {
+    renderBusyGrid()
+    expect(screen.getByRole('button', { name: 'Thu, Aug 20, 5:30–7:00 PM' })).toBeInTheDocument()
+  })
+
+  // AC-030. The grid learns that the layer is not drawn by not being given one — there is no
+  // status prop to disagree with the data. Absent `busy`, no name can claim a state nothing on
+  // screen shows.
+  it('drops the booked suffix from every name when no busy layer is passed', () => {
+    renderBusyGrid({ busy: undefined })
+    expect(screen.getAllByRole('button').map((cell) => cell.getAttribute('aria-label'))).toEqual([
+      'Wed, Aug 12, 5:30–7:00 PM',
+      'Wed, Aug 12, 6:00–7:30 PM',
+      'Thu, Aug 20, 5:30–7:00 PM',
+      'Thu, Aug 20, 6:00–7:30 PM',
+    ])
+  })
+
+  // AC-018. The calendar reports; it does not decide. A participant who is genuinely free during a
+  // meeting their calendar knows about has to be able to say so, so the cell is never `disabled`
+  // and never `aria-hidden` — either would remove it from the tab order and from the reach of the
+  // screen reader that just announced it as booked.
+  it('keeps a booked cell a live, focusable button rather than an inert placeholder', () => {
+    renderBusyGrid()
+    const cell = screen.getByRole('button', { name: 'Wed, Aug 12, 5:30–7:00 PM, booked' })
+
+    cell.focus()
+
+    expect(cell).toHaveFocus()
+    expect(cell).toBeEnabled()
+    expect(cell).not.toHaveAttribute('aria-hidden')
+  })
+
+  it('paints a booked cell free from the keyboard, and the mark sticks', () => {
+    const onCommit = jest.fn()
+    renderBusyGrid({ onCommit })
+    const cell = screen.getByRole('button', { name: 'Wed, Aug 12, 5:30–7:00 PM, booked' })
+
+    fireEvent.keyDown(cell, { key: 'Enter' })
+
+    expect(cell).toHaveAttribute('aria-pressed', 'true')
+    expect(onCommit).toHaveBeenCalledWith([{ dateIndex: 0, slotIndex: 0, value: true }])
+    // Flush the deferred overlay clear inside the test rather than leaving it to fire after
+    // teardown; a real parent answers the commit with a new `grid`, which this render has no
+    // caller to supply.
+    act(() => {
+      jest.advanceTimersByTime(0)
+    })
+  })
+
+  // The drag gesture hit-tests through `data-date-index`/`data-slot-index` on whichever button is
+  // under the pointer. A booked cell that lost either attribute would still pass every name and
+  // keyboard assertion above while silently dropping out of the sweep that paints a whole run.
+  it('keeps a booked cell inside the drag-paint gesture', () => {
+    const onCommit = jest.fn()
+    renderBusyGrid({ onCommit })
+    const cell = screen.getByRole('button', { name: 'Wed, Aug 12, 5:30–7:00 PM, booked' })
+
+    fireEvent.pointerDown(cell, { pointerId: 1 })
+    fireEvent.pointerUp(cell, { pointerId: 1 })
+
+    expect(onCommit).toHaveBeenCalledWith([{ dateIndex: 0, slotIndex: 0, value: true }])
+    act(() => {
+      jest.advanceTimersByTime(0)
+    })
+  })
+
+  // A date whose own window excludes a column renders a non-button placeholder there, and the busy
+  // layer must not resurrect it: the claim "you are booked" needs a slot to be about.
+  it('draws no booked treatment where the date has no slot at all', () => {
+    renderBusyGrid({
+      slots: [[busySlots[0]], busySlots],
+    })
+
+    expect(screen.queryByRole('button', { name: 'Wed, Aug 12, 6:00–7:30 PM, booked' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(3)
   })
 })
 
