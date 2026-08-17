@@ -381,6 +381,21 @@ describe('PaintGrid booked cells', () => {
     expect(screen.queryByRole('button', { name: 'Wed, Aug 12, 6:00–7:30 PM, booked' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button')).toHaveLength(3)
   })
+
+  // The row above truncates its TAIL, where a slot's index within its date and its position among
+  // the union columns happen to agree -- so it passes either way and proves nothing about which of
+  // the two the busy layer is read by. This one starts LATE instead: Aug 12's only slot is slotIndex
+  // 0 sitting under the SECOND column, so the two disagree, and reading by column position finds
+  // nothing at busy[0][1] and silently draws no layer at all.
+  it('reads the busy layer by slot index rather than by column position', () => {
+    renderBusyGrid({
+      busy: [[true], [false, false]],
+      slots: [[{ ...busyColumns[1], slotIndex: 0 }], busySlots],
+    })
+
+    expect(screen.getByRole('button', { name: 'Wed, Aug 12, 6:00–7:30 PM, booked' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Wed, Aug 12, 5:30–7:00 PM, booked' })).not.toBeInTheDocument()
+  })
 })
 
 describe('PaintGrid scroll edge indicators', () => {

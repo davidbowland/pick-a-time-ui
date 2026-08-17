@@ -1,4 +1,4 @@
-import { Check, Clock } from 'lucide-react'
+import { CalendarClock, Check } from 'lucide-react'
 import React, { useMemo, useRef } from 'react'
 
 import { GridColumns } from '../grid-columns'
@@ -358,7 +358,7 @@ const PaintGrid = ({
                             booked-contrast.test.ts measures (3.80:1 on the composited booked fill).
                             Restating a color here would leave that test measuring a value nothing
                             renders. aria-hidden because the name already says `booked`. */}
-                          {booked && !on && <Clock aria-hidden="true" className="h-4 w-4" />}
+                          {booked && !on && <CalendarClock aria-hidden="true" className="h-4 w-4" />}
                           {booked && on && (
                             // A conflict shows the participant's own Check AND a second mark, since
                             // its fill is identical to an ordinary painted cell and the Check alone
@@ -369,14 +369,14 @@ const PaintGrid = ({
                             //
                             // `bg-current`, again with no color of its own, so the bar inherits
                             // CONFLICT_CELL_FRAGMENT's `--ink` (6.50:1 on `--accent`). Absolutely
-                            // positioned inside the button's own box — `inset-x-1.5 bottom-1 h-0.5`
+                            // positioned inside the button's own box — `inset-x-1.5 bottom-1 h-1`
                             // is a 2px bar inset 6px from each side and 4px from the bottom, which
                             // clears the centred Check (y 8–24 in a 32px cell) without overlap and
                             // stays inside the rounded corners at every column width, since the
                             // inset is horizontal and the cell only ever grows horizontally.
                             <span
                               aria-hidden="true"
-                              className="absolute inset-x-1.5 bottom-1 h-0.5 rounded-full bg-current"
+                              className="absolute inset-x-1.5 bottom-1 h-1 rounded-full bg-current"
                             />
                           )}
                         </button>
