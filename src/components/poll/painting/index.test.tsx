@@ -6,6 +6,7 @@ import {
   CalendarSyncResult,
   connectCalendar,
   fetchAvailability,
+  fetchAvailabilityAuthed,
   fetchCalendarState,
   patchAvailability,
   syncCalendar,
@@ -13,7 +14,7 @@ import {
 import '@testing-library/jest-dom'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AvailabilityRecord, PollData } from '@types'
+import { AvailabilityRecord, OwnerAvailabilityRecord, PollData } from '@types'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 
 jest.mock('@services/api')
@@ -25,14 +26,7 @@ describe('PaintingPhase', () => {
   // `waitFor`/`findBy*` detect Jest's fake timers and advance them automatically, but their
   // default 1000ms timeout is shorter than the debounce, so assertions that wait on a PATCH pass
   // an explicit longer timeout via DEBOUNCE_WAIT.
-  const PATCH_DEBOUNCE_MS = 1250
-  // Mirrors CHECK_SETTLE_MS in the component: how long painting must stop before the one automatic
-  // calendar check is spent.
-  const CHECK_SETTLE_MS = 3000
   const DEBOUNCE_WAIT = { timeout: 2000 }
-  // Long enough to cover the paint debounce and the settle window that follows it, so a check
-  // waiting on both has landed by the time this expires.
-  const IDLE_WAIT = { timeout: 8000 }
 
   beforeAll(() => {
     jest.useFakeTimers()
@@ -129,15 +123,13 @@ describe('PaintingPhase', () => {
     })
   }
 
-  // One cell already free. A calendar check can only turn a free cell busy, so against an all-false
-  // grid it cannot change anything whatever the calendar holds -- PaintingPhase therefore waits for
-  // something to mark rather than spending the poll's one automatic check on an empty grid. Any
-  // test that expects a check to fire has to give it something to act on.
-  function mockPaintedAvailability(): void {
-    jest.mocked(fetchAvailability).mockResolvedValueOnce({
+  // Signed in, the availability read goes through the authenticated route -- the only one that can
+  // carry a busy layer (AC-003) -- so a signed-in test has to mock that one instead.
+  function mockEmptyOwnerAvailability(): void {
+    jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
       userId: 'quiet-falcon',
       free: [
-        [true, false, false],
+        [false, false, false],
         [false, false, false],
       ],
       expiration: 1725453600,
@@ -667,7 +659,7 @@ describe('PaintingPhase', () => {
   // A refused save is not a flaky network -- retrying paints the same grid into somebody else's
   // record forever. It gets the reason instead of the retry.
   it('should name the account mismatch when a save is refused', async () => {
-    mockEmptyAvailability()
+    mockEmptyOwnerAvailability()
     jest.mocked(patchAvailability).mockRejectedValueOnce({ response: { statusCode: 403 } })
 
     renderWithClient(<PaintingPhase isSignedIn poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
@@ -684,7 +676,7 @@ describe('PaintingPhase', () => {
   })
 
   it('should send the save through the authenticated route when signed in', async () => {
-    mockEmptyAvailability()
+    mockEmptyOwnerAvailability()
 
     renderWithClient(<PaintingPhase isSignedIn poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
     const cells = await screen.findAllByRole('button', { pressed: false })
@@ -925,48 +917,129 @@ describe('PaintingPhase', () => {
 
   describe('calendar', () => {
     const redirectTo = jest.fn()
-    const emptyGrid: AvailabilityRecord = {
-      userId: 'quiet-falcon',
-      free: [
-        [false, false, false],
-        [false, false, false],
-      ],
-      expiration: 1725453600,
+    // Injected rather than read off the clock: the strip renders "Checked <ago>" from a real epoch,
+    // so a test asserting that string must not depend on the day it runs.
+    const now = (): number => 1_754_006_400_000
+    const CHECKED_AT = 1_754_006_400
+    const BUSY_WINDOW = { end: '2025-09-05', start: '2025-09-04' }
+
+    const NOTHING = [
+      [false, false, false],
+      [false, false, false],
+    ]
+    // Thu 7-8 PM is the one hour this participant's calendar has booked.
+    const THU_SEVEN_BOOKED = [
+      [false, true, false],
+      [false, false, false],
+    ]
+    const THU_SIX_AND_SEVEN_BOOKED = [
+      [true, true, false],
+      [false, false, false],
+    ]
+
+    function ownerRecord(free: boolean[][], busy: boolean[][]): OwnerAvailabilityRecord {
+      return {
+        busy,
+        busyWindow: BUSY_WINDOW,
+        calendarStatus: 'connected',
+        expiration: 1725453600,
+        free,
+        userId: 'quiet-falcon',
+      }
+    }
+
+    function mockOwnerAvailability(free: boolean[][], busy: boolean[][]): void {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce(ownerRecord(free, busy))
+    }
+
+    // What the authenticated read resolves with when it refused and fell back to the open one: the
+    // participant's record and nothing whatever about a calendar (AC-044).
+    function mockUnlinkedAvailability(free: boolean[][] = NOTHING): void {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        expiration: 1725453600,
+        free,
+        userId: 'quiet-falcon',
+      })
+    }
+
+    function syncResult(busy: boolean[][]): CalendarSyncResult {
+      return { busy, busyWindow: BUSY_WINDOW, calendarStatus: 'connected', lastSyncedAt: CHECKED_AT }
+    }
+
+    // What a PATCH answers with: the open availability shape, carrying no busy layer at all. Every
+    // write of one into the cache is a chance to strip the layer off the grid.
+    function patchResponse(free: boolean[][]): AvailabilityRecord {
+      return { expiration: 1725453600, free, userId: 'quiet-falcon' }
     }
 
     beforeAll(() => {
-      jest.mocked(fetchCalendarState).mockResolvedValue({ lastSyncedAt: 1_754_006_280, status: 'connected' })
-      jest
-        .mocked(syncCalendar)
-        .mockResolvedValue({ applied: true, availability: emptyGrid, lastSyncedAt: 1_754_006_400, markedBusyCount: 2 })
+      jest.mocked(fetchCalendarState).mockResolvedValue({ lastSyncedAt: null, status: 'connected' })
+      jest.mocked(syncCalendar).mockResolvedValue(syncResult(NOTHING))
       jest.mocked(connectCalendar).mockResolvedValue({ alreadyConnected: false, authUrl: 'https://auth' })
     })
 
     function renderSignedIn(): ReturnType<typeof renderWithClient> {
       return renderWithClient(
-        <PaintingPhase isSignedIn poll={poll} redirectTo={redirectTo} sessionId="amber-harbor" userId="quiet-falcon" />,
+        <PaintingPhase
+          isSignedIn
+          now={now}
+          poll={poll}
+          redirectTo={redirectTo}
+          sessionId="amber-harbor"
+          userId="quiet-falcon"
+        />,
       )
     }
 
-    it('should not report a count when the server skipped the check', async () => {
-      mockPaintedAvailability()
-      jest.mocked(syncCalendar).mockResolvedValueOnce({
-        applied: false,
-        availability: emptyGrid,
-        lastSyncedAt: 1_754_006_400,
-        markedBusyCount: 0,
-      })
+    const liveText = (): string => screen.getByTestId('calendar-strip-detail').textContent ?? ''
+    const setupUser = (): ReturnType<typeof userEvent.setup> =>
+      userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    const reasonFor = (control: HTMLElement): HTMLElement | null =>
+      document.getElementById(control.getAttribute('aria-describedby') ?? '')
+
+    it('should read availability through the authenticated route when signed in', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
 
       renderSignedIn()
 
-      // applied: false means the server did nothing, so its zero says "not checked", not "clear".
-      // Claiming the calendar is clear here would be false for anyone whose earlier check did mark hours.
-      expect(await screen.findByText(/^Checked /)).toBeInTheDocument()
-      expect(screen.queryByText(/nothing on your calendar conflicts/)).not.toBeInTheDocument()
+      await screen.findAllByRole('button', { pressed: false })
+      expect(fetchAvailabilityAuthed).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon')
+      expect(fetchAvailability).not.toHaveBeenCalled()
+    })
+
+    // AC-003. The read is the check: the server refreshes the cached intervals when it serves this
+    // route, so a second client-side check on mount would only ask the same question twice.
+    it('should draw the busy layer with no button pressed', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+
+      expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })).toBeInTheDocument()
+      expect(syncCalendar).not.toHaveBeenCalled()
+    })
+
+    // AC-044: a signed-in participant whose record is not linked yet gets a grid, not a blank.
+    it('should render a calendar-less grid when the authenticated read learned nothing', async () => {
+      mockUnlinkedAvailability()
+
+      renderSignedIn()
+
+      expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(6)
+      expect(screen.queryByRole('button', { name: /booked/ })).not.toBeInTheDocument()
+      expect(screen.queryByText("We couldn't reach Google Calendar")).not.toBeInTheDocument()
+    })
+
+    it('should claim nothing about booked time it never saw', async () => {
+      mockUnlinkedAvailability()
+
+      renderSignedIn()
+
+      await screen.findAllByRole('button', { pressed: false })
+      expect(liveText()).toBe('Checked just now')
     })
 
     it('should render no strip when signed out', async () => {
-      mockPaintedAvailability()
+      mockEmptyAvailability()
 
       renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
 
@@ -975,169 +1048,478 @@ describe('PaintingPhase', () => {
       expect(fetchCalendarState).not.toHaveBeenCalled()
     })
 
-    it('should check unforced on mount when connected', async () => {
-      mockPaintedAvailability()
+    // AC-019, AC-035: an entry per treatment on screen, and none for a treatment nobody can see.
+    it('should explain both treatments in the key when both are on screen', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, THU_SIX_AND_SEVEN_BOOKED)
 
       renderSignedIn()
 
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', false))
-      await screen.findByRole('button', { name: 'Check again' })
+      await screen.findByRole('list', { name: 'Key' })
+      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Booked on your calendar',
+        'Marked free, but booked',
+      ])
     })
 
-    it('should check only once per mount', async () => {
-      mockPaintedAvailability()
+    it('should render no key when the calendar has nothing on screen', async () => {
+      mockOwnerAvailability(NOTHING, NOTHING)
 
       renderSignedIn()
 
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled())
-      await screen.findByRole('button', { name: 'Check again' })
-      expect(syncCalendar).toHaveBeenCalledTimes(1)
+      await screen.findAllByRole('button', { pressed: false })
+      expect(screen.queryByRole('list', { name: 'Key' })).not.toBeInTheDocument()
     })
 
-    it('should not check on mount when the calendar is not connected', async () => {
-      mockPaintedAvailability()
-      jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
+    it('should state what the check covers while the layer is drawn', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
 
       renderSignedIn()
 
-      await screen.findByRole('button', { name: 'Connect' })
-      expect(syncCalendar).not.toHaveBeenCalled()
+      expect(
+        await screen.findByText('We only check your primary calendar, and only the dates in this poll.'),
+      ).toBeInTheDocument()
     })
 
-    it('should report how many hours the check marked busy', async () => {
-      mockPaintedAvailability()
+    // AC-034: an empty result is a completed check, named and scoped -- not an error.
+    it('should report an empty calendar as a completed check', async () => {
+      mockOwnerAvailability(NOTHING, NOTHING)
 
       renderSignedIn()
 
-      expect(await screen.findByText(/marked 2 hours busy/)).toBeInTheDocument()
+      await screen.findAllByRole('button', { pressed: false })
+      expect(liveText()).toBe('Checked just now · nothing booked on your primary calendar, Sep 4–5')
+      expect(screen.getByRole('button', { name: "Fill in what's free" })).toBeEnabled()
+    })
+
+    // The window the server sends back is its syncedRange, which is unioned across every poll this
+    // person is in so that moving between two of them does not re-fetch on each open. The count
+    // behind "nothing booked" only ever looked at THIS poll's slots, so naming the whole window
+    // would vouch for months nobody inspected -- and a December poll can be full while this one is
+    // clear. Only the overlap is reported.
+    it('should name only the part of the synced window this poll covers', async () => {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        busy: NOTHING,
+        busyWindow: { end: '2025-12-03', start: '2025-08-20' },
+        calendarStatus: 'connected',
+        expiration: 1725453600,
+        free: NOTHING,
+        userId: 'quiet-falcon',
+      })
+
+      renderSignedIn()
+
+      await screen.findAllByRole('button', { pressed: false })
+      expect(liveText()).toBe('Checked just now · nothing booked on your primary calendar, Sep 4–5')
+    })
+
+    // AC-030 and AC-042. The layer is in the record and is deliberately withheld: a name claiming
+    // `booked` for something the reader cannot see is worse than saying nothing.
+    it('should draw no busy treatment when the record reports a failed check', async () => {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        busy: THU_SEVEN_BOOKED,
+        busyWindow: null,
+        calendarStatus: 'error',
+        expiration: 1725453600,
+        free: NOTHING,
+        userId: 'quiet-falcon',
+      })
+
+      renderSignedIn()
+
+      expect(await screen.findByText("We couldn't reach Google Calendar")).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /booked/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('list', { name: 'Key' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('We only check your primary calendar, and only the dates in this poll.'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('should say the check failed and that the grid is untouched', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, NOTHING)
+      jest.mocked(syncCalendar).mockRejectedValueOnce(new Error('network error'))
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
+
+      expect(await screen.findByText("We couldn't reach Google Calendar")).toBeInTheDocument()
+      expect(liveText()).toBe('Nothing on your grid changed. Booked squares are hidden until we can check again.')
+      // One cell arrived painted, and a failed check leaves it exactly as it found it.
+      expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(1)
+    })
+
+    // AC-032: inert, still reachable, and the reason is on screen rather than implied.
+    it('should say on screen why the fill is inert after a failed check', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(syncCalendar).mockRejectedValueOnce(new Error('network error'))
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
+
+      const fill = await screen.findByRole('button', { name: "Fill in what's free" })
+      expect(fill).toHaveAttribute('aria-disabled', 'true')
+      expect(reasonFor(fill)).toHaveTextContent("You can fill in what's free once we reach your calendar.")
+    })
+
+    // AC-031: nothing on the grid moves while a check runs, and the live region says why.
+    it('should keep the layer drawn while a check is running and say where it came from', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(syncCalendar).mockImplementationOnce(() => new Promise(() => {}))
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
+
+      expect(screen.getByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })).toBeInTheDocument()
+      expect(liveText()).toBe('Checking your calendar… The booked squares on screen are from the last check.')
+      const fill = screen.getByRole('button', { name: "Fill in what's free" })
+      expect(reasonFor(fill)).toHaveTextContent("You can fill in what's free once the check finishes.")
     })
 
     it('should force a check when Check again is pressed', async () => {
-      mockPaintedAvailability()
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Check again' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
 
       await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', true))
-      await screen.findByRole('button', { name: 'Check again' })
     })
 
-    it('should refresh the overlap after a check, since marked hours change it for everyone', async () => {
-      mockPaintedAvailability()
-
-      const { queryClient } = renderSignedIn()
-      const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries')
-      await screen.findByRole('button', { name: 'Check again' })
-
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['overlap', 'amber-harbor'] })
-    })
-
-    it('should drain pending paints before the check rewrites the record', async () => {
-      mockPaintedAvailability()
-      jest.mocked(patchAvailability).mockResolvedValueOnce(emptyGrid)
+    it('should merge a fresh check into the record without dropping what is painted', async () => {
+      mockOwnerAvailability(
+        [
+          [true, false, false],
+          [false, false, false],
+        ],
+        NOTHING,
+      )
+      jest.mocked(syncCalendar).mockResolvedValueOnce(syncResult(THU_SEVEN_BOOKED))
 
       renderSignedIn()
-      const cells = await screen.findAllByRole('button', { pressed: false })
-      await screen.findByRole('button', { name: 'Check again' })
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
 
-      act(() => {
-        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-      })
-
-      // Well inside the 1250ms debounce: without the flush, this paint would still be queued when
-      // the check overwrites the record, and the record it returns would discard it.
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(screen.getByRole('button', { name: 'Check again' }))
-
-      // Signed in here, so the drained paint goes out through the authenticated route.
-      expect(patchAvailability).toHaveBeenCalledWith(
-        'amber-harbor',
-        'quiet-falcon',
-        {
-          cells: [{ dateIndex: 0, slotIndex: 0, value: true }],
-        },
-        true,
-      )
-      await screen.findByRole('button', { name: 'Check again' })
+      expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
     })
 
-    it('should not revert a cell painted while the check was in flight', async () => {
-      mockPaintedAvailability()
-      jest.mocked(patchAvailability).mockResolvedValueOnce(emptyGrid)
-      let resolveSync: (value: CalendarSyncResult) => void = () => {}
-      jest.mocked(syncCalendar).mockImplementationOnce(
+    it('should say so when a check finds the same booked time as the last one', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(syncCalendar).mockResolvedValueOnce(syncResult(THU_SEVEN_BOOKED))
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Check again' }))
+
+      await waitFor(() => expect(liveText()).toBe("Checked just now · your booked time hasn't changed"))
+    })
+
+    // AC-020, AC-021, AC-022, AC-037. Additive only: the batch carries no false, so nothing the
+    // participant painted can come off, and it persists through the same PATCH painting uses.
+    it('should paint every unbooked slot and leave the booked ones alone', async () => {
+      mockOwnerAvailability(
+        [
+          [true, false, false],
+          [false, false, false],
+        ],
+        THU_SEVEN_BOOKED,
+      )
+      jest.mocked(patchAvailability).mockResolvedValueOnce(
+        patchResponse([
+          [true, false, true],
+          [true, true, true],
+        ]),
+      )
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: "Fill in what's free" }))
+
+      await waitFor(
         () =>
-          new Promise((resolve) => {
-            resolveSync = resolve
-          }),
+          expect(patchAvailability).toHaveBeenCalledWith(
+            'amber-harbor',
+            'quiet-falcon',
+            {
+              cells: [
+                { dateIndex: 0, slotIndex: 2, value: true },
+                { dateIndex: 1, slotIndex: 0, value: true },
+                { dateIndex: 1, slotIndex: 1, value: true },
+                { dateIndex: 1, slotIndex: 2, value: true },
+              ],
+            },
+            true,
+          ),
+        DEBOUNCE_WAIT,
+      )
+    })
+
+    it('should never unpaint anything from the fill', async () => {
+      mockOwnerAvailability(
+        [
+          [true, false, false],
+          [false, false, false],
+        ],
+        THU_SEVEN_BOOKED,
+      )
+      jest.mocked(patchAvailability).mockResolvedValueOnce(
+        patchResponse([
+          [true, false, true],
+          [true, true, true],
+        ]),
+      )
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: "Fill in what's free" }))
+
+      await waitFor(() => expect(patchAvailability).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      const { cells } = jest.mocked(patchAvailability).mock.calls[0][2]
+      expect(cells.filter((cell) => cell.value === false)).toEqual([])
+    })
+
+    it('should ask for no confirmation before filling', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: "Fill in what's free" }))
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(await screen.findAllByRole('button', { pressed: true })).toHaveLength(5)
+    })
+
+    // AC-024: the count of what it painted, in the strip's live region.
+    it('should report what the fill did', async () => {
+      mockOwnerAvailability(
+        [
+          [true, false, false],
+          [false, false, false],
+        ],
+        THU_SEVEN_BOOKED,
+      )
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: "Fill in what's free" }))
+
+      expect(liveText()).toBe('Marked 4 slots free · skipped 1 booked slot')
+    })
+
+    // AC-040. Two slots are booked; one of them was already painted free and kept, so the fill
+    // leaves exactly one booked slot unpainted. The reported figure is that one, not the two.
+    it('should report the booked slots the fill actually skipped, not the total booked', async () => {
+      mockOwnerAvailability(
+        [
+          [false, true, false],
+          [false, false, false],
+        ],
+        THU_SIX_AND_SEVEN_BOOKED,
+      )
+
+      renderSignedIn()
+      const user = setupUser()
+      await user.click(await screen.findByRole('button', { name: 'Keep it' }))
+      await user.click(screen.getByRole('button', { name: "Fill in what's free" }))
+
+      expect(liveText()).toBe('Marked 4 slots free · skipped 1 booked slot')
+    })
+
+    // AC-029
+    it('should state the number of unresolved conflicts', async () => {
+      mockOwnerAvailability(
+        [
+          [true, true, false],
+          [false, false, false],
+        ],
+        THU_SIX_AND_SEVEN_BOOKED,
+      )
+
+      renderSignedIn()
+
+      // Asserted through the resolution control rather than the title: the title and the key entry
+      // are deliberately the same words, so the title alone is not a unique handle on this state.
+      expect(await screen.findByRole('button', { name: 'Clear these 2' })).toBeInTheDocument()
+      expect(liveText()).toBe('2 slots you marked free are booked on your calendar.')
+    })
+
+    // AC-027: one batch, the conflicts only, and nothing else on the grid touched.
+    it('should clear every conflict in one batch and alter no other paint', async () => {
+      mockOwnerAvailability(
+        [
+          [true, true, false],
+          [true, false, false],
+        ],
+        THU_SIX_AND_SEVEN_BOOKED,
+      )
+      jest.mocked(patchAvailability).mockResolvedValueOnce(
+        patchResponse([
+          [false, false, false],
+          [true, false, false],
+        ]),
+      )
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Clear these 2' }))
+
+      await waitFor(
+        () =>
+          expect(patchAvailability).toHaveBeenCalledWith(
+            'amber-harbor',
+            'quiet-falcon',
+            {
+              cells: [
+                { dateIndex: 0, slotIndex: 0, value: false },
+                { dateIndex: 0, slotIndex: 1, value: false },
+              ],
+            },
+            true,
+          ),
+        DEBOUNCE_WAIT,
+      )
+      expect(screen.getByRole('button', { name: 'Fri, Sep 5, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
+      expect(liveText()).toBe('Cleared 2 slots · nothing you marked is booked now')
+    })
+
+    // AC-028: keeping writes nothing at all -- which conflicts somebody chose to live with is a
+    // decision about their calendar, and it stays out of the poll record.
+    it('should keep every conflict without writing anything', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Keep it' }))
+
+      expect(patchAvailability).not.toHaveBeenCalled()
+      expect(liveText()).toBe("Kept 1 slot · we won't ask again unless you change it")
+      expect(
+        screen.getByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked', pressed: true }),
+      ).toBeInTheDocument()
+    })
+
+    it('should stop asking about a conflict once it is kept', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Keep it' }))
+
+      expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Clear this one' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
+      // The treatment stays on the cell, so the key still has to explain it.
+      expect(screen.getByRole('listitem')).toHaveTextContent('Marked free, but booked')
+    })
+
+    // AC-028's tail: the decision was about those slots, not about the calendar in general.
+    it('should ask again when a new conflict appears after a keep', async () => {
+      mockOwnerAvailability(
+        [
+          [false, true, false],
+          [false, false, false],
+        ],
+        THU_SIX_AND_SEVEN_BOOKED,
+      )
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Keep it' }))
+
+      const booked = screen.getByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM, booked' })
+      act(() => {
+        booked.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        booked.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+
+      expect(await screen.findByRole('button', { name: 'Clear this one' })).toBeInTheDocument()
+      expect(liveText()).toBe('1 slot you marked free is booked on your calendar.')
+    })
+
+    // The keep was a decision about that slot as it stood. Clearing it by hand and painting it
+    // again is a new decision about the same slot, so the strip is entitled to ask about it again.
+    it('should ask again when a kept slot is repainted by hand', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+      await setupUser().click(await screen.findByRole('button', { name: 'Keep it' }))
+      const booked = screen.getByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })
+      act(() => {
+        booked.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        booked.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+      act(() => {
+        booked.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        booked.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+
+      expect(await screen.findByRole('button', { name: 'Clear this one' })).toBeInTheDocument()
+    })
+
+    // AC-002: the calendar reports, it does not decide.
+    it('should keep a booked slot painted free once the save lands', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(patchAvailability).mockResolvedValueOnce(patchResponse(THU_SEVEN_BOOKED))
+
+      renderSignedIn()
+      const booked = await screen.findByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })
+      act(() => {
+        booked.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        booked.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
+
+      await waitFor(() => expect(patchAvailability).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      expect(
+        await screen.findByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked', pressed: true }),
+      ).toBeInTheDocument()
+    })
+
+    // The busy layer rides the same cache entry as `free` (D-9), and a PATCH answers with a record
+    // that has no busy in it. Written straight into the cache it would take the layer off the grid.
+    it('should keep the busy layer when a save response lands', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(patchAvailability).mockResolvedValueOnce(
+        patchResponse([
+          [true, false, false],
+          [false, false, false],
+        ]),
       )
 
       renderSignedIn()
       const cells = await screen.findAllByRole('button', { pressed: false })
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled())
-
       act(() => {
         cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
         cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
       })
-      act(() => {
-        jest.advanceTimersByTime(50)
-      })
-      expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
 
-      // The check's record predates that paint. Writing it would blank the cell the person just
-      // filled in, and their own PATCH is still pending to reconcile it.
-      await act(async () => {
-        resolveSync({ applied: true, availability: emptyGrid, lastSyncedAt: 1_754_006_400, markedBusyCount: 0 })
-      })
-
-      expect(cells[0]).toHaveAttribute('aria-pressed', 'true')
+      await waitFor(() => expect(patchAvailability).toHaveBeenCalled(), DEBOUNCE_WAIT)
+      expect(screen.getByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked' })).toBeInTheDocument()
     })
 
-    it('should apply the checked record when nothing was painted while it was in flight', async () => {
-      mockPaintedAvailability()
-      jest.mocked(syncCalendar).mockResolvedValueOnce({
-        applied: true,
-        availability: {
-          userId: 'quiet-falcon',
-          free: [
-            [true, false, false],
-            [false, false, false],
-          ],
-          expiration: 1725453600,
-        },
-        lastSyncedAt: 1_754_006_400,
-        markedBusyCount: 2,
-      })
+    it('should keep the busy layer when a failed save rolls the grid back', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+      jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('network error'))
 
       renderSignedIn()
+      const cells = await screen.findAllByRole('button', { pressed: false })
+      act(() => {
+        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+      })
 
-      expect(await screen.findByRole('button', { name: 'Thu, Sep 4, 6:00–7:00 PM', pressed: true })).toBeInTheDocument()
+      expect(await screen.findByRole('alert', {}, DEBOUNCE_WAIT)).toHaveTextContent("Couldn't save your availability")
+      expect(
+        screen.getByRole('button', { name: 'Thu, Sep 4, 7:00–8:00 PM, booked', pressed: false }),
+      ).toBeInTheDocument()
     })
 
     it('should store the return path and redirect when connecting', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       sessionStorage.clear()
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Connect' }))
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith('https://auth'))
       expect(sessionStorage.getItem('pat_calendar_return')).toEqual('/')
     })
 
     it('should not redirect when the calendar is already connected', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       jest.mocked(connectCalendar).mockResolvedValueOnce({ alreadyConnected: true })
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Connect' }))
 
       await waitFor(() => expect(connectCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon'))
       // No consent screen to send them to: the refreshed calendar state is what moves the strip.
@@ -1149,13 +1531,12 @@ describe('PaintingPhase', () => {
     // ignored. The 403 case is the one worth naming: the API answers it only when the participant
     // belongs to a different Google account, which "try again" will never fix.
     it('should name the account mismatch when the connect is refused', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       jest.mocked(connectCalendar).mockRejectedValueOnce({ response: { statusCode: 403 } })
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Connect' }))
 
       expect(
         await screen.findByText(
@@ -1166,198 +1547,48 @@ describe('PaintingPhase', () => {
     })
 
     it('should report a connect that failed for any other reason', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       jest.mocked(connectCalendar).mockRejectedValueOnce({ response: { statusCode: 500 } })
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Connect' }))
 
       expect(await screen.findByText("Couldn't connect Google Calendar. Please try again.")).toBeInTheDocument()
     })
 
     it('should hide the invitation once it is dismissed', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Not now' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Not now' }))
 
       expect(screen.queryByText(/google calendar/i)).not.toBeInTheDocument()
     })
 
-    it('should say the check failed and that the grid is untouched', async () => {
-      mockPaintedAvailability()
-      jest.mocked(syncCalendar).mockRejectedValueOnce(new Error('network error'))
-
-      renderSignedIn()
-
-      expect(await screen.findByText("We couldn't reach Google Calendar")).toBeInTheDocument()
-      expect(screen.getByText('Nothing on your grid changed.')).toBeInTheDocument()
-      // Five unpressed, one still painted: the fixture arrives with a cell already free, and a
-      // failed check must leave it exactly as it found it.
-      expect(await screen.findAllByRole('button', { pressed: false })).toHaveLength(5)
-      expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(1)
-    })
-
     it('should say it is connecting while the hand-off is in flight', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       jest.mocked(connectCalendar).mockImplementationOnce(() => new Promise(() => {}))
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      await user.click(await screen.findByRole('button', { name: 'Connect' }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Connect' }))
 
       expect(await screen.findByText('Connecting to Google Calendar…')).toBeInTheDocument()
     })
 
     it('should refuse a second connect while the first is still in flight', async () => {
-      mockPaintedAvailability()
+      mockUnlinkedAvailability()
       jest.mocked(fetchCalendarState).mockResolvedValueOnce({ lastSyncedAt: null, status: 'not_connected' })
       jest.mocked(connectCalendar).mockImplementationOnce(() => new Promise(() => {}))
 
       renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+      const user = setupUser()
       await user.click(await screen.findByRole('button', { name: 'Connect' }))
       await user.click(await screen.findByRole('button', { name: 'Connecting…' }))
 
       expect(connectCalendar).toHaveBeenCalledTimes(1)
-    })
-
-    it('should not spend the check on a grid with nothing to mark', async () => {
-      // The natural order is to connect first -- connecting is the thing that promises to save you
-      // the painting. A check fired here could not change a cell, and used to burn the poll's one
-      // automatic check doing it.
-      mockEmptyAvailability()
-
-      renderSignedIn()
-
-      expect(await screen.findByRole('button', { name: 'Check again' })).toBeInTheDocument()
-      expect(syncCalendar).not.toHaveBeenCalled()
-    })
-
-    // The poll grants one automatic check, and the server will not re-run it unforced. Firing it the
-    // instant the first cell turns free spent it on a one-cell grid and left everything painted
-    // afterwards -- which is to say the whole grid -- never checked against the calendar at all. From
-    // the painter's side that is a calendar connection that does nothing.
-    it('should not spend the check on the first cell while painting is still going', async () => {
-      mockEmptyAvailability()
-      jest.mocked(patchAvailability).mockResolvedValue({
-        userId: 'quiet-falcon',
-        free: [
-          [true, false, false],
-          [false, false, false],
-        ],
-        expiration: 1725453600,
-      })
-
-      renderSignedIn()
-      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
-      const cells = await screen.findAllByRole('button', { pressed: false })
-      await user.click(cells[0])
-
-      // Waited out the PATCH debounce, so the paint has landed server-side: any check that was going
-      // to fire on this first cell has had every chance to.
-      await waitFor(() => expect(patchAvailability).toHaveBeenCalled(), DEBOUNCE_WAIT)
-      expect(syncCalendar).not.toHaveBeenCalled()
-    })
-
-    it('should tell somebody who connected first what to do next', async () => {
-      mockEmptyAvailability()
-
-      renderSignedIn()
-
-      expect(
-        await screen.findByText(
-          "Mark when you're free and we'll mark you busy wherever your calendar says you're booked.",
-        ),
-      ).toBeInTheDocument()
-    })
-
-    it('should check once painting stops', async () => {
-      mockEmptyAvailability()
-      jest.mocked(patchAvailability).mockResolvedValueOnce({
-        userId: 'quiet-falcon',
-        free: [
-          [true, false, false],
-          [false, false, false],
-        ],
-        expiration: 1725453600,
-      })
-
-      renderSignedIn()
-      const cells = await screen.findAllByRole('button', { pressed: false })
-
-      act(() => {
-        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-      })
-
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalledWith('amber-harbor', 'quiet-falcon', false), IDLE_WAIT)
-    })
-
-    it('should land the painted cell on the server before the check reads the record back', async () => {
-      // The check is triggered by the very paint it needs the server to have stored. "Sent" is not
-      // "landed": without awaiting the drain, the check reads a record that predates the paint and
-      // marks hours against a grid that no longer exists.
-      mockEmptyAvailability()
-      jest.mocked(patchAvailability).mockResolvedValueOnce({
-        userId: 'quiet-falcon',
-        free: [
-          [true, false, false],
-          [false, false, false],
-        ],
-        expiration: 1725453600,
-      })
-
-      renderSignedIn()
-      const cells = await screen.findAllByRole('button', { pressed: false })
-
-      act(() => {
-        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-      })
-
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), IDLE_WAIT)
-      expect(jest.mocked(patchAvailability).mock.invocationCallOrder[0]).toBeLessThan(
-        jest.mocked(syncCalendar).mock.invocationCallOrder[0],
-      )
-    })
-
-    it('should check only once however much is painted afterwards', async () => {
-      mockEmptyAvailability()
-      jest.mocked(patchAvailability).mockResolvedValue({
-        userId: 'quiet-falcon',
-        free: [
-          [true, true, false],
-          [false, false, false],
-        ],
-        expiration: 1725453600,
-      })
-
-      renderSignedIn()
-      const cells = await screen.findAllByRole('button', { pressed: false })
-
-      act(() => {
-        cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-        cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-      })
-      await waitFor(() => expect(syncCalendar).toHaveBeenCalled(), IDLE_WAIT)
-
-      act(() => {
-        cells[1].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-        cells[1].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
-      })
-      // Past the paint debounce AND the settle window: if a second check were ever going to fire,
-      // this is where it would.
-      act(() => {
-        jest.advanceTimersByTime(PATCH_DEBOUNCE_MS + CHECK_SETTLE_MS + 100)
-      })
-
-      expect(syncCalendar).toHaveBeenCalledTimes(1)
     })
   })
 })

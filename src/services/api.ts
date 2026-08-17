@@ -20,9 +20,12 @@ import { getIdToken } from '@services/auth'
 import {
   AvailabilityPatchRequest,
   AvailabilityRecord,
+  CalendarStatus,
   ConfigData,
+  DateWindow,
   ErrorCode,
   NewPollRequest,
+  OwnerAvailabilityRecord,
   PatchOperation,
   PollData,
   Slot,
@@ -196,6 +199,47 @@ export const claimUser = (sessionId: string, userId: string): Promise<User> =>
 export const fetchAvailability = (sessionId: string, userId: string): Promise<AvailabilityRecord> =>
   apiGet(`/sessions/${encodeURIComponent(sessionId)}/users/${encodeURIComponent(userId)}/availability`)
 
+const availabilityPath = (sessionId: string, userId: string, authenticated: boolean): string =>
+  `${userPath(sessionId, userId, false)}/availability${authenticated ? '/authed' : ''}`
+
+/**
+ * Reads a participant's availability as its owner, so the response may carry their calendar.
+ *
+ * The authenticated route is the only one in the API that serves busy data, and it serves it only
+ * to the participant it belongs to. Everything else -- `GET .../availability`, `GET .../overlap`,
+ * `GET /users` -- is deliberately incapable of emitting it.
+ *
+ * **On 401 or 403 this resolves, it does not reject.** Somebody who joined a poll before signing in
+ * has a participant with a null `googleSub` until an authenticated PATCH links it, and the
+ * authenticated read refuses an unlinked record rather than claiming it. That claim fires in the
+ * poll's parent component, *after* this query has already mounted, so every signed-in joiner's first
+ * load races it and would otherwise see the caller render nothing at all: a blank grid, not a
+ * calendar-less one (AC-044). A participant with no linked record is a normal state.
+ *
+ * The fallback lives here rather than in the caller for two reasons. It keeps the refusal from ever
+ * reaching react-query, which would latch it as a query error and needs a second query to recover
+ * from; and it means a caller can treat this as "the availability read" with one result shape and
+ * no knowledge that two routes exist. `createUser` handles its own 401/403 the same way.
+ *
+ * What comes back from the fallback is the open record and nothing else -- no `busy`, no
+ * `calendarStatus`, no `busyWindow`. That read genuinely learned nothing about a calendar, and
+ * synthesizing `not_connected` here would assert something this client cannot know.
+ *
+ * `busy` is returned exactly as the server built it. See `OwnerAvailabilityRecord`.
+ */
+export const fetchAvailabilityAuthed = async (sessionId: string, userId: string): Promise<OwnerAvailabilityRecord> => {
+  try {
+    return await apiGetAuthed<OwnerAvailabilityRecord>(availabilityPath(sessionId, userId, true))
+  } catch (err) {
+    if (err instanceof ApiError && (err.response.statusCode === 401 || err.response.statusCode === 403)) {
+      return apiGet<AvailabilityRecord>(availabilityPath(sessionId, userId, false))
+    }
+    // Any other status is a real failure. Swallowing it into a calendar-less grid would render an
+    // outage as a permanent, silent "you have no calendar".
+    throw err
+  }
+}
+
 /**
  * Writes painted cells. Signed in, this goes through the authenticated route.
  *
@@ -210,23 +254,30 @@ export const patchAvailability = (
   body: AvailabilityPatchRequest,
   authenticated: boolean,
 ): Promise<AvailabilityRecord> =>
-  apiSend(
-    'PATCH',
-    `${userPath(sessionId, userId, false)}/availability${authenticated ? '/authed' : ''}`,
-    authenticated,
-    body,
-  )
+  apiSend('PATCH', availabilityPath(sessionId, userId, authenticated), authenticated, body)
 
 export interface CalendarState {
-  status: 'not_connected' | 'connected' | 'error'
+  status: CalendarStatus
   lastSyncedAt: number | null
 }
 
+/**
+ * What a calendar check answers with.
+ *
+ * A check writes nothing. It refreshes the cached intervals from Google and returns the grid it
+ * just read, so there is no `applied` (nothing is applied), no `markedBusyCount` (nothing is
+ * marked), and no `availability` (stored availability is not read, let alone written). What is left
+ * is the same three calendar values the authenticated read serves -- assembled server-side as one
+ * unit so they can never come from different reads -- plus the timestamp of the check.
+ *
+ * `busy` carries the same indexing caveat as `OwnerAvailabilityRecord['busy']`: slot indices are
+ * per-date, not per union column.
+ */
 export interface CalendarSyncResult {
-  applied: boolean
-  markedBusyCount: number
+  busy: boolean[][]
+  busyWindow: DateWindow | null
+  calendarStatus: CalendarStatus
   lastSyncedAt: number
-  availability: AvailabilityRecord
 }
 
 export const connectCalendar = (

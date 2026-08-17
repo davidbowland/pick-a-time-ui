@@ -1,7 +1,9 @@
 import React from 'react'
 
+import { BOOKED_CELL_FRAGMENT, CONFLICT_CELL_FRAGMENT } from '../slot-columns'
 import { Chip } from '@components/ui/chip'
-import { formatCheckedAgo } from '@utils/dates'
+import { CalendarStatus, DateWindow } from '@types'
+import { formatCheckedAgo, formatShortDate } from '@utils/dates'
 
 export const Toolbar = ({
   onSelectAll,
@@ -16,121 +18,296 @@ export const Toolbar = ({
   </div>
 )
 
+/**
+ * The legend for the two calendar treatments, rendered only for what is actually on screen.
+ *
+ * Both counts are of cells the grid is drawing *right now*, not of anything the calendar reported:
+ * a key entry for a treatment nobody can see is worse than no key at all, because it sends the
+ * reader hunting for a square that does not exist (AC-035). The marked-and-booked count is
+ * therefore every conflicting cell drawn, including ones the participant chose to keep — those
+ * cells still carry the treatment, so the key still has to explain it.
+ */
+export const GridKey = ({
+  unmarkedBookedCount,
+  markedBookedCount,
+}: {
+  unmarkedBookedCount: number
+  markedBookedCount: number
+}): React.ReactNode => {
+  if (unmarkedBookedCount === 0 && markedBookedCount === 0) return null
+
+  return (
+    <ul aria-label="Key" className="flex flex-wrap items-center gap-3 text-[10px] text-[var(--slate)]">
+      {unmarkedBookedCount > 0 && (
+        <li className="flex items-center gap-1">
+          <span aria-hidden="true" className={`h-3 w-3 rounded ${BOOKED_CELL_FRAGMENT}`} />
+          Booked on your calendar
+        </li>
+      )}
+      {markedBookedCount > 0 && (
+        <li className="flex items-center gap-1">
+          <span aria-hidden="true" className={`h-3 w-3 rounded ${CONFLICT_CELL_FRAGMENT}`} />
+          Marked free, but booked
+        </li>
+      )}
+    </ul>
+  )
+}
+
+/**
+ * What the strip has to report about the action that just happened.
+ *
+ * Deliberately one discriminated union rather than a spread of count props: every arm describes
+ * something the participant did and the counts belong to that act, so a caller cannot supply a
+ * skipped count without also saying a fill is what produced it. `unchanged` is the one arm nobody
+ * asked for -- a check that found the same booked time it found last time -- and it exists because
+ * silence after pressing `Check again` reads as a control that did nothing.
+ */
+export type StripReport =
+  | { kind: 'filled'; markedCount: number; skippedCount: number }
+  | { kind: 'cleared'; count: number }
+  | { kind: 'kept'; count: number }
+  | { kind: 'unchanged' }
+
 export interface CalendarStripProps {
-  status: 'not_connected' | 'connected' | 'error'
-  // How many hours this check changed to busy, or null when no check has run or the server skipped
-  // one. It counts changes, not conflicts: an hour that was already busy is already correct, so it
-  // does not increment. A grid with nothing marked free therefore reports zero however booked the
-  // person is. Only a count above zero is a claim we can make, so zero and null render the same.
-  markedBusyCount: number | null
+  status: CalendarStatus
   lastSyncedAt: number | null
-  usesTimes: boolean
+  // Whether a check is in flight. What is already drawn stays drawn (AC-031), so this changes the
+  // strip's words and the actions' inertness, never the grid.
   isChecking: boolean
   // Whether the OAuth hand-off is in flight. Connecting is always a deliberate press, so unlike
-  // `isChecking` -- which fires by itself on mount, with nobody looking at a control -- this state
-  // keeps the pressed control on screen rather than removing it out from under the pointer.
+  // `isChecking` this state keeps the pressed control on screen rather than removing it out from
+  // under the pointer.
   isConnecting: boolean
-  // Whether the grid has anything for a check to act on. The calendar only ever turns a free cell
-  // busy (see markBusyHours in the API), so against a grid with nothing free a check is incapable
-  // of changing anything -- and saying "Checked just now" after one reads as a feature that ran and
-  // found nothing, which is the opposite of what happened.
-  hasFreeCells: boolean
+  // Whether the grid is drawing a busy layer at all. Distinct from `bookedCount === 0`, which is a
+  // calendar with nothing in it: this is a read that learned nothing about a calendar (an
+  // unlinked participant, AC-044), and the difference is between reporting an empty calendar and
+  // claiming one we never saw.
+  hasBusyLayer: boolean
+  // The range the check actually covered, which the empty-calendar report names (AC-034). Null
+  // when the server could not name one, in which case the report does not invent it.
+  busyWindow?: DateWindow | null
+  // Booked slots drawn on screen, marked or not.
+  bookedCount: number
+  // Slots the participant has marked free.
+  markedCount: number
+  // Conflicts still unresolved -- every slot both marked free and booked, minus the ones already
+  // kept. Kept slots keep their treatment on the grid but stop being asked about (AC-028).
+  conflictCount: number
+  // Unmarked, unbooked slots: exactly what the fill would paint. Zero removes the control, since
+  // an action that provably changes nothing is not an offer.
+  fillableCount: number
+  report?: StripReport
+  // The on-screen line explaining why the fill is inert, which the inert control points at
+  // (AC-032). Owned by the caller because it sits with the grid's other explanatory lines.
+  fillReasonId: string
   onConnect: () => void
   onCheckAgain: () => void
   onDismiss: () => void
+  onFill: () => void
+  onClearConflicts: () => void
+  onKeepConflicts: () => void
   now?: () => number
 }
 
-const detailFor = (props: CalendarStripProps, checked: string): string => {
-  // Zero is folded in with null on purpose. We can report what a check changed; we can never report
-  // an absence of conflicts, because "everything was already busy" and "nothing on the calendar
-  // clashes" are indistinguishable from here.
-  if (!props.markedBusyCount) {
+const CONNECTED_TITLE = 'Google Calendar connected'
+const FILL_LABEL = "Fill in what's free"
+
+const slots = (count: number): string => `${count} ${count === 1 ? 'slot' : 'slots'}`
+
+// `Aug 12–25` within one month, `Aug 12–Sep 2` across two. The month is compared on the ISO
+// prefix rather than on the rendered label so a window a year long cannot collapse to a range
+// that reads as a fortnight.
+const formatWindowRange = (window: DateWindow): string => {
+  const monthDay = (iso: string): string => formatShortDate(iso).split(', ')[1]
+  const end = monthDay(window.end)
+  // The year is compared before the month, because a window may legitimately span one: the
+  // retention arm reaches a year forward, and "Aug 20-Aug 20" for twelve months of calendar reads
+  // as a single day.
+  const sameYear = window.start.slice(0, 4) === window.end.slice(0, 4)
+  const sameMonth = sameYear && window.start.slice(0, 7) === window.end.slice(0, 7)
+  const endLabel = sameYear ? end : `${end}, ${window.end.slice(0, 4)}`
+  return `${monthDay(window.start)}–${sameMonth ? end.split(' ')[1] : endLabel}`
+}
+
+// "Slots", never "hours": slots slide (5:30–7, 6–7:30, 6:30–8), so three slots is not three hours.
+const fillReport = (markedCount: number, skippedCount: number): string => {
+  // Defensive. The control is absent when there is nothing to fill, but a report that says nothing
+  // after a press reads as a press that did not register.
+  if (markedCount === 0) return 'Nothing left to fill. Nothing on your grid changed.'
+  if (skippedCount === 0) return `Marked ${slots(markedCount)} free`
+  return `Marked ${slots(markedCount)} free · skipped ${skippedCount} booked ${skippedCount === 1 ? 'slot' : 'slots'}`
+}
+
+const reportDetail = (report: StripReport, checked: string): string => {
+  if (report.kind === 'filled') return fillReport(report.markedCount, report.skippedCount)
+  if (report.kind === 'cleared') return `Cleared ${slots(report.count)} · nothing you marked is booked now`
+  if (report.kind === 'kept') {
+    return `Kept ${slots(report.count)} · we won't ask again unless you change ${report.count === 1 ? 'it' : 'them'}`
+  }
+  return `Checked ${checked} · your booked time hasn't changed`
+}
+
+// The connected strip with nothing to report. Every branch here is a claim about the calendar, so
+// each one is gated on having actually seen it: no layer, or no window to name, and the strip says
+// only when the account was last checked.
+const restDetail = (props: CalendarStripProps, checked: string): string => {
+  if (props.hasBusyLayer && props.bookedCount === 0) {
+    const window = props.busyWindow
+    if (window) return `Checked ${checked} · nothing booked on your primary calendar, ${formatWindowRange(window)}`
     return `Checked ${checked}`
   }
-  if (!props.usesTimes) {
-    return `Checked ${checked} · on date-only polls we mark a day busy once 8 hours of it are booked`
+  if (props.hasBusyLayer && props.markedCount === 0) {
+    // A grid where every slot is booked has no fill control, so promising a tap that marks the rest
+    // free would point at something that is not on screen.
+    if (props.fillableCount === 0) return 'Nothing left to fill. Nothing on your grid changed.'
+    return "The grid shows where your calendar says you're booked. One tap marks everything else free."
   }
-  const hours = props.markedBusyCount === 1 ? 'hour' : 'hours'
-  return `Checked ${checked} · marked ${props.markedBusyCount} ${hours} busy`
+  if (props.hasBusyLayer) return 'Nothing you marked is booked on your calendar.'
+  return `Checked ${checked}`
 }
 
 const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail: React.ReactNode } => {
-  const { status, lastSyncedAt, isChecking, isConnecting, hasFreeCells, now = Date.now } = props
+  const { status, lastSyncedAt, isChecking, isConnecting, conflictCount, report, now = Date.now } = props
+  // 0 is the API's never-synced sentinel (get-calendar-callback.ts stamps it at connect), and it is
+  // not null, so `?? null` misses it and formatCheckedAgo(0) renders a date in 1970.
+  const checked = lastSyncedAt ? formatCheckedAgo(lastSyncedAt, now) : 'just now'
 
   if (isConnecting) {
     return { detail: 'Connecting to Google Calendar…', title: null }
   }
 
   if (isChecking) {
-    return { detail: 'Checking your calendar…', title: null }
+    return {
+      detail: 'Checking your calendar… The booked squares on screen are from the last check.',
+      title: CONNECTED_TITLE,
+    }
   }
 
   if (status === 'not_connected') {
+    // The last sentence names the limit of the permission as a fact, not a pledge: calendar.freebusy
+    // returns time ranges and nothing else, so the three things people worry about cost us nothing.
+    // The middle one is the promise this whole redesign exists to make true -- nothing is marked
+    // that was not asked for (AC-033).
     return {
-      // The second sentence names the limit of the permission as a fact, not a pledge:
-      // calendar.freebusy returns time ranges and nothing else, so the three things people worry
-      // about cost us nothing.
-      detail: (
-        <>
-          Connect Google Calendar and we&apos;ll mark you busy wherever it says you&apos;re booked. We see when
-          you&apos;re busy — never event titles, guests, or locations.
-        </>
-      ),
-      title: <>Mark yourself busy where you&apos;re already booked</>,
+      detail:
+        "Connect Google Calendar and we'll show where your primary calendar says you're booked, then fill in the rest in one tap. We never mark anything you didn't ask for. We see when you're busy — never event titles, guests, or locations.",
+      title: 'Fill this in from your calendar',
     }
   }
 
   if (status === 'error') {
-    return { detail: 'Nothing on your grid changed.', title: <>We couldn&apos;t reach Google Calendar</> }
-  }
-
-  // Nothing has failed here, so this is guidance rather than an apology: it names the one thing the
-  // person has to do, and what they get for doing it. Reporting a check instead would be worse than
-  // useless -- a check against an empty grid cannot mark anything, so "Checked just now" would
-  // describe a search of an empty room as having found nobody home.
-  //
-  // The count is what distinguishes an empty grid nobody has filled in from one a check just
-  // emptied by marking every free hour busy. Both have no free cells; only the first has nothing to
-  // report. Asking for free time right after taking it away would read as the feature undoing
-  // itself.
-  if (!hasFreeCells && !props.markedBusyCount) {
     return {
-      detail: "Mark when you're free and we'll mark you busy wherever your calendar says you're booked.",
-      title: 'Google Calendar connected',
+      detail: 'Nothing on your grid changed. Booked squares are hidden until we can check again.',
+      title: <>We couldn&apos;t reach Google Calendar</>,
     }
   }
 
-  return {
-    // 0 is the API's never-synced sentinel (get-calendar-callback.ts stamps it at connect), and it
-    // is not null, so `?? null` misses it and formatCheckedAgo(0) renders a date in 1970.
-    detail: detailFor(props, lastSyncedAt ? formatCheckedAgo(lastSyncedAt, now) : 'just now'),
-    title: 'Google Calendar connected',
+  // A live conflict outranks the report of whatever was resolved a moment ago: the count is the
+  // one thing on this strip that is a question rather than a statement (AC-029).
+  if (conflictCount > 0) {
+    return {
+      detail:
+        conflictCount === 1
+          ? '1 slot you marked free is booked on your calendar.'
+          : `${conflictCount} slots you marked free are booked on your calendar.`,
+      title: 'Marked free, but booked',
+    }
   }
+
+  return { detail: report ? reportDetail(report, checked) : restDetail(props, checked), title: CONNECTED_TITLE }
 }
 
 const actionsFor = (props: CalendarStripProps): React.ReactNode => {
-  const { status, isChecking, isConnecting, onConnect, onCheckAgain, onDismiss } = props
+  const {
+    status,
+    isChecking,
+    isConnecting,
+    conflictCount,
+    fillableCount,
+    fillReasonId,
+    hasBusyLayer,
+    onConnect,
+    onCheckAgain,
+    onDismiss,
+    onFill,
+    onClearConflicts,
+    onKeepConflicts,
+  } = props
 
-  // Disabled rather than removed, and relabelled rather than spinner-only: the live region above
-  // carries the announcement, so this only has to stop a second press and stay put while it does.
+  // The one control that keeps native `disabled`: its label is its own explanation and the state
+  // ends by itself, so nothing is stranded by its leaving the tab order.
   if (isConnecting) {
     return <Chip disabled>Connecting…</Chip>
   }
+
+  // aria-disabled, never disabled: both of these can persist, and a keyboard user tabbed past a
+  // control that vanished has no way to find out why nothing happens (AC-032).
   if (isChecking) {
-    return null
+    return (
+      <>
+        <Chip aria-describedby={fillReasonId} aria-disabled>
+          {FILL_LABEL}
+        </Chip>
+        <Chip aria-disabled>Checking…</Chip>
+      </>
+    )
   }
+
   if (status === 'not_connected') {
     return (
       <>
-        <Chip onPress={onConnect}>Connect</Chip>
+        <Chip onPress={onConnect} primary>
+          Connect
+        </Chip>
         <Chip onPress={onDismiss}>Not now</Chip>
       </>
     )
   }
+
+  if (status === 'error') {
+    return (
+      <>
+        <Chip aria-describedby={fillReasonId} aria-disabled>
+          {FILL_LABEL}
+        </Chip>
+        <Chip onPress={onCheckAgain} primary>
+          Try again
+        </Chip>
+      </>
+    )
+  }
+
+  // The review asks one question and offers exactly the two answers to it. `Check again` stands
+  // down here on purpose: another check cannot resolve a conflict -- it would return the same
+  // booked time and re-ask the same question -- and the fill cannot touch a booked slot, so
+  // neither has anything to contribute until this is settled. Both return one tap later.
+  if (conflictCount > 0) {
+    return (
+      <>
+        <Chip onPress={onClearConflicts} primary>
+          {conflictCount === 1 ? 'Clear this one' : `Clear these ${conflictCount}`}
+        </Chip>
+        <Chip onPress={onKeepConflicts}>{conflictCount === 1 ? 'Keep it' : 'Keep them'}</Chip>
+      </>
+    )
+  }
+
   // No Disconnect here at any status. Disconnecting is account-wide, so it lives in the app bar --
   // a control sitting inside one poll would misrepresent how far it reaches.
-  return <Chip onPress={onCheckAgain}>{status === 'error' ? 'Try again' : 'Check again'}</Chip>
+  return (
+    <>
+      {/* A fill offered without a layer is Select all wearing the calendar's name: with no busy data
+          every unmarked slot counts as fillable, so the control would promise to skip booked hours
+          and skip none, having seen none. Withheld until there is a calendar to have consulted. */}
+      {hasBusyLayer && fillableCount > 0 && (
+        <Chip onPress={onFill} primary>
+          {FILL_LABEL}
+        </Chip>
+      )}
+      <Chip onPress={onCheckAgain}>Check again</Chip>
+    </>
+  )
 }
 
 // Presentational only: every value arrives as a prop, so the phase that owns the calendar owns all
@@ -140,14 +317,14 @@ export const CalendarStrip = (props: CalendarStripProps): React.ReactNode => {
 
   // One shell for every state so the live region below is the same DOM node across transitions.
   // A live region that is unmounted and remounted with new text is frequently not announced --
-  // the region has to already exist for a screen reader to notice its content change.
+  // the region has to already exist for a screen reader to notice its content change (AC-036).
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.05] px-3 py-2.5">
       <div className="flex min-w-0 flex-col gap-0.5">
         {title === null ? null : <p className="text-[13px] font-semibold text-[var(--bone)]">{title}</p>}
-        {/* Live: an hour a check marked busy looks exactly like one you never marked free, so this
-            count is the only explanation of why the grid changed. */}
-        <p aria-live="polite" className="text-xs text-[var(--slate)]">
+        {/* Live: this line is the only account of what the calendar found, what the fill did, and
+            how many marks it disagrees with. Nothing else on the page says any of it. */}
+        <p aria-live="polite" className="text-xs text-[var(--slate)]" data-testid="calendar-strip-detail">
           {detail}
         </p>
       </div>

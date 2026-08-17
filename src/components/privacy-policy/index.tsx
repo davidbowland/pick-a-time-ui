@@ -27,10 +27,12 @@ const PrivacyPolicy = (): React.ReactNode => {
           yours included, without joining. A poll is guarded by those and nothing else, so share them the way you&apos;d
           share what&apos;s on it.
         </p>
-        <p>
-          No users ever see your email address. Hours your calendar blocks off look exactly like hours you crossed out
-          by hand — nobody on the poll can tell which is which.
-        </p>
+        {/*
+          This says what we store, not what anyone can work out. The earlier wording promised nobody on the poll could
+          tell a calendar hour from a hand-marked one, which the one-tap fill breaks: it leaves your free hours as the
+          exact opposite of your booked ones, and anyone holding the link can read those.
+        */}
+        <p>No users ever see your email address. We keep no record of which hours came from your calendar.</p>
       </Section>
 
       <Section title="What We Store">
@@ -101,10 +103,15 @@ const PrivacyPolicy = (): React.ReactNode => {
           A poll and everything in it disappears 14 days after the poll is created, whether or not the group ever picked
           a time.
         </p>
+        {/*
+          Two bounds are load-bearing here. "A year's worth" is the saved busy window, which reaches from two weeks
+          back to a year ahead, so the older ones are gone long before the connection is. And the clock runs from the
+          last answer Google gave us -- a check served from cache asks Google nothing and extends nothing, which is
+          why this names Google rather than the check.
+        */}
         <p>
-          Your calendar connection outlives the poll. We keep it, and the busy times we&apos;ve saved, for 90 days after
-          the last time we checked, and every check restarts that clock. Disconnect and both go immediately. Hours
-          marked busy by your calendar stay busy. You can mark yourself free again at any time.
+          Your calendar connection outlives the poll. We keep it, and a year&apos;s worth of your busy times, for 90
+          days after Google last told us when you&apos;re busy. Disconnect and both go immediately.
         </p>
         <p>If you signed in with Google, the record that lets us recognize you stays until you ask us to delete it.</p>
       </Section>
@@ -128,7 +135,7 @@ const PrivacyPolicy = (): React.ReactNode => {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
           Back to Pick a Time
         </Link>
-        <span>Last updated August 12, 2026</span>
+        <span>Last updated August 17, 2026</span>
       </div>
     </div>
   )

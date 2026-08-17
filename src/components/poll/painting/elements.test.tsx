@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { CalendarStrip, Toolbar } from './elements'
+import { CalendarStrip, CalendarStripProps, GridKey, StripReport, Toolbar } from './elements'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -21,222 +21,359 @@ describe('Toolbar', () => {
   })
 })
 
+describe('GridKey', () => {
+  // AC-035: an entry exists only while a cell on screen draws that treatment, and the key itself
+  // disappears when neither is drawn. A legend for something invisible is worse than no legend.
+  const keyCases: [string, number, number, string[]][] = [
+    ['both treatments on screen', 2, 3, ['Booked on your calendar', 'Marked free, but booked']],
+    ['only unmarked booked squares', 2, 0, ['Booked on your calendar']],
+    ['only marked-and-booked squares', 0, 3, ['Marked free, but booked']],
+  ]
+
+  it.each(keyCases)('should list exactly the treatments drawn for %s', (_name, unmarked, marked, expected) => {
+    render(<GridKey markedBookedCount={marked} unmarkedBookedCount={unmarked} />)
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(expected)
+  })
+
+  it('should render no key at all when no cell draws either treatment', () => {
+    render(<GridKey markedBookedCount={0} unmarkedBookedCount={0} />)
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
+  it('should name the key for a screen reader', () => {
+    render(<GridKey markedBookedCount={1} unmarkedBookedCount={1} />)
+    expect(screen.getByRole('list', { name: 'Key' })).toBeInTheDocument()
+  })
+})
+
 describe('CalendarStrip', () => {
-  const now = () => 1_754_006_400_000
+  const now = (): number => 1_754_006_400_000
   const noop = (): void => undefined
-  const base = {
-    hasFreeCells: true,
+  const base: CalendarStripProps = {
+    bookedCount: 3,
+    busyWindow: { end: '2026-08-25', start: '2026-08-12' },
+    conflictCount: 0,
+    fillReasonId: 'fill-reason',
+    fillableCount: 4,
+    hasBusyLayer: true,
     isChecking: false,
     isConnecting: false,
     lastSyncedAt: 1_754_006_280,
-    markedBusyCount: 4,
+    markedCount: 2,
     now,
     onCheckAgain: noop,
+    onClearConflicts: noop,
     onConnect: noop,
     onDismiss: noop,
-    status: 'connected' as const,
-    usesTimes: true,
+    onFill: noop,
+    onKeepConflicts: noop,
+    status: 'connected',
   }
 
-  it('should offer to connect when not connected', () => {
-    render(<CalendarStrip {...base} status="not_connected" />)
-    expect(screen.getByText("Mark yourself busy where you're already booked")).toBeInTheDocument()
-    expect(screen.getByText(/never event titles, guests, or locations/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument()
+  const liveText = (): string => screen.getByTestId('calendar-strip-detail').textContent ?? ''
+
+  describe('not connected', () => {
+    it('should offer to connect', () => {
+      render(<CalendarStrip {...base} status="not_connected" />)
+      expect(screen.getByText('Fill this in from your calendar')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument()
+    })
+
+    // AC-033: the prompt may promise only what the system does. It shows booked time and marks
+    // nothing on its own, and the freeBusy limit is stated as the fact it is.
+    it('should promise only what connecting actually does', () => {
+      render(<CalendarStrip {...base} status="not_connected" />)
+      expect(liveText()).toBe(
+        "Connect Google Calendar and we'll show where your primary calendar says you're booked, then fill in the rest in one tap. We never mark anything you didn't ask for. We see when you're busy — never event titles, guests, or locations.",
+      )
+    })
+
+    it('should claim no automatic marking', () => {
+      render(<CalendarStrip {...base} status="not_connected" />)
+      expect(screen.queryByText(/we'll mark you busy|automatically/i)).not.toBeInTheDocument()
+    })
+
+    it('should connect when Connect is pressed', async () => {
+      const onConnect = jest.fn()
+      render(<CalendarStrip {...base} onConnect={onConnect} status="not_connected" />)
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }))
+      expect(onConnect).toHaveBeenCalledTimes(1)
+    })
+
+    it('should dismiss the offer when Not now is pressed', async () => {
+      const onDismiss = jest.fn()
+      render(<CalendarStrip {...base} onDismiss={onDismiss} status="not_connected" />)
+      await userEvent.click(screen.getByRole('button', { name: 'Not now' }))
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+    })
   })
 
-  it('should promise to mark busy, never to remove anything', () => {
-    render(<CalendarStrip {...base} status="not_connected" />)
-    expect(screen.getByText(/we'll mark you busy wherever it says you're booked/)).toBeInTheDocument()
-    // The calendar only ever adds busy time to the poll. Any wording about taking out, removing, or
-    // clearing hours describes the opposite of what this feature does.
-    expect(screen.queryByText(/take out|remove|clear/i)).not.toBeInTheDocument()
+  describe('connecting', () => {
+    it('should say it is connecting', () => {
+      render(<CalendarStrip {...base} isConnecting status="not_connected" />)
+      expect(liveText()).toBe('Connecting to Google Calendar…')
+    })
+
+    // The one control that keeps native `disabled`: its label is its own explanation and the state
+    // ends by itself, so nothing is stranded by its leaving the tab order (AC-032's exception).
+    it('should refuse a second press while connecting', () => {
+      render(<CalendarStrip {...base} isConnecting status="not_connected" />)
+      expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
+    })
   })
 
-  it('should report the count of hours marked busy', () => {
-    render(<CalendarStrip {...base} />)
-    expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
-    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBeInTheDocument()
+  describe('checking', () => {
+    // AC-031: what is on screen stays on screen, and the live region says where it came from.
+    it('should say a check is running and that the squares are from the last one', () => {
+      render(<CalendarStrip {...base} isChecking />)
+      expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
+      expect(liveText()).toBe('Checking your calendar… The booked squares on screen are from the last check.')
+    })
+
+    // AC-032: aria-disabled, never disabled — the control stays reachable and says why.
+    it('should keep the fill control focusable while making it inert', async () => {
+      const onFill = jest.fn()
+      render(<CalendarStrip {...base} isChecking onFill={onFill} />)
+      const fill = screen.getByRole('button', { name: "Fill in what's free" })
+
+      fill.focus()
+      await userEvent.click(fill)
+
+      expect(fill).toHaveAttribute('aria-disabled', 'true')
+      expect(fill).not.toBeDisabled()
+      expect(fill).toHaveFocus()
+      expect(onFill).not.toHaveBeenCalled()
+    })
+
+    it('should point the inert fill control at an on-screen reason', () => {
+      render(<CalendarStrip {...base} isChecking />)
+      expect(screen.getByRole('button', { name: "Fill in what's free" })).toHaveAttribute(
+        'aria-describedby',
+        'fill-reason',
+      )
+    })
+
+    it('should make the check control inert without removing it from the tab order', () => {
+      render(<CalendarStrip {...base} isChecking />)
+      const checking = screen.getByRole('button', { name: 'Checking…' })
+      checking.focus()
+      expect(checking).toHaveAttribute('aria-disabled', 'true')
+      expect(checking).toHaveFocus()
+    })
   })
 
-  it('should count a single hour in the singular', () => {
-    render(<CalendarStrip {...base} markedBusyCount={1} />)
-    expect(screen.getByText('Checked 2 minutes ago · marked 1 hour busy')).toBeInTheDocument()
+  describe('connected, at rest', () => {
+    // One case per branch of the at-rest report, table-driven: the copy is where this feature is
+    // most likely to make a claim it cannot support.
+    const restCases: [string, Partial<CalendarStripProps>, string][] = [
+      [
+        'nothing marked yet, with booked time on screen',
+        { bookedCount: 3, markedCount: 0 },
+        "The grid shows where your calendar says you're booked. One tap marks everything else free.",
+      ],
+      [
+        'a grid where every slot is booked, and so has no fill control to point at',
+        { bookedCount: 6, fillableCount: 0, markedCount: 0 },
+        'Nothing left to fill. Nothing on your grid changed.',
+      ],
+      [
+        'a check that found nothing booked',
+        { bookedCount: 0, lastSyncedAt: null },
+        'Checked just now · nothing booked on your primary calendar, Aug 12–25',
+      ],
+      [
+        'a check that found nothing booked, some time ago',
+        { bookedCount: 0 },
+        'Checked 2 minutes ago · nothing booked on your primary calendar, Aug 12–25',
+      ],
+      [
+        'a window that spans two months',
+        { bookedCount: 0, busyWindow: { end: '2026-09-02', start: '2026-08-12' }, lastSyncedAt: null },
+        'Checked just now · nothing booked on your primary calendar, Aug 12–Sep 2',
+      ],
+      [
+        'marked time that no booking contradicts',
+        { bookedCount: 3, markedCount: 5 },
+        'Nothing you marked is booked on your calendar.',
+      ],
+      // No layer to report on: the authenticated read refused (an unlinked participant), so the
+      // strip may say when the account was last checked and nothing whatever about booked time.
+      ['no busy layer of its own', { hasBusyLayer: false }, 'Checked 2 minutes ago'],
+      // A window the server could not name is not a window we can read out.
+      ['a check with no window to name', { bookedCount: 0, busyWindow: null }, 'Checked 2 minutes ago'],
+    ]
+
+    it.each(restCases)('should report %s', (_name, overrides, expected) => {
+      render(<CalendarStrip {...base} {...overrides} />)
+      expect(liveText()).toBe(expected)
+    })
+
+    it('should confirm the connection in the title', () => {
+      render(<CalendarStrip {...base} />)
+      expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
+    })
+
+    it('should offer the fill when there is something left to fill', async () => {
+      const onFill = jest.fn()
+      render(<CalendarStrip {...base} onFill={onFill} />)
+      await userEvent.click(screen.getByRole('button', { name: "Fill in what's free" }))
+      expect(onFill).toHaveBeenCalledTimes(1)
+    })
+
+    // AC-034's tail: an empty calendar still leaves the bulk action available.
+    it('should keep the fill available when the calendar is clear', () => {
+      render(<CalendarStrip {...base} bookedCount={0} />)
+      expect(screen.getByRole('button', { name: "Fill in what's free" })).toBeEnabled()
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+    })
+
+    // The distinction the count alone cannot draw: fillableCount is high here precisely BECAUSE no
+    // layer arrived, since a slot nothing knows to be booked counts as fillable. Offering the
+    // control on that number promises to skip booked hours and skips none, having seen none --
+    // Select all wearing the calendar's name. Reachable for real: a signed-in participant whose
+    // record is not yet linked gets a 403 on the authed read and falls back to the open one.
+    it('should withhold the fill when no busy layer arrived, however many slots look fillable', () => {
+      render(<CalendarStrip {...base} fillableCount={12} hasBusyLayer={false} />)
+      expect(screen.queryByRole('button', { name: "Fill in what's free" })).not.toBeInTheDocument()
+    })
+
+    it('should drop the fill when every slot is already marked or booked', () => {
+      render(<CalendarStrip {...base} fillableCount={0} />)
+      expect(screen.queryByRole('button', { name: "Fill in what's free" })).not.toBeInTheDocument()
+    })
+
+    it('should check again when Check again is pressed', async () => {
+      const onCheckAgain = jest.fn()
+      render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
+      expect(onCheckAgain).toHaveBeenCalledTimes(1)
+    })
+
+    it('should never offer disconnect, which is account-wide', () => {
+      render(<CalendarStrip {...base} />)
+      expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeInTheDocument()
+    })
   })
 
-  it('should claim nothing about conflicts when the count is zero', () => {
-    // The count is of hours changed to busy. An hour already busy is already correct and does not
-    // increment it, so zero says the grid needed no change -- not that the calendar is clear.
-    render(<CalendarStrip {...base} markedBusyCount={0} />)
-    expect(screen.getByText('Checked 2 minutes ago')).toBeInTheDocument()
-    expect(screen.queryByText(/nothing on your calendar conflicts/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/marked .* busy/)).not.toBeInTheDocument()
+  describe('reports', () => {
+    // AC-024 and AC-040. Every singular/plural branch of the report copy, one case each. The
+    // skipped count is what the fill actually skipped, so it varies independently of the marked one.
+    const reportCases: [StripReport, string][] = [
+      [{ kind: 'filled', markedCount: 23, skippedCount: 7 }, 'Marked 23 slots free · skipped 7 booked slots'],
+      [{ kind: 'filled', markedCount: 1, skippedCount: 7 }, 'Marked 1 slot free · skipped 7 booked slots'],
+      [{ kind: 'filled', markedCount: 23, skippedCount: 1 }, 'Marked 23 slots free · skipped 1 booked slot'],
+      [{ kind: 'filled', markedCount: 30, skippedCount: 0 }, 'Marked 30 slots free'],
+      [{ kind: 'filled', markedCount: 0, skippedCount: 3 }, 'Nothing left to fill. Nothing on your grid changed.'],
+      [{ count: 7, kind: 'cleared' }, 'Cleared 7 slots · nothing you marked is booked now'],
+      [{ count: 1, kind: 'cleared' }, 'Cleared 1 slot · nothing you marked is booked now'],
+      [{ count: 7, kind: 'kept' }, "Kept 7 slots · we won't ask again unless you change them"],
+      [{ count: 1, kind: 'kept' }, "Kept 1 slot · we won't ask again unless you change it"],
+      [{ kind: 'unchanged' }, "Checked 2 minutes ago · your booked time hasn't changed"],
+    ]
+
+    it.each(reportCases)('should report %j in the live region', (report, expected) => {
+      render(<CalendarStrip {...base} report={report} />)
+      expect(liveText()).toBe(expected)
+    })
+
+    it('should keep the connected title while reporting', () => {
+      render(<CalendarStrip {...base} report={{ kind: 'filled', markedCount: 4, skippedCount: 0 }} />)
+      expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
+    })
   })
 
-  it('should not explain the all-day rule when the count is zero', () => {
-    render(<CalendarStrip {...base} markedBusyCount={0} usesTimes={false} />)
-    expect(screen.getByText('Checked 2 minutes ago')).toBeInTheDocument()
+  describe('review', () => {
+    const reviewCases: [number, string, string, string][] = [
+      [7, '7 slots you marked free are booked on your calendar.', 'Clear these 7', 'Keep them'],
+      [1, '1 slot you marked free is booked on your calendar.', 'Clear this one', 'Keep it'],
+    ]
+
+    it.each(reviewCases)(
+      'should state %i unresolved conflicts and offer both ways out',
+      (count, detail, clear, keep) => {
+        render(<CalendarStrip {...base} conflictCount={count} />)
+        expect(screen.getByText('Marked free, but booked')).toBeInTheDocument()
+        expect(liveText()).toBe(detail)
+        expect(screen.getByRole('button', { name: clear })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: keep })).toBeInTheDocument()
+      },
+    )
+
+    it('should clear every conflict when the resolution control is pressed', async () => {
+      const onClearConflicts = jest.fn()
+      render(<CalendarStrip {...base} conflictCount={3} onClearConflicts={onClearConflicts} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Clear these 3' }))
+      expect(onClearConflicts).toHaveBeenCalledTimes(1)
+    })
+
+    it('should keep every conflict when the keep control is pressed', async () => {
+      const onKeepConflicts = jest.fn()
+      render(<CalendarStrip {...base} conflictCount={3} onKeepConflicts={onKeepConflicts} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Keep them' }))
+      expect(onKeepConflicts).toHaveBeenCalledTimes(1)
+    })
+
+    // The review asks one question. A check cannot answer it -- it would only re-report the same
+    // conflicts -- and the fill cannot touch a booked slot, so both stand down until it is settled.
+    it('should offer nothing but the two resolutions', () => {
+      render(<CalendarStrip {...base} conflictCount={3} />)
+      expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Clear these 3', 'Keep them'])
+    })
+
+    // The report of a resolution belongs to the state after it, so a live conflict outranks it.
+    it('should ask before it reports', () => {
+      render(<CalendarStrip {...base} conflictCount={2} report={{ count: 5, kind: 'cleared' }} />)
+      expect(liveText()).toBe('2 slots you marked free are booked on your calendar.')
+    })
   })
 
-  it('should claim nothing about conflicts when the count is unknown', () => {
-    render(<CalendarStrip {...base} markedBusyCount={null} />)
-    expect(screen.getByText('Checked 2 minutes ago')).toBeInTheDocument()
-    expect(screen.queryByText(/nothing on your calendar conflicts/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/marked .* busy/)).not.toBeInTheDocument()
+  describe('error', () => {
+    // AC-042: named, not merely undrawn.
+    it('should say the calendar could not be reached and offer a retry', () => {
+      render(<CalendarStrip {...base} status="error" />)
+      expect(screen.getByText("We couldn't reach Google Calendar")).toBeInTheDocument()
+      expect(liveText()).toBe('Nothing on your grid changed. Booked squares are hidden until we can check again.')
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    })
+
+    it('should retry when Try again is pressed', async () => {
+      const onCheckAgain = jest.fn()
+      render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} status="error" />)
+      await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(onCheckAgain).toHaveBeenCalledTimes(1)
+    })
+
+    it('should keep the fill reachable but inert, with its reason named', async () => {
+      const onFill = jest.fn()
+      render(<CalendarStrip {...base} onFill={onFill} status="error" />)
+      const fill = screen.getByRole('button', { name: "Fill in what's free" })
+
+      fill.focus()
+      await userEvent.click(fill)
+
+      expect(fill).toHaveAttribute('aria-disabled', 'true')
+      expect(fill).toHaveAttribute('aria-describedby', 'fill-reason')
+      expect(fill).toHaveFocus()
+      expect(onFill).not.toHaveBeenCalled()
+    })
   })
 
-  it('should not explain the full-day rule when the count is unknown', () => {
-    render(<CalendarStrip {...base} markedBusyCount={null} usesTimes={false} />)
-    expect(screen.getByText('Checked 2 minutes ago')).toBeInTheDocument()
-  })
+  // AC-036. A live region that is unmounted and remounted with new text is frequently not
+  // announced at all, so every state has to update this one node rather than replace it.
+  it('should keep one live region across every state transition', () => {
+    const { rerender } = render(<CalendarStrip {...base} status="not_connected" />)
+    const live = screen.getByTestId('calendar-strip-detail')
 
-  it('should explain the full-day rule on a date-only poll', () => {
-    render(<CalendarStrip {...base} usesTimes={false} />)
-    expect(
-      screen.getByText('Checked 2 minutes ago · on date-only polls we mark a day busy once 8 hours of it are booked'),
-    ).toBeInTheDocument()
-  })
+    rerender(<CalendarStrip {...base} isConnecting status="not_connected" />)
+    rerender(<CalendarStrip {...base} isChecking />)
+    rerender(<CalendarStrip {...base} conflictCount={2} />)
+    rerender(<CalendarStrip {...base} report={{ count: 2, kind: 'cleared' }} />)
+    rerender(<CalendarStrip {...base} status="error" />)
 
-  it('should read a missing timestamp as just now', () => {
-    render(<CalendarStrip {...base} lastSyncedAt={null} />)
-    expect(screen.getByText('Checked just now · marked 4 hours busy')).toBeInTheDocument()
-  })
-
-  it('should read the never-synced sentinel as just now, not as 1970', () => {
-    // The API stamps lastSyncedAt: 0 at connect and passes it through verbatim, so this -- not
-    // null -- is what a freshly connected account actually sends.
-    render(<CalendarStrip {...base} lastSyncedAt={0} />)
-    expect(screen.getByText('Checked just now · marked 4 hours busy')).toBeInTheDocument()
-  })
-
-  it('should show progress while checking', () => {
-    render(<CalendarStrip {...base} isChecking />)
-    expect(screen.getByText('Checking your calendar…')).toBeInTheDocument()
-  })
-
-  it('should announce that a check is under way', () => {
-    render(<CalendarStrip {...base} isChecking />)
-    expect(screen.getByText('Checking your calendar…')).toHaveAttribute('aria-live', 'polite')
-  })
-
-  it('should offer no action while checking', () => {
-    render(<CalendarStrip {...base} isChecking />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
-  it('should keep the live region across a check so the new count is announced', () => {
-    const { rerender } = render(<CalendarStrip {...base} markedBusyCount={1} />)
-    const live = screen.getByText('Checked 2 minutes ago · marked 1 hour busy')
-    rerender(<CalendarStrip {...base} isChecking markedBusyCount={1} />)
-    rerender(<CalendarStrip {...base} markedBusyCount={4} />)
-    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBe(live)
-  })
-
-  it('should report a failure and reassure that nothing changed', () => {
-    render(<CalendarStrip {...base} status="error" />)
-    expect(screen.getByText("We couldn't reach Google Calendar")).toBeInTheDocument()
-    expect(screen.getByText('Nothing on your grid changed.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
-  })
-
-  it('should never offer disconnect, which is account-wide', () => {
-    render(<CalendarStrip {...base} />)
-    expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeInTheDocument()
-  })
-
-  it('should announce changes to the detail line', () => {
-    render(<CalendarStrip {...base} />)
-    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toHaveAttribute('aria-live', 'polite')
-  })
-
-  it('should connect when Connect is pressed', async () => {
-    const onConnect = jest.fn()
-    render(<CalendarStrip {...base} onConnect={onConnect} status="not_connected" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Connect' }))
-    expect(onConnect).toHaveBeenCalledTimes(1)
-  })
-
-  it('should dismiss the offer when Not now is pressed', async () => {
-    const onDismiss = jest.fn()
-    render(<CalendarStrip {...base} onDismiss={onDismiss} status="not_connected" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Not now' }))
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-  })
-
-  it('should check again when Check again is pressed', async () => {
-    const onCheckAgain = jest.fn()
-    render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
-    expect(onCheckAgain).toHaveBeenCalledTimes(1)
-  })
-
-  it('should retry from the error state when Try again is pressed', async () => {
-    const onCheckAgain = jest.fn()
-    render(<CalendarStrip {...base} onCheckAgain={onCheckAgain} status="error" />)
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(onCheckAgain).toHaveBeenCalledTimes(1)
-  })
-
-  it('should say it is connecting while the hand-off is in flight', () => {
-    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
-    expect(screen.getByText('Connecting to Google Calendar…')).toBeInTheDocument()
-  })
-
-  it('should refuse a second press while connecting', () => {
-    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
-    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
-  })
-
-  it('should keep the pressed control on screen while connecting', () => {
-    // Unlike a check, which starts by itself, connecting is always a deliberate press. A control
-    // that disappears under the pointer reads as a mis-click.
-    render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
-    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeInTheDocument()
-  })
-
-  it('should announce the connecting state in the live region', () => {
-    const { container } = render(<CalendarStrip {...base} isConnecting={true} status="not_connected" />)
-    expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent('Connecting to Google Calendar…')
-  })
-
-  // Nothing free and nothing reported: a grid nobody has filled in yet.
-  const untouchedGrid = { hasFreeCells: false, markedBusyCount: null }
-
-  it('should ask for free time rather than report a check when the grid is empty', () => {
-    render(<CalendarStrip {...base} {...untouchedGrid} />)
-    expect(
-      screen.getByText("Mark when you're free and we'll mark you busy wherever your calendar says you're booked."),
-    ).toBeInTheDocument()
-  })
-
-  it('should not claim a check ran when there was nothing for it to mark', () => {
-    render(<CalendarStrip {...base} {...untouchedGrid} />)
-    expect(screen.queryByText(/^Checked /)).not.toBeInTheDocument()
-  })
-
-  it('should still confirm the calendar is connected when the grid is empty', () => {
-    render(<CalendarStrip {...base} {...untouchedGrid} />)
-    expect(screen.getByText('Google Calendar connected')).toBeInTheDocument()
-  })
-
-  it('should keep the empty-grid guidance on the additive side', () => {
-    // Same rule the connect offer is held to: this feature only ever adds busy time.
-    render(<CalendarStrip {...base} {...untouchedGrid} />)
-    expect(screen.queryByText(/take out|remove|clear/i)).not.toBeInTheDocument()
-  })
-
-  it('should report the count when a check emptied the grid by marking every free hour busy', () => {
-    // Also no free cells, but for the opposite reason. Asking for free time right after taking it
-    // away would read as the feature undoing itself.
-    render(<CalendarStrip {...base} hasFreeCells={false} markedBusyCount={4} />)
-    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBeInTheDocument()
-    expect(screen.queryByText(/Mark when you're free/)).not.toBeInTheDocument()
-  })
-
-  it('should report the check normally once the grid has free time', () => {
-    render(<CalendarStrip {...base} hasFreeCells={true} />)
-    expect(screen.getByText('Checked 2 minutes ago · marked 4 hours busy')).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-strip-detail')).toBe(live)
+    expect(live).toHaveAttribute('aria-live', 'polite')
+    expect(live).toHaveTextContent('Nothing on your grid changed.')
   })
 })

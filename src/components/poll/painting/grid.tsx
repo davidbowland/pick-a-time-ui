@@ -1,9 +1,17 @@
-import { Check } from 'lucide-react'
+import { CalendarClock, Check } from 'lucide-react'
 import React, { useMemo, useRef } from 'react'
 
 import { GridColumns } from '../grid-columns'
 import { ScrollEdgeIndicators } from '../scroll-edge-indicators'
-import { DISABLED_CELL_CLASS, TimeWindow, findCellForColumn, gridLayout, showsDateColumn } from '../slot-columns'
+import {
+  BOOKED_CELL_FRAGMENT,
+  CONFLICT_CELL_FRAGMENT,
+  DISABLED_CELL_CLASS,
+  TimeWindow,
+  findCellForColumn,
+  gridLayout,
+  showsDateColumn,
+} from '../slot-columns'
 import { FOCUS_RING } from '@components/ui/focus-ring'
 import { useInitialColumnScroll } from '@hooks/useInitialColumnScroll'
 import { usePaintGesture } from '@hooks/usePaintGesture'
@@ -28,6 +36,19 @@ export interface PaintGridProps {
   // never shorten what a screen reader announces.
   slotAriaLabels: string[]
   grid: boolean[][]
+  // Where the participant's own calendar says they are already booked, indexed exactly as `grid`
+  // is — `[dateIndex][slot.slotIndex]`, the server's `buildBusyGrid` output for this poll. It never
+  // decides anything: a booked cell is a live button and paints like any other, and `grid` remains
+  // the only record of what the participant actually said.
+  //
+  // OPTIONAL, and the absence is the whole mechanism behind AC-030. When the calendar errors — or
+  // was never connected, or the reader is not the record's owner — the layer is not drawn, and the
+  // grid learns that by not being handed one. The alternative, a `status` prop sitting beside a
+  // still-populated `busy`, would make "drawn" and "announced" two facts that can disagree: a
+  // render carrying stale intervals plus `status="error"` would have to be caught by a branch that
+  // remembered to check both, and the failure mode is a name claiming `booked` for a layer the
+  // reader cannot see. One source of truth cannot drift from itself.
+  busy?: boolean[][]
   onCommit: (cells: AvailabilityCell[]) => void
 }
 
@@ -61,9 +82,39 @@ function cellCoordsAt(x: number, y: number, fallback: EventTarget | null): CellC
 // Deliberately built from the long forms of both halves, never from what the headers display: a
 // cell is the only place a screen reader hears the date or the time at all when the user tabs
 // straight into the grid, and on a single-date poll there is no row header to fall back on.
-function cellLabel(dateAriaLabel: string, slotAriaLabel: string | undefined): string {
-  if (!slotAriaLabel) return dateAriaLabel
-  return `${dateAriaLabel}, ${slotAriaLabel}`
+//
+// AC-017 rides on the same string rather than on a second ARIA attribute. `aria-describedby` or a
+// visually hidden sibling would put "booked" in a separate announcement that several screen
+// readers deliver late, out of order, or (in a table's browse mode) not at all — and the pressed
+// state is already carried by `aria-pressed`, so a cell that is both would owe the reader three
+// separate utterances. One comma-appended suffix, exactly as results/heat-grid.tsx builds its
+// `, recommended` suffix, keeps the whole state in the one string every mode reads.
+function cellLabel(dateAriaLabel: string, slotAriaLabel: string | undefined, booked: boolean): string {
+  const statusSuffix = booked ? ', booked' : ''
+  if (!slotAriaLabel) return `${dateAriaLabel}${statusSuffix}`
+  return `${dateAriaLabel}, ${slotAriaLabel}${statusSuffix}`
+}
+
+// Exactly one `bg-*` utility, chosen here rather than layered at the call site. There is no
+// tailwind-merge in this project, so two background utilities on one element are resolved by the
+// order the stylesheet emits them, NOT by the order they appear in the class string — appending
+// BOOKED_CELL_FRAGMENT onto a shared base that already carried the unpainted `--bone` fill would
+// paint whichever Tailwind happened to sort last, and would keep doing so consistently enough to
+// look deliberate. Nothing can assert this: reading the class back is the class-string assertion
+// CLAUDE.md bars, and jsdom resolves no stylesheets, so a cascade bug renders identically in every
+// test. Note too that booked-contrast.test.ts reads THIS FILE for the unpainted fill and now
+// demands exactly one match, so a second `--bone` utility anywhere here — a comment quoting the
+// utility included — fails that suite rather than this one.
+//
+// The two branch pairs are not symmetric on purpose. A conflict keeps the painted fill unchanged
+// (CONFLICT_CELL_FRAGMENT is `bg-[var(--accent)]` plus the marker's inherited color) because
+// dimming it would say the participant's mark had been overruled by their calendar, which is the
+// behavior this feature exists to undo. The booked fill, by contrast, sits between the unpainted
+// and painted fills so it can never be mistaken for either, nor for the fainter dashed
+// out-of-window treatment (AC-013, AC-014); booked-contrast.test.ts holds that ordering.
+function cellFillClass(painted: boolean, booked: boolean): string {
+  if (booked) return painted ? CONFLICT_CELL_FRAGMENT : BOOKED_CELL_FRAGMENT
+  return painted ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
 }
 
 const PaintGrid = ({
@@ -74,6 +125,7 @@ const PaintGrid = ({
   slotLabels,
   slotAriaLabels,
   grid,
+  busy,
   onCommit,
 }: PaintGridProps): React.ReactNode => {
   const gesture = usePaintGesture(grid, onCommit)
@@ -258,6 +310,15 @@ const PaintGrid = ({
                       )
                     }
                     const on = gesture.isOn(dateIndex, slot.slotIndex)
+                    // Indexed by `slot.slotIndex`, never by the column position `index`: a date
+                    // whose own window is narrower renders placeholders for the columns it lacks,
+                    // so the two diverge exactly where a misread would be least visible — the busy
+                    // layer would slide onto the wrong hours for precisely the dates with an
+                    // override. `grid` is read the same way one line above, and `busy` arrives from
+                    // the same server-side slot numbering. The `?.` chain is what makes the layer
+                    // optional (AC-030) and also absorbs a short row for a date the retention
+                    // window does not reach.
+                    const booked = busy?.[dateIndex]?.[slot.slotIndex] ?? false
                     return (
                       <td className="p-0" key={slot.slotIndex}>
                         {/* touch-none lives on the cell button itself, not the scrollport: a touch that
@@ -266,11 +327,17 @@ const PaintGrid = ({
                           headers — which aren't buttons — keeps its default touch-action and scrolls
                           the grid normally. */}
                         <button
-                          aria-label={cellLabel(dateAriaLabel, slotAriaLabels[index])}
+                          aria-label={cellLabel(dateAriaLabel, slotAriaLabels[index], booked)}
                           aria-pressed={on}
-                          className={`flex h-8 w-full touch-none items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${
-                            on ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
-                          }`}
+                          // `relative` positions the conflict marker below and nothing else; it is
+                          // inert for every other state. No `disabled` and no `aria-hidden` appear
+                          // here in any state, booked included (AC-018) — the calendar reports, and
+                          // a participant who is free during a meeting it knows about has to be
+                          // able to say so in one press.
+                          className={`relative flex h-8 w-full touch-none items-center justify-center rounded transition-colors duration-150 ease-out ${FOCUS_RING} ${cellFillClass(
+                            on,
+                            booked,
+                          )}`}
                           data-date-index={dateIndex}
                           data-slot-index={slot.slotIndex}
                           onKeyDown={(e) => {
@@ -282,6 +349,36 @@ const PaintGrid = ({
                           type="button"
                         >
                           {on && <Check aria-hidden="true" className="h-4 w-4 text-[var(--ink)]/70" />}
+                          {/* The non-color channel WCAG 1.4.1 requires: color alone never
+                            distinguishes booked from unpainted, because the fill step between them
+                            is deliberately quiet — a fill loud enough to carry the meaning by itself
+                            reads as a warning, and the calendar is not entitled to shout. No `text-`
+                            class here on purpose: lucide strokes with `currentColor`, so the glyph
+                            takes BOOKED_CELL_FRAGMENT's `--slate`, which is the pairing
+                            booked-contrast.test.ts measures (3.80:1 on the composited booked fill).
+                            Restating a color here would leave that test measuring a value nothing
+                            renders. aria-hidden because the name already says `booked`. */}
+                          {booked && !on && <CalendarClock aria-hidden="true" className="h-4 w-4" />}
+                          {booked && on && (
+                            // A conflict shows the participant's own Check AND a second mark, since
+                            // its fill is identical to an ordinary painted cell and the Check alone
+                            // would make the two indistinguishable by any channel at all. A bar
+                            // rather than a second glyph: the 32px cell has room for one 16px glyph
+                            // centred, and two crowded glyphs read as noise at the 3rem column width
+                            // this grid is budgeted.
+                            //
+                            // `bg-current`, again with no color of its own, so the bar inherits
+                            // CONFLICT_CELL_FRAGMENT's `--ink` (6.50:1 on `--accent`). Absolutely
+                            // positioned inside the button's own box — `inset-x-1.5 bottom-1 h-1`
+                            // is a 2px bar inset 6px from each side and 4px from the bottom, which
+                            // clears the centred Check (y 8–24 in a 32px cell) without overlap and
+                            // stays inside the rounded corners at every column width, since the
+                            // inset is horizontal and the cell only ever grows horizontally.
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-x-1.5 bottom-1 h-1 rounded-full bg-current"
+                            />
+                          )}
                         </button>
                       </td>
                     )

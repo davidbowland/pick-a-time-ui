@@ -11,6 +11,7 @@ import {
   claimUser,
   createUser,
   fetchAvailability,
+  fetchAvailabilityAuthed,
   fetchConfig,
   fetchOverlap,
   fetchPoll,
@@ -241,7 +242,7 @@ describe('Poll', () => {
       window.history.pushState(null, '', `?id=${existingUser.userId}`)
       jest.mocked(fetchPoll).mockResolvedValue(poll)
       jest.mocked(fetchUsers).mockResolvedValue([existingUser])
-      jest.mocked(fetchAvailability).mockResolvedValue({
+      const record = {
         userId: existingUser.userId,
         free: [
           [false, false],
@@ -249,7 +250,11 @@ describe('Poll', () => {
           [false, false],
         ],
         expiration: 1725453600,
-      })
+      }
+      jest.mocked(fetchAvailability).mockResolvedValue(record)
+      // Signed in, PaintingPhase reads through the authenticated route instead -- the only one that
+      // can carry a busy layer -- so these tests have to arrange both.
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValue(record)
       jest.mocked(fetchOverlap).mockResolvedValue({
         grid: { bestSlot: { dateIndex: 0, freeCount: 0, freeUserIds: [], slotIndex: 0 }, cells: [] },
         recommendedMeetings: [],
