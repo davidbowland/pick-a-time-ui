@@ -14,7 +14,7 @@ import {
   patchAvailability,
   syncCalendar,
 } from '@services/api'
-import { AvailabilityCell, CalendarStatus, OwnerAvailabilityRecord, PollData, Slot } from '@types'
+import { AvailabilityCell, CalendarStatus, DateWindow, OwnerAvailabilityRecord, PollData, Slot } from '@types'
 import { formatShortDate } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 import { formatSlotDuration } from '@utils/time'
@@ -94,6 +94,22 @@ interface GridSurvey {
  * `busy` is read by `slot.slotIndex`, never by column position, for the reason spelled out in
  * grid.tsx: the two diverge exactly on the dates with a per-date override.
  */
+/**
+ * The part of the synced window this poll can actually speak for.
+ *
+ * `busyWindow` is the server's `syncedRange`, and that is unioned across every poll the person is
+ * in -- deliberately, so moving between two polls does not re-fetch on each open. Naming it whole
+ * would let a poll in August report "nothing booked, Aug 20-Dec 3" while December is full: the
+ * count behind that sentence only ever looked at this poll's own slots. Intersecting says what was
+ * inspected rather than what was fetched.
+ */
+function inspectedWindow(window: DateWindow | null | undefined, dates: string[]): DateWindow | null {
+  const first = dates[0]
+  const last = dates[dates.length - 1]
+  if (!window || !first || window.end < first || window.start > last) return null
+  return { end: window.end < last ? window.end : last, start: window.start > first ? window.start : first }
+}
+
 function surveyGrid(slots: Slot[][], free: boolean[][], busy: boolean[][] | undefined): GridSurvey {
   const cells = slots.flatMap((dateSlots, dateIndex) =>
     dateSlots.map((slot) => ({
@@ -281,7 +297,11 @@ const PaintingPhase = ({
   // without this the failure is silent -- the grid just doesn't change and nothing says why. A
   // record whose own read failed says `error` the same way, and outranks the account-level status
   // for the same reason: it is the newer fact about this poll's calendar data.
-  const failed = syncMutation.isError || availability.calendarStatus === 'error'
+  // A 403 here means this participant is linked to a different Google account -- Google was never
+  // called, so calling it an outage offers a Try again that can only fail the same way. The toast
+  // names the real cause; the strip stays out of it.
+  const checkFailed = syncMutation.isError && !isWrongAccount(syncMutation.error)
+  const failed = checkFailed || availability.calendarStatus === 'error'
   const calendarStatus: CalendarStatus | undefined = failed
     ? 'error'
     : (calendar?.status ?? availability.calendarStatus)
@@ -379,7 +399,7 @@ const PaintingPhase = ({
       {showsCalendarStrip && (
         <CalendarStrip
           bookedCount={survey.bookedUnmarked + survey.conflicts.length}
-          busyWindow={availability.busyWindow}
+          busyWindow={inspectedWindow(availability.busyWindow, poll.dates)}
           conflictCount={liveConflicts.length}
           fillReasonId={FILL_REASON_ID}
           fillableCount={survey.fillable.length}

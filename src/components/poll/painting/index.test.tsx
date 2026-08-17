@@ -1091,6 +1091,27 @@ describe('PaintingPhase', () => {
       expect(screen.getByRole('button', { name: "Fill in what's free" })).toBeEnabled()
     })
 
+    // The window the server sends back is its syncedRange, which is unioned across every poll this
+    // person is in so that moving between two of them does not re-fetch on each open. The count
+    // behind "nothing booked" only ever looked at THIS poll's slots, so naming the whole window
+    // would vouch for months nobody inspected -- and a December poll can be full while this one is
+    // clear. Only the overlap is reported.
+    it('should name only the part of the synced window this poll covers', async () => {
+      jest.mocked(fetchAvailabilityAuthed).mockResolvedValueOnce({
+        busy: NOTHING,
+        busyWindow: { end: '2025-12-03', start: '2025-08-20' },
+        calendarStatus: 'connected',
+        expiration: 1725453600,
+        free: NOTHING,
+        userId: 'quiet-falcon',
+      })
+
+      renderSignedIn()
+
+      await screen.findAllByRole('button', { pressed: false })
+      expect(liveText()).toBe('Checked just now · nothing booked on your primary calendar, Sep 4–5')
+    })
+
     // AC-030 and AC-042. The layer is in the record and is deliberately withheld: a name claiming
     // `booked` for something the reader cannot see is worse than saying nothing.
     it('should draw no busy treatment when the record reports a failed check', async () => {

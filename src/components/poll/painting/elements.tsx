@@ -121,8 +121,13 @@ const slots = (count: number): string => `${count} ${count === 1 ? 'slot' : 'slo
 const formatWindowRange = (window: DateWindow): string => {
   const monthDay = (iso: string): string => formatShortDate(iso).split(', ')[1]
   const end = monthDay(window.end)
-  const sameMonth = window.start.slice(0, 7) === window.end.slice(0, 7)
-  return `${monthDay(window.start)}–${sameMonth ? end.split(' ')[1] : end}`
+  // The year is compared before the month, because a window may legitimately span one: the
+  // retention arm reaches a year forward, and "Aug 20-Aug 20" for twelve months of calendar reads
+  // as a single day.
+  const sameYear = window.start.slice(0, 4) === window.end.slice(0, 4)
+  const sameMonth = sameYear && window.start.slice(0, 7) === window.end.slice(0, 7)
+  const endLabel = sameYear ? end : `${end}, ${window.end.slice(0, 4)}`
+  return `${monthDay(window.start)}–${sameMonth ? end.split(' ')[1] : endLabel}`
 }
 
 // "Slots", never "hours": slots slide (5:30–7, 6–7:30, 6:30–8), so three slots is not three hours.
