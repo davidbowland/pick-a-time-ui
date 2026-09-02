@@ -26,6 +26,13 @@ describe('Privacy page', () => {
     render(<PrivacyPage />)
     expect(PrivacyPolicy).toHaveBeenCalled()
   })
+
+  it('should name production as the canonical, so the test deploy does not compete with it', () => {
+    render(<PrivacyPage />)
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+      'https://pick-a-time.com/privacy-policy/',
+    )
+  })
 })
 
 // The page a reader actually loads is the thing AC-043 constrains, so the real policy is swapped

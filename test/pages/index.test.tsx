@@ -249,6 +249,15 @@ describe('Index page', () => {
     expect(BackToFormCta).toHaveBeenCalled()
   })
 
+  // `.env.test` sets NEXT_PUBLIC_ORIGIN to the bowland.link host, exactly as the test deploy does.
+  // Built from that variable, this page's canonical named the test copy as the original -- and no
+  // test noticed, because none of them read the tag. This one does.
+  it('names production as the canonical and og:url, whatever host the build is for', () => {
+    renderPage()
+    expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://pick-a-time.com/')
+    expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe('https://pick-a-time.com/')
+  })
+
   it('renders all six scenes in order, with the real CreateScene as Scene 2', () => {
     renderPage()
     expect(HeroScene).toHaveBeenCalledTimes(1)

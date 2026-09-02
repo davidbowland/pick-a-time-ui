@@ -15,6 +15,7 @@ import { CreateScene } from '@components/story/create-scene'
 import { DoorPair } from '@components/story/door-pair'
 import { HeroScene, IdentityScene, PaintingScene, ResultsScene, ShareScene } from '@components/story/scenes'
 import { SkyBackground } from '@components/story/sky-background'
+import { ogImageUrl, siteUrl } from '@config/urls'
 import { useIsIntersecting } from '@hooks/useIsIntersecting'
 import { useNarrowViewport } from '@hooks/useNarrowViewport'
 import { defaultStorage, useRecentPolls } from '@hooks/useRecentPolls'
@@ -34,8 +35,11 @@ const SCENE_CLASS = 'flex py-16 md:min-h-[100dvh] md:items-center md:py-28'
 const TITLE = "Pick a Time — Find the minute everybody's free"
 const DESCRIPTION =
   'Start a poll, send one link, and see the times everybody can make. No accounts, no reply-all threads.'
-const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`
-const PAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/`
+// Both from `@config/urls` and NOT from `NEXT_PUBLIC_ORIGIN`, which resolves to the test host in
+// the test deploy. See the note in that file: built from the environment, this page's canonical
+// named the test copy as the original.
+const OG_IMAGE_URL = ogImageUrl
+const PAGE_URL = `${siteUrl}/`
 
 // The one attribute the pre-paint script in `_document.tsx` sets, and the CSS hook both
 // compositions hang off. Its presence is the boolean: set when at least one unexpired recents

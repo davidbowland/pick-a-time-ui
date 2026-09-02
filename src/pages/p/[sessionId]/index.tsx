@@ -6,10 +6,13 @@ import React, { useEffect, useState } from 'react'
 import AppBar from '@components/app-bar'
 import Poll from '@components/poll'
 import PrivacyLink from '@components/privacy-link'
+import { ogImageUrl } from '@config/urls'
 
 const TITLE = "You're invited — Pick a Time"
 const DESCRIPTION = 'Mark the times that work for you and see where everybody overlaps. No account needed.'
-const OG_IMAGE_URL = `${process.env.NEXT_PUBLIC_ORIGIN}/og-image.png`
+// The production image, even from the test deploy. This page is `noindex`, so no canonical is
+// wanted here, but the unfurl on a shared invite should not advertise the test host.
+const OG_IMAGE_URL = ogImageUrl
 
 /**
  * The poll code, read from the address bar rather than from `router.query`.
