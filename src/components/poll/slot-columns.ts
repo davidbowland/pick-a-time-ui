@@ -62,6 +62,18 @@ export const BOOKED_CELL_FRAGMENT = 'bg-[var(--bone)]/16 text-[var(--slate)]'
 // is actually drawn on. `--ink` on `--accent` is 6.50:1.
 export const CONFLICT_CELL_FRAGMENT = 'bg-[var(--accent)] text-[var(--ink)]'
 
+// The two ORDINARY cell fills, named here for exactly the reason the two calendar fragments above
+// are: the key in painting/elements.tsx draws them as swatches, and a swatch that restated the
+// value would go on matching a grid that had since moved. They were inline in painting/grid.tsx
+// until the key started needing them, which is why booked-contrast.test.ts used to read that file
+// for the unpainted fill rather than import a constant — it imports this one now.
+//
+// Same two rules as the fragments above: exactly one `bg-*` on a cell, chosen in a ternary, and
+// never layered; and 0.10 is load-bearing, not a taste — booked sits at 0.16 and out-of-window at
+// 0.03, and the three have to stay distinguishable by eye in that order (AC-013/AC-014).
+export const FREE_CELL_FRAGMENT = 'bg-[var(--accent)]'
+export const UNMARKED_CELL_FRAGMENT = 'bg-[var(--bone)]/10'
+
 export function buildUnionColumns(rows: TimeWindow[][]): TimeWindow[] {
   const byKey = new Map<string, TimeWindow>()
   for (const row of rows) {

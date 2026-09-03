@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { CalendarStrip, CalendarStripProps, GridKey, StripReport, Toolbar } from './elements'
+import { CalendarStrip, CalendarStripProps, GridKey, PaintStatus, StripReport, Toolbar } from './elements'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -22,12 +22,19 @@ describe('Toolbar', () => {
 })
 
 describe('GridKey', () => {
-  // AC-035: an entry exists only while a cell on screen draws that treatment, and the key itself
-  // disappears when neither is drawn. A legend for something invisible is worse than no legend.
+  // The two ordinary fills are unconditional: green versus grey is the entire language of this
+  // grid, and a voter who never connects a calendar used to get no legend at all. AC-035 still
+  // holds for the two calendar treatments below them — those appear only while a cell draws them.
   const keyCases: [string, number, number, string[]][] = [
-    ['both treatments on screen', 2, 3, ['Booked on your calendar', 'Marked free, but booked']],
-    ['only unmarked booked squares', 2, 0, ['Booked on your calendar']],
-    ['only marked-and-booked squares', 0, 3, ['Marked free, but booked']],
+    [
+      'both calendar treatments on screen',
+      2,
+      3,
+      ['Free', 'Not free', 'Booked on your calendar', 'Marked free, but booked'],
+    ],
+    ['only unmarked booked squares', 2, 0, ['Free', 'Not free', 'Booked on your calendar']],
+    ['only marked-and-booked squares', 0, 3, ['Free', 'Not free', 'Marked free, but booked']],
+    ['no calendar layer at all', 0, 0, ['Free', 'Not free']],
   ]
 
   it.each(keyCases)('should list exactly the treatments drawn for %s', (_name, unmarked, marked, expected) => {
@@ -35,9 +42,16 @@ describe('GridKey', () => {
     expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(expected)
   })
 
-  it('should render no key at all when no cell draws either treatment', () => {
+  // The free/not-free pair is what a signed-out voter -- the majority of them -- has to read the
+  // grid by, so the key has to survive having no calendar to talk about.
+  it('should keep the key on screen when no cell draws a calendar treatment', () => {
     render(<GridKey markedBookedCount={0} unmarkedBookedCount={0} />)
-    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Key' })).toBeInTheDocument()
+  })
+
+  it('should draw the check on the free swatch', () => {
+    render(<GridKey markedBookedCount={0} unmarkedBookedCount={0} />)
+    expect(screen.getByTestId('key-free-check')).toBeInTheDocument()
   })
 
   it('should name the key for a screen reader', () => {
@@ -69,6 +83,76 @@ describe('GridKey', () => {
   it('should draw no marks for a treatment no cell is drawing', () => {
     render(<GridKey markedBookedCount={0} unmarkedBookedCount={2} />)
     expect(screen.queryByTestId('key-conflict-bar')).not.toBeInTheDocument()
+  })
+})
+
+describe('PaintStatus', () => {
+  const INSTRUCTION = "Click the times you're free. Drag across to mark several."
+
+  // The wrong verb here does not merely read as off-register: it names a gesture the reader's
+  // hardware cannot perform. Only the first word moves -- dragging is dragging on both.
+  it.each([
+    [true, "Tap the times you're free. Drag across to mark several."],
+    [false, "Click the times you're free. Drag across to mark several."],
+  ])('should name the gesture the pointer can actually make (coarse: %s)', (isCoarsePointer, expected) => {
+    render(<PaintStatus isCoarsePointer={isCoarsePointer} markedCount={0} saveState="idle" />)
+    expect(screen.getByText(expected)).toBeInTheDocument()
+  })
+
+  // The verb this screen never had. It stays on screen at every state, because a voter changing
+  // their mind needs it as much as one arriving at an empty grid.
+  it.each([
+    ['an empty grid', 0, 'idle' as const],
+    ['a grid already filled in', 8, 'idle' as const],
+    ['a save in flight', 3, 'saving' as const],
+    ['a save that landed', 3, 'saved' as const],
+  ])('should keep the instruction on screen for %s', (_name, markedCount, saveState) => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={markedCount} saveState={saveState} />)
+    expect(screen.getByText(INSTRUCTION)).toBeInTheDocument()
+  })
+
+  // Nothing has happened yet, so there is nothing to report. Saying "0 slots marked" to somebody
+  // who has not touched the grid reads as a failure rather than a starting point.
+  it('should report nothing before the voter has marked anything', () => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={0} saveState="idle" />)
+    expect(screen.getByTestId('paint-status').textContent).toBe('')
+  })
+
+  // The whole reason this exists: painting saves silently on a debounce and there is no Submit
+  // button, so without a receipt the voter's reasonable assumption -- that nothing has been sent
+  // -- is wrong and nothing on screen corrects it.
+  it.each([
+    [1, '1 slot marked. Saved.'],
+    [8, '8 slots marked. Saved.'],
+  ])('should report %i marked slots once the save lands', (markedCount, expected) => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={markedCount} saveState="saved" />)
+    expect(screen.getByTestId('paint-status').textContent).toBe(expected)
+  })
+
+  // Clearing the grid is a save like any other, and "0 slots marked" is a number where a state is
+  // what the voter wants confirmed.
+  it('should say a cleared grid is empty rather than count nothing', () => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={0} saveState="saved" />)
+    expect(screen.getByTestId('paint-status').textContent).toBe('Nothing marked. Saved.')
+  })
+
+  it('should say a save is in flight rather than claim it has landed', () => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={3} saveState="saving" />)
+    expect(screen.getByTestId('paint-status').textContent).toBe('Saving…')
+  })
+
+  // A voter returning to a poll they already answered gets the count without the claim: nothing
+  // was just saved, so nothing says it was.
+  it('should report what is already marked without claiming a save just happened', () => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={8} saveState="idle" />)
+    expect(screen.getByTestId('paint-status').textContent).toBe('8 slots marked.')
+  })
+
+  // Polite, never assertive: the report follows a gesture the voter just made, so interrupting
+  // them to read it back would be worse than letting it wait.
+  it('should announce the report through a live region', () => {
+    render(<PaintStatus isCoarsePointer={false} markedCount={2} saveState="saved" />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
   })
 })
 

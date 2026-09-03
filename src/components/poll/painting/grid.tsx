@@ -7,7 +7,9 @@ import {
   BOOKED_CELL_FRAGMENT,
   CONFLICT_CELL_FRAGMENT,
   DISABLED_CELL_CLASS,
+  FREE_CELL_FRAGMENT,
   TimeWindow,
+  UNMARKED_CELL_FRAGMENT,
   findCellForColumn,
   gridLayout,
   showsDateColumn,
@@ -102,19 +104,22 @@ function cellLabel(dateAriaLabel: string, slotAriaLabel: string | undefined, boo
 // paint whichever Tailwind happened to sort last, and would keep doing so consistently enough to
 // look deliberate. Nothing can assert this: reading the class back is the class-string assertion
 // CLAUDE.md bars, and jsdom resolves no stylesheets, so a cascade bug renders identically in every
-// test. Note too that booked-contrast.test.ts reads THIS FILE for the unpainted fill and now
-// demands exactly one match, so a second `--bone` utility anywhere here — a comment quoting the
-// utility included — fails that suite rather than this one.
+// test.
+//
+// All four fills are named constants in ../slot-columns, none inline here, because the grid is no
+// longer the only thing that draws them — the key in ./elements draws each one as a swatch, and a
+// legend that pointed at a fill the grid had stopped using would send the reader hunting for a
+// square that does not exist (AC-035).
 //
 // The two branch pairs are not symmetric on purpose. A conflict keeps the painted fill unchanged
-// (CONFLICT_CELL_FRAGMENT is `bg-[var(--accent)]` plus the marker's inherited color) because
+// (CONFLICT_CELL_FRAGMENT is FREE_CELL_FRAGMENT's fill plus the marker's inherited color) because
 // dimming it would say the participant's mark had been overruled by their calendar, which is the
 // behavior this feature exists to undo. The booked fill, by contrast, sits between the unpainted
 // and painted fills so it can never be mistaken for either, nor for the fainter dashed
 // out-of-window treatment (AC-013, AC-014); booked-contrast.test.ts holds that ordering.
 function cellFillClass(painted: boolean, booked: boolean): string {
   if (booked) return painted ? CONFLICT_CELL_FRAGMENT : BOOKED_CELL_FRAGMENT
-  return painted ? 'bg-[var(--accent)]' : 'bg-[var(--bone)]/10'
+  return painted ? FREE_CELL_FRAGMENT : UNMARKED_CELL_FRAGMENT
 }
 
 const PaintGrid = ({

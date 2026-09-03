@@ -163,6 +163,118 @@ describe('PaintingPhase', () => {
     expect(await screen.findByText('Each column is a 1-hour slot.')).toBeInTheDocument()
   })
 
+  // The jsdom matchMedia polyfill answers `matches: false` to everything, so the default render
+  // here is the fine-pointer one.
+  it('should tell the voter what to do with the grid', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText("Click the times you're free. Drag across to mark several.")).toBeInTheDocument()
+  })
+
+  // `(pointer: coarse)` decides the verb, so a phone is told to tap and a desktop to click -- the
+  // gesture each one can actually make.
+  it('should tell a touch voter to tap rather than click', async () => {
+    mockEmptyAvailability()
+    jest.mocked(window.matchMedia).mockReturnValueOnce({
+      addEventListener: jest.fn(),
+      matches: true,
+      media: '(pointer: coarse)',
+      removeEventListener: jest.fn(),
+    } as unknown as MediaQueryList)
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByText("Tap the times you're free. Drag across to mark several.")).toBeInTheDocument()
+  })
+
+  // Signed out there is no calendar layer, and the key used to render nothing at all in that case
+  // -- leaving the green-versus-grey language of the grid undefined for most voters.
+  it('should explain the two cell fills even with no calendar connected', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    expect(await screen.findByRole('list', { name: 'Key' })).toBeInTheDocument()
+    expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.getByText('Not free')).toBeInTheDocument()
+  })
+
+  // There is no Submit button because there is nothing to submit -- so the receipt is the only
+  // thing standing between the voter and the belief that their answers went nowhere.
+  it('should confirm the save once the painted cell reaches the server', async () => {
+    mockEmptyAvailability()
+    jest.mocked(patchAvailability).mockResolvedValueOnce({
+      userId: 'quiet-falcon',
+      free: [
+        [true, false, false],
+        [false, false, false],
+      ],
+      expiration: 1725453600,
+    })
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    await waitFor(() => expect(screen.getByTestId('paint-status').textContent).toBe('1 slot marked. Saved.'), {
+      timeout: 2000,
+    })
+  })
+
+  // A failed save already raises a message of its own. Claiming "Saved" beside it would be the one
+  // lie this line exists to prevent.
+  it('should not claim a save landed when the PATCH failed', async () => {
+    mockEmptyAvailability()
+    jest.mocked(patchAvailability).mockRejectedValueOnce(new Error('nope'))
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+    const cells = await screen.findAllByRole('button', { pressed: false })
+
+    act(() => {
+      cells[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      cells[0].dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    })
+
+    await screen.findByText("Couldn't save your availability. Please try again.", undefined, { timeout: 2000 })
+    expect(screen.getByTestId('paint-status').textContent).not.toContain('Saved')
+  })
+
+  // The grid is a capped-height scrollport, so a voter who has just finished painting is at the
+  // bottom of it with the tabs off screen above them. This is the way on.
+  it('should offer a way to the overlap when the caller has somewhere to send them', async () => {
+    mockEmptyAvailability()
+    const onSeeOverlap = jest.fn()
+
+    renderWithClient(
+      <PaintingPhase
+        isSignedIn={false}
+        onSeeOverlap={onSeeOverlap}
+        poll={poll}
+        sessionId="amber-harbor"
+        userId="quiet-falcon"
+      />,
+    )
+
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: "See everyone's overlap" }))
+    expect(onSeeOverlap).toHaveBeenCalledTimes(1)
+  })
+
+  it('should offer no such control when the caller has nowhere to send them', async () => {
+    mockEmptyAvailability()
+
+    renderWithClient(<PaintingPhase isSignedIn={false} poll={poll} sessionId="amber-harbor" userId="quiet-falcon" />)
+
+    await screen.findAllByRole('button', { pressed: false })
+    expect(screen.queryByRole('button', { name: "See everyone's overlap" })).not.toBeInTheDocument()
+  })
+
   it('should PATCH the painted cell on pointer up', async () => {
     mockEmptyAvailability()
     jest.mocked(patchAvailability).mockResolvedValueOnce({
@@ -1056,18 +1168,21 @@ describe('PaintingPhase', () => {
 
       await screen.findByRole('list', { name: 'Key' })
       expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Free',
+        'Not free',
         'Booked on your calendar',
         'Marked free, but booked',
       ])
     })
 
-    it('should render no key when the calendar has nothing on screen', async () => {
+    // The two ordinary fills stay: they are what the grid is read by, calendar or no calendar.
+    it('should list only the two ordinary fills when the calendar has nothing on screen', async () => {
       mockOwnerAvailability(NOTHING, NOTHING)
 
       renderSignedIn()
 
       await screen.findAllByRole('button', { pressed: false })
-      expect(screen.queryByRole('list', { name: 'Key' })).not.toBeInTheDocument()
+      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Free', 'Not free'])
     })
 
     it('should state what the check covers while the layer is drawn', async () => {
@@ -1128,7 +1243,7 @@ describe('PaintingPhase', () => {
 
       expect(await screen.findByText("We couldn't reach Google Calendar")).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /booked/ })).not.toBeInTheDocument()
-      expect(screen.queryByRole('list', { name: 'Key' })).not.toBeInTheDocument()
+      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Free', 'Not free'])
       expect(
         screen.queryByText('We only check your primary calendar, and only the dates in this poll.'),
       ).not.toBeInTheDocument()
@@ -1455,7 +1570,7 @@ describe('PaintingPhase', () => {
       expect(screen.queryByRole('button', { name: 'Clear this one' })).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
       // The treatment stays on the cell, so the key still has to explain it.
-      expect(screen.getByRole('listitem')).toHaveTextContent('Marked free, but booked')
+      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toContain('Marked free, but booked')
     })
 
     // AC-028's tail: the decision was about those slots, not about the calendar in general.

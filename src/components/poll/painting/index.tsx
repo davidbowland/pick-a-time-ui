@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useMemo, useRef, useState } from 'react'
 
 import { buildUnionColumns, dayOffsetLegendLine, gridContextLine, showsDateColumn } from '../slot-columns'
-import { CalendarStrip, GridKey, StripReport, Toolbar } from './elements'
+import { CalendarStrip, GridKey, PaintStatus, SaveState, StripReport, Toolbar } from './elements'
 import PaintGrid from './grid'
 import FeedbackMessage from '@components/feedback-message'
+import { Chip } from '@components/ui/chip'
+import { useCoarsePointer } from '@hooks/useCoarsePointer'
 import { useDebouncedAvailabilityCommit } from '@hooks/useDebouncedAvailabilityCommit'
 import {
   connectCalendar,
@@ -25,6 +27,13 @@ export interface PaintingPhaseProps {
   userId: string
   poll: PollData
   isSignedIn: boolean
+  /**
+   * Switches the poll to the overlap tab. OPTIONAL, and the absence is the mechanism: the grid is
+   * a capped-height scrollport, so a voter who has just finished painting sits at the bottom of it
+   * with the tabs off screen above them, and this is the way on. A caller with no tabs to switch
+   * hands none, and the control is simply not offered rather than pointing nowhere.
+   */
+  onSeeOverlap?: () => void
   // Injectable so a test can assert the OAuth hand-off instead of forcing a real navigation.
   redirectTo?: (url: string) => void
   // Injectable for the same reason the strip takes one: "Checked 2 minutes ago" is computed from a
@@ -136,13 +145,21 @@ const PaintingPhase = ({
   userId,
   poll,
   isSignedIn,
+  onSeeOverlap,
   redirectTo = assignLocation,
   now = Date.now,
 }: PaintingPhaseProps): React.ReactNode => {
   const queryClient = useQueryClient()
   const viewerTimezone = useMemo(() => detectViewerTimezone(), [])
+  // Read here rather than in ./elements for the same reason the timezone is: this phase owns the
+  // facts about the reader, and the elements beneath it stay presentational.
+  const isCoarsePointer = useCoarsePointer()
   const queryKey = ['availability', sessionId, userId]
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
+  // Starts `idle`, never `saved`: on arrival nothing has been saved *this visit*, and a grid that
+  // greeted a returning voter with "Saved." would be claiming credit for a round trip that has not
+  // happened. The count alone is the honest thing to say then.
+  const [saveState, setSaveState] = useState<SaveState>('idle')
 
   // Signed in, this goes through the authenticated route — the only one in the API that serves a
   // busy layer, and only to the participant it belongs to. It falls back to the open read on a
@@ -188,11 +205,21 @@ const PaintingPhase = ({
       // Server response wins over the optimistic guess if the two ever disagree — but only when
       // nothing newer has been painted since; otherwise the still-pending batch owns the cache
       // and its own PATCH response will reconcile with the server.
-      if (editCountRef.current === editCountAtFlush) mergeCachedRecord(updated)
+      // The receipt rides the same guard for the same reason: newer paints are still in flight, so
+      // announcing "Saved" on a stale response would credit a save that has not covered them yet.
+      if (editCountRef.current === editCountAtFlush) {
+        mergeCachedRecord(updated)
+        setSaveState('saved')
+      }
     } catch (err) {
       // Only `free` is rolled back. The snapshot may predate a check that has since landed, and
       // reverting somebody's calendar to what it said a second ago is not what a failed save means.
-      if (editCountRef.current === editCountAtFlush) mergeCachedRecord({ free: previous.free })
+      // Back to `idle`, never `saved`: the message below says what happened, and a "Saved." beside
+      // it would be the one lie this line exists to prevent.
+      if (editCountRef.current === editCountAtFlush) {
+        mergeCachedRecord({ free: previous.free })
+        setSaveState('idle')
+      }
       // A refusal is not a flaky connection, and "try again" would be a lie: every later paint on
       // this participant is refused too. Only the authenticated route can answer 403, so this is
       // reachable only while signed in.
@@ -278,6 +305,9 @@ const PaintingPhase = ({
 
     if (!batchStartRef.current) batchStartRef.current = previous
     editCountRef.current += 1
+    // Every route into the grid comes through here — a tap, a drag, Select all, Clear all, the
+    // calendar fill, resolving a conflict — so the receipt cannot fall out of step with the paint.
+    setSaveState('saving')
     // A slot the participant just committed by hand is a fresh decision about that slot, so any
     // earlier "keep it as it is" for it stops applying — repaint a cleared conflict and the strip
     // asks again, which is what AC-028 means by a newly created one.
@@ -428,6 +458,10 @@ const PaintingPhase = ({
           status={calendarStatus}
         />
       )}
+      {/* Above the toolbar, deliberately. Select all and Clear all are shortcuts for a job the
+          reader has not been told about yet; the instruction has to come before the shortcuts for
+          doing it, or the first thing on the screen is a bulk action over an unexplained grid. */}
+      <PaintStatus isCoarsePointer={isCoarsePointer} markedCount={survey.markedCount} saveState={saveState} />
       <Toolbar
         onClear={() => handleCommit(allCells(poll.slots, false))}
         onSelectAll={() => handleCommit(allCells(poll.slots, true))}
@@ -455,6 +489,14 @@ const PaintingPhase = ({
         slotLabels={slotLabels}
         slots={poll.slots}
       />
+      {/* Not a Submit button wearing a different hat: it saves nothing, because there is nothing
+          left to save by the time anyone reaches it. It answers the question the screen used to
+          leave hanging — what happens now — by going to the one place that answers it. */}
+      {onSeeOverlap && (
+        <div className="flex">
+          <Chip onPress={onSeeOverlap}>See everyone&apos;s overlap</Chip>
+        </div>
+      )}
       <FeedbackMessage message={errorMessage} onClose={() => setErrorMessage(undefined)} severity="error" />
     </div>
   )

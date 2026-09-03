@@ -211,8 +211,8 @@ describe('Poll', () => {
     renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
-    const paintingTab = screen.getByRole('tab', { name: 'Your hours' })
-    const resultsTab = screen.getByRole('tab', { name: 'The overlap' })
+    const paintingTab = screen.getByRole('tab', { name: 'Mark your times' })
+    const resultsTab = screen.getByRole('tab', { name: "Everyone's overlap" })
     expect(paintingTab).toHaveAttribute('aria-selected', 'true')
     expect(resultsTab).toHaveAttribute('aria-selected', 'false')
     // The Share component is genuinely reachable in the active phase, once a real userId is
@@ -300,7 +300,7 @@ describe('Poll', () => {
       renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
       await waitFor(() => expect(claimUser).toHaveBeenCalledTimes(1))
-      await userEvent.click(await screen.findByRole('tab', { name: 'The overlap' }))
+      await userEvent.click(await screen.findByRole('tab', { name: "Everyone's overlap" }))
       await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
       expect(claimUser).toHaveBeenCalledTimes(1)
     })
@@ -332,7 +332,7 @@ describe('Poll', () => {
           'Quiet Falcon belongs to a different Google account. Pick your own name, or join as somebody new.',
         ),
       ).toBeInTheDocument()
-      expect(screen.queryByRole('tab', { name: 'Your hours' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Mark your times' })).not.toBeInTheDocument()
     })
 
     it('should not put the person back into a refused participant when they pick it again', async () => {
@@ -346,7 +346,7 @@ describe('Poll', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
       expect(await screen.findByText('Who are you on this poll?')).toBeInTheDocument()
-      expect(screen.queryByRole('tab', { name: 'Your hours' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Mark your times' })).not.toBeInTheDocument()
       // No second attempt at a participant already known to belong to somebody else.
       expect(claimUser).toHaveBeenCalledTimes(1)
     })
@@ -393,7 +393,7 @@ describe('Poll', () => {
     expect(fetchPoll).toHaveBeenCalledTimes(1)
     expect(fetchUsers).toHaveBeenCalledTimes(1)
 
-    await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
+    await userEvent.click(screen.getByRole('tab', { name: "Everyone's overlap" }))
 
     await waitFor(() => expect(fetchPoll).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
@@ -442,7 +442,7 @@ describe('Poll', () => {
     renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
     expect(await screen.findByText('Lunch with friends')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
+    await userEvent.click(screen.getByRole('tab', { name: "Everyone's overlap" }))
 
     // "1 of 2 free": the roster fetched two users, and the participant total honors the roster
     // over this fixture's (stale) participantCount of 1.
@@ -537,9 +537,9 @@ describe('Poll', () => {
 
     // The phase machine actually advances past `identity` into `active` — painting/results
     // tabs appear, which is the concrete, observable proof this is no longer stuck.
-    expect(await screen.findByRole('tab', { name: 'Your hours' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'The overlap' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Your hours' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: 'Mark your times' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: "Everyone's overlap" })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Mark your times' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('shows the first-visit intro above the identity step and hides it once dismissed', async () => {
@@ -581,7 +581,7 @@ describe('Poll', () => {
 
     renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor-onboarding-toggle" />)
 
-    await screen.findByRole('tab', { name: 'Your hours' })
+    await screen.findByRole('tab', { name: 'Mark your times' })
 
     expect(screen.queryByRole('button', { name: /what is this/i })).not.toBeInTheDocument()
   })
@@ -667,10 +667,10 @@ describe('Poll', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: /quiet falcon/i })).toHaveFocus())
   })
 
-  it('resets to the "Your hours" tab after switching to a different user', async () => {
+  it('resets to the "Mark your times" tab after switching to a different user', async () => {
     // The tab state lives in the Poll component and survives the "This isn't me" -> identity ->
     // re-join round trip, so without an explicit reset a switched user inherits the previous
-    // voter's "The overlap" tab instead of starting on their own hours.
+    // voter's "Everyone's overlap" tab instead of starting on their own hours.
     window.history.replaceState(null, '', '/')
     const otherUser: User = { userId: 'bold-otter', name: 'Bold Otter' }
     // Unlike the closure-variable mocks above, this flow needs the cookie hook to be genuinely
@@ -699,15 +699,15 @@ describe('Poll', () => {
 
     renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
 
-    await userEvent.click(await screen.findByRole('tab', { name: 'The overlap' }))
-    expect(screen.getByRole('tab', { name: 'The overlap' })).toHaveAttribute('aria-selected', 'true')
+    await userEvent.click(await screen.findByRole('tab', { name: "Everyone's overlap" }))
+    expect(screen.getByRole('tab', { name: "Everyone's overlap" })).toHaveAttribute('aria-selected', 'true')
 
     await userEvent.click(screen.getByRole('button', { name: "This isn't me" }))
     await userEvent.click(await screen.findByRole('radio', { name: /bold otter/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
-    expect(await screen.findByRole('tab', { name: 'Your hours' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'The overlap' })).toHaveAttribute('aria-selected', 'false')
+    expect(await screen.findByRole('tab', { name: 'Mark your times' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: "Everyone's overlap" })).toHaveAttribute('aria-selected', 'false')
   })
 
   it('falls back to the identity phase when "This isn\'t me" is clicked after being identified via a ?id= link', async () => {
@@ -807,7 +807,7 @@ describe('Poll', () => {
 
       await waitFor(() => expect(storedPolls(storage)).toHaveLength(1))
       // Opening the overlap tab invalidates and refetches both the poll and the users.
-      await userEvent.click(screen.getByRole('tab', { name: 'The overlap' }))
+      await userEvent.click(screen.getByRole('tab', { name: "Everyone's overlap" }))
       await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2))
 
       expect(storage.setItem).toHaveBeenCalledTimes(1)

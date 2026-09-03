@@ -191,8 +191,8 @@ const MockTabs = ({ active }: { active: 'painting' | 'results' }): React.ReactNo
     `rounded-full px-3.5 py-1.5 text-xs font-bold ${isActive ? 'bg-[var(--accent)] text-[var(--ink)]' : 'text-[var(--slate-on-light)]'}`
   return (
     <div className="inline-flex w-fit gap-1 rounded-full bg-black/5 p-1">
-      <span className={tabClass(active === 'painting')}>Your hours</span>
-      <span className={tabClass(active === 'results')}>The overlap</span>
+      <span className={tabClass(active === 'painting')}>Mark your times</span>
+      <span className={tabClass(active === 'results')}>Everyone&apos;s overlap</span>
     </div>
   )
 }

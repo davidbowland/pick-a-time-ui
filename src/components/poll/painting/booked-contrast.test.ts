@@ -1,7 +1,12 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-import { BOOKED_CELL_FRAGMENT, CONFLICT_CELL_FRAGMENT, DISABLED_CELL_CLASS } from '../slot-columns'
+import {
+  BOOKED_CELL_FRAGMENT,
+  CONFLICT_CELL_FRAGMENT,
+  DISABLED_CELL_CLASS,
+  UNMARKED_CELL_FRAGMENT,
+} from '../slot-columns'
 import { contrastRatio } from '@utils/contrast'
 
 // Same shape as poll/identity/radio-contrast.test.ts and share/border-contrast.test.ts: this repo
@@ -79,23 +84,12 @@ const CONFLICT_FILL = paintedColor(CONFLICT_CELL_FRAGMENT, 'bg', PAGE)
 const BOOKED_GLYPH = paintedColor(BOOKED_CELL_FRAGMENT, 'text', BOOKED_FILL)
 const CONFLICT_MARKER = paintedColor(CONFLICT_CELL_FRAGMENT, 'text', CONFLICT_FILL)
 
-// The fill PaintGrid gives an unpainted, unbooked cell, read from the grid rather than restated:
-// AC-014 is a comparison against that specific value, and a copy of it here would keep passing
-// after the grid's own fill changed.
-const unpaintedAlpha = (): number => {
-  const source = readFileSync(join(process.cwd(), 'src/components/poll/painting/grid.tsx'), 'utf-8')
-  const matches = [...source.matchAll(/bg-\[var\(--bone\)\]\/\[?([\d.]+)\]?/g)].map((match) => Number(match[1]))
-  // Throwing beats degrading: a missed match used to become NaN, which composites to `#NaNNaNNaN`
-  // and fails as a wrong-color comparison rather than as the missing-source-line it really is.
-  // More than one match is equally fatal — the second could be the booked fill, and silently
-  // measuring against that would make the ordering assertion below compare a value with itself.
-  if (matches.length !== 1) {
-    throw new Error(`expected exactly one --bone fill in grid.tsx, found ${matches.length}`)
-  }
-  return matches[0] > 1 ? matches[0] / 100 : matches[0]
-}
-
-const UNPAINTED_FILL = over(readCssVar(cssTokens, 'bone'), unpaintedAlpha(), PAGE)
+// The fill PaintGrid gives an unpainted, unbooked cell. AC-014 is a comparison against that
+// specific value, so it is read from the constant the grid actually renders rather than restated
+// here — a copy would keep passing after the grid's own fill changed. This used to scrape
+// grid.tsx for the one `--bone` utility in it, because the value was inline there; it is a named
+// export now (the key draws it too), so the import does the same job without the file read.
+const UNPAINTED_FILL = paintedColor(UNMARKED_CELL_FRAGMENT, 'bg', PAGE)
 
 const NON_TEXT_MINIMUM = 3
 

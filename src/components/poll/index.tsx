@@ -227,7 +227,7 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
   // machine stays stuck on `identity` forever. Invalidating forces a refetch that picks it up.
   const handleUserSelected = (newUserId: string): void => {
     setUserId(newUserId)
-    // The previous voter's tab choice (e.g. "The overlap") must not carry over to whoever
+    // The previous voter's tab choice (e.g. "Everyone's overlap") must not carry over to whoever
     // joins next — every newly selected user starts on their own hours.
     setTab('painting')
     void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
@@ -235,6 +235,17 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
     // against — left stale at its pre-join value, the results phase pairs it with a fresher
     // overlap and shows more people free than it says exist.
     void queryClient.invalidateQueries({ queryKey: ['poll', sessionId] })
+  }
+
+  // Both the overlap tab and the link at the foot of the grid come through here. The invalidations
+  // are the reason it is one function: the overlap query refetches on its own when ResultsPhase
+  // mounts, but the participant count (poll) and roster (users) it renders against live on these
+  // two queries — left stale while others join, the fresher overlap disagrees with them ("2 of 1
+  // free"). A second entrance that forgot them would show that only sometimes.
+  const showResults = (): void => {
+    setTab('results')
+    void queryClient.invalidateQueries({ queryKey: ['poll', sessionId] })
+    void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
   }
 
   const handleNotYou = (): void => {
@@ -355,23 +366,20 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
                 onClick={() => setTab('painting')}
                 role="tab"
               >
-                Your hours
+                {/* Says what the tab is FOR, not what it contains. "Your hours" reads as hours you
+                    own; this is the only instruction some voters get before they look down at a
+                    wall of rectangles. */}
+                Mark your times
               </button>
               <button
                 aria-selected={tab === 'results'}
                 className={`${TAB_BASE_CLASS} ${tabSkinFor(tab === 'results')}`}
-                onClick={() => {
-                  setTab('results')
-                  // The overlap query refetches on its own when ResultsPhase remounts, but the
-                  // participant count (poll) and roster (users) it renders against live on these
-                  // two queries — left stale while others join, the fresher overlap disagrees
-                  // with them ("2 of 1 free").
-                  void queryClient.invalidateQueries({ queryKey: ['poll', sessionId] })
-                  void queryClient.invalidateQueries({ queryKey: ['users', sessionId] })
-                }}
+                onClick={showResults}
                 role="tab"
               >
-                The overlap
+                {/* "The overlap" used a definite article for a thing nobody has been introduced to.
+                    Naming the people whose overlap it is makes the noun concrete. */}
+                Everyone&apos;s overlap
               </button>
             </div>
             {currentUser && (
@@ -387,6 +395,7 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
           {tab === 'painting' ? (
             <PaintingPhase
               isSignedIn={isSignedIn}
+              onSeeOverlap={showResults}
               poll={poll}
               sessionId={sessionId}
               userId={effectiveUserId as string}

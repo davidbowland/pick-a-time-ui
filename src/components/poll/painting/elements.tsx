@@ -1,7 +1,12 @@
 import { CalendarClock, Check } from 'lucide-react'
 import React from 'react'
 
-import { BOOKED_CELL_FRAGMENT, CONFLICT_CELL_FRAGMENT } from '../slot-columns'
+import {
+  BOOKED_CELL_FRAGMENT,
+  CONFLICT_CELL_FRAGMENT,
+  FREE_CELL_FRAGMENT,
+  UNMARKED_CELL_FRAGMENT,
+} from '../slot-columns'
 import { Chip } from '@components/ui/chip'
 import { CalendarStatus, DateWindow } from '@types'
 import { formatCheckedAgo, formatShortDate } from '@utils/dates'
@@ -27,14 +32,23 @@ export const Toolbar = ({
 // find, which is the failure AC-035 is about. `relative` so the bar can be positioned inside.
 const KEY_SWATCH_FRAGMENT = 'relative flex h-4 w-4 shrink-0 items-center justify-center rounded'
 
+const slots = (count: number): string => `${count} ${count === 1 ? 'slot' : 'slots'}`
+
 /**
- * The legend for the two calendar treatments, rendered only for what is actually on screen.
+ * The legend for every treatment the grid is drawing.
  *
- * Both counts are of cells the grid is drawing *right now*, not of anything the calendar reported:
- * a key entry for a treatment nobody can see is worse than no key at all, because it sends the
- * reader hunting for a square that does not exist (AC-035). The marked-and-booked count is
- * therefore every conflicting cell drawn, including ones the participant chose to keep — those
- * cells still carry the treatment, so the key still has to explain it.
+ * Two tiers, and they follow different rules on purpose.
+ *
+ * The free / not-free pair is UNCONDITIONAL. Green versus grey is the whole language of this
+ * screen, and the key used to render `null` for anyone with no calendar layer — which is every
+ * signed-out voter, the majority of them. They met a wall of rectangles with nothing anywhere
+ * saying what either colour meant.
+ *
+ * The two calendar entries keep AC-035: an entry exists only while a cell on screen actually
+ * draws that treatment, because a legend for something invisible sends the reader hunting for a
+ * square that does not exist. Both counts are therefore of cells drawn *right now*, not of
+ * anything the calendar reported. The marked-and-booked count includes conflicts the participant
+ * chose to keep — those cells still carry the treatment, so the key still has to explain it.
  */
 export const GridKey = ({
   unmarkedBookedCount,
@@ -43,10 +57,26 @@ export const GridKey = ({
   unmarkedBookedCount: number
   markedBookedCount: number
 }): React.ReactNode => {
-  if (unmarkedBookedCount === 0 && markedBookedCount === 0) return null
-
   return (
-    <ul aria-label="Key" className="flex flex-wrap items-center gap-3 text-[10px] text-[var(--slate)]">
+    // text-xs, not the [10px] this key used to be: it is no longer a footnote about a calendar
+    // feature but the first thing a voter needs in order to read the grid at all.
+    <ul aria-label="Key" className="flex flex-wrap items-center gap-3 text-xs text-[var(--slate)]">
+      <li className="flex items-center gap-1">
+        <span aria-hidden="true" className={`${KEY_SWATCH_FRAGMENT} ${FREE_CELL_FRAGMENT}`}>
+          {/* The same Check the cell draws, at the same proportions. The fill alone cannot carry
+              this entry: `--accent` and the unpainted `--bone`/10 differ by colour, and WCAG 1.4.1
+              does not let colour be the only channel. */}
+          <Check className="h-2.5 w-2.5 text-[var(--ink)]/70" data-testid="key-free-check" />
+        </span>
+        Free
+      </li>
+      <li className="flex items-center gap-1">
+        {/* No glyph, because the cell has none. A swatch that invented one would describe a square
+            nobody can find — the same failure AC-035 names, in the other direction. The absence of
+            a mark IS the state, and the label is what says so. */}
+        <span aria-hidden="true" className={`${KEY_SWATCH_FRAGMENT} ${UNMARKED_CELL_FRAGMENT}`} />
+        Not free
+      </li>
       {unmarkedBookedCount > 0 && (
         <li className="flex items-center gap-1">
           <span aria-hidden="true" className={`${KEY_SWATCH_FRAGMENT} ${BOOKED_CELL_FRAGMENT}`}>
@@ -75,6 +105,74 @@ export const GridKey = ({
       )}
     </ul>
   )
+}
+
+/**
+ * Where a batch of paints has got to. Not derived from anything on screen: the grid updates
+ * optimistically the instant a gesture ends, so what it shows is a guess until the debounced PATCH
+ * lands, and this is the only thing that can tell the two apart.
+ */
+export type SaveState = 'idle' | 'saving' | 'saved'
+
+// The verb this screen never had. Imperative, and it names the gestures rather than the
+// abstraction over them: "mark your availability" is a nominalization that tells nobody where to
+// put their finger.
+//
+// Tap or click is settled by `(pointer: coarse)` rather than by picking the likelier device,
+// because this is one of the few strings where the wrong word is not merely off-register — it
+// names a gesture the reader's hardware cannot perform. "Drag across" is right either way, so only
+// the first verb moves. There is no hydration hazard in reading a media query this early: the whole
+// phase returns null until its availability query resolves, so nothing here is ever in the
+// prerendered HTML to disagree with.
+const paintInstruction = (isCoarsePointer: boolean): string =>
+  `${isCoarsePointer ? 'Tap' : 'Click'} the times you're free. Drag across to mark several.`
+
+/**
+ * What the voter has marked, and whether it has reached the server.
+ *
+ * There is no Submit button on this screen because there is nothing to submit — painting saves
+ * itself on a 1250ms debounce. That is the right behaviour and the wrong silence: with no receipt,
+ * the reasonable assumption ("I haven't sent this yet") is simply wrong, and nothing corrected it.
+ *
+ * Two nodes, not one. The instruction is static so a screen reader meets it in ordinary reading
+ * order, and the report is a live region that mounts EMPTY and gains its text later — a region
+ * populated at mount is routinely announced by nothing at all. `role="status"` is polite by
+ * definition, which is right for a line that follows a gesture the voter just made: interrupting
+ * them to read their own action back would be worse than letting it wait.
+ *
+ * One announcement per gesture, not per cell: `handleCommit` in ./index batches a whole drag into
+ * a single call, so a stroke across eight cells moves this once.
+ */
+export const PaintStatus = ({
+  isCoarsePointer,
+  markedCount,
+  saveState,
+}: {
+  // Which verb the instruction uses. A prop rather than a `useCoarsePointer()` call in here,
+  // because everything else in this file is presentational and takes its facts from the phase that
+  // owns them -- and a hook would put a media query behind every test of this copy.
+  isCoarsePointer: boolean
+  markedCount: number
+  saveState: SaveState
+}): React.ReactNode => (
+  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+    <p className="text-[var(--slate)]">{paintInstruction(isCoarsePointer)}</p>
+    <p className="font-semibold text-[var(--bone)]" data-testid="paint-status" role="status">
+      {paintReport(markedCount, saveState)}
+    </p>
+  </div>
+)
+
+function paintReport(markedCount: number, saveState: SaveState): string {
+  if (saveState === 'saving') return 'Saving…'
+  // A cleared grid is a state the voter chose, not a count of nothing: "0 slots marked" reads as a
+  // failure to do the thing they had just deliberately done.
+  const tally = markedCount === 0 ? 'Nothing marked' : `${slots(markedCount)} marked`
+  if (saveState === 'saved') return `${tally}. Saved.`
+  // Idle with marks is the returning voter: the grid they painted last week is still theirs, and
+  // saying so is the whole answer to "did any of this stick?". Idle with none is somebody who has
+  // touched nothing yet — there is nothing to report, and a bare `0` would read as a problem.
+  return markedCount === 0 ? '' : `${tally}.`
 }
 
 /**
@@ -135,8 +233,6 @@ export interface CalendarStripProps {
 
 const CONNECTED_TITLE = 'Google Calendar connected'
 const FILL_LABEL = "Fill in what's free"
-
-const slots = (count: number): string => `${count} ${count === 1 ? 'slot' : 'slots'}`
 
 // `Aug 12–25` within one month, `Aug 12–Sep 2` across two. The month is compared on the ISO
 // prefix rather than on the rendered label so a window a year long cannot collapse to a range
