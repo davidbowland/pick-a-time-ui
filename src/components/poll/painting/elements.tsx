@@ -233,6 +233,44 @@ export interface CalendarStripProps {
 
 const CONNECTED_TITLE = 'Google Calendar connected'
 const FILL_LABEL = "Fill in what's free"
+const START_TITLE = 'Start from your calendar'
+// freeBusy reports only events marked Busy, and Google creates all-day events as Free, so a
+// vacation is invisible to the check. Said wherever the fill is the lead, because that is where a
+// person is most likely to take the fill's answer as complete.
+const ALL_DAY_LINE = "We can't see most all-day events, like vacations."
+
+/**
+ * An empty grid with a calendar behind it, where the fill is the whole of the next step.
+ *
+ * Deliberately not an automatic fill: a slot the calendar leaves clear is not a slot the person is
+ * free (the all-day blind spot above), and marking free is a claim other people schedule around.
+ * So the strip leads with the one tap instead of taking it. Every other state outranks this one --
+ * a check in flight, a report of what just happened, a conflict to resolve -- and it applies only
+ * where there is a layer to have consulted and something left to fill.
+ */
+const startsFromCalendar = (props: CalendarStripProps): boolean =>
+  props.status === 'connected' &&
+  props.hasBusyLayer &&
+  props.markedCount === 0 &&
+  props.fillableCount > 0 &&
+  props.conflictCount === 0 &&
+  !props.report &&
+  !props.isChecking &&
+  !props.isConnecting
+
+const startDetail = (bookedCount: number, fillableCount: number, busyWindow?: DateWindow | null): string => {
+  const unmark = "then unmark any days you're away."
+  if (bookedCount === 0) {
+    const target = fillableCount === 1 ? 'the slot' : `all ${slots(fillableCount)}`
+    // Names only the dates actually inspected, for the same reason the at-rest copy does: "nothing
+    // booked during this poll" would vouch for any part of the poll the check never read.
+    const clear = busyWindow ? `Your calendar shows nothing booked ${formatWindowRange(busyWindow)}. ` : ''
+    return `${clear}Mark ${target} free, ${unmark} ${ALL_DAY_LINE}`
+  }
+  const booked = `${bookedCount} booked ${bookedCount === 1 ? 'slot' : 'slots'}`
+  const target = fillableCount === 1 ? 'slot' : `${fillableCount}`
+  return `Your calendar shows ${booked}. Mark the other ${target} free, ${unmark} ${ALL_DAY_LINE}`
+}
 
 // `Aug 12–25` within one month, `Aug 12–Sep 2` across two. The month is compared on the ISO
 // prefix rather than on the rendered label so a window a year long cannot collapse to a range
@@ -276,12 +314,10 @@ const restDetail = (props: CalendarStripProps, checked: string): string => {
     if (window) return `Checked ${checked} · nothing booked on your primary calendar, ${formatWindowRange(window)}`
     return `Checked ${checked}`
   }
-  if (props.hasBusyLayer && props.markedCount === 0) {
-    // A grid where every slot is booked has no fill control, so promising a tap that marks the rest
-    // free would point at something that is not on screen.
-    if (props.fillableCount === 0) return 'Nothing left to fill. Nothing on your grid changed.'
-    return "The grid shows where your calendar says you're booked. One tap marks everything else free."
-  }
+  // A grid where every slot is booked has no fill control, so promising a tap that marks the rest
+  // free would point at something that is not on screen. With anything left to fill, an empty grid
+  // is `startsFromCalendar` and never reaches here.
+  if (props.hasBusyLayer && props.markedCount === 0) return 'Nothing left to fill. Nothing on your grid changed.'
   if (props.hasBusyLayer) return 'Nothing you marked is booked on your calendar.'
   return `Checked ${checked}`
 }
@@ -294,6 +330,10 @@ const contentFor = (props: CalendarStripProps): { title: React.ReactNode; detail
 
   if (isConnecting) {
     return { detail: 'Connecting to Google Calendar…', title: null }
+  }
+
+  if (startsFromCalendar(props)) {
+    return { detail: startDetail(props.bookedCount, props.fillableCount, props.busyWindow), title: START_TITLE }
   }
 
   if (isChecking) {
@@ -370,6 +410,18 @@ const actionsFor = (props: CalendarStripProps): React.ReactNode => {
   // ends by itself, so nothing is stranded by its leaving the tab order.
   if (isConnecting) {
     return <Chip disabled>Connecting…</Chip>
+  }
+
+  // The count on the control itself, so the tap says exactly what it will do before it does it.
+  if (startsFromCalendar(props)) {
+    return (
+      <>
+        <Chip onPress={onFill} primary>
+          {`Mark ${slots(fillableCount)} free`}
+        </Chip>
+        <Chip onPress={onCheckAgain}>Check again</Chip>
+      </>
+    )
   }
 
   // aria-disabled, never disabled: both of these can persist, and a keyboard user tabbed past a
@@ -461,12 +513,17 @@ const actionsFor = (props: CalendarStripProps): React.ReactNode => {
 // of its state and this renders identically under test without a query client.
 export const CalendarStrip = (props: CalendarStripProps): React.ReactNode => {
   const { title, detail } = contentFor(props)
+  // The accent marks the strip as the next step only while it is one. Emphasis, not meaning: the
+  // title and the counted control say the same thing in words.
+  const shellSkin = startsFromCalendar(props)
+    ? 'border-[var(--accent)]/60 bg-[var(--accent)]/[0.08]'
+    : 'border-[var(--hair)] bg-[var(--bone)]/[0.05]'
 
   // One shell for every state so the live region below is the same DOM node across transitions.
   // A live region that is unmounted and remounted with new text is frequently not announced --
   // the region has to already exist for a screen reader to notice its content change (AC-036).
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--hair)] bg-[var(--bone)]/[0.05] px-3 py-2.5">
+    <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${shellSkin}`}>
       <div className="flex min-w-0 flex-col gap-0.5">
         {title === null ? null : <p className="text-[13px] font-semibold text-[var(--bone)]">{title}</p>}
         {/* Live: this line is the only account of what the calendar found, what the fill did, and

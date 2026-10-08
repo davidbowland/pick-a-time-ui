@@ -279,11 +279,6 @@ describe('CalendarStrip', () => {
     // most likely to make a claim it cannot support.
     const restCases: [string, Partial<CalendarStripProps>, string][] = [
       [
-        'nothing marked yet, with booked time on screen',
-        { bookedCount: 3, markedCount: 0 },
-        "The grid shows where your calendar says you're booked. One tap marks everything else free.",
-      ],
-      [
         'a grid where every slot is booked, and so has no fill control to point at',
         { bookedCount: 6, fillableCount: 0, markedCount: 0 },
         'Nothing left to fill. Nothing on your grid changed.',
@@ -364,6 +359,93 @@ describe('CalendarStrip', () => {
     it('should never offer disconnect, which is account-wide', () => {
       render(<CalendarStrip {...base} />)
       expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeInTheDocument()
+    })
+  })
+
+  // An empty grid with a calendar behind it: the fill is the whole of the next step, so the strip
+  // leads with it instead of offering it beside Check again.
+  describe('connected, nothing marked yet', () => {
+    const start: Partial<CalendarStripProps> = { fillableCount: 5, markedCount: 0 }
+
+    it('should lead with starting from the calendar', () => {
+      render(<CalendarStrip {...base} {...start} />)
+      expect(screen.getByText('Start from your calendar')).toBeInTheDocument()
+      expect(screen.queryByText('Google Calendar connected')).not.toBeInTheDocument()
+    })
+
+    const ALL_DAY = "We can't see most all-day events, like vacations."
+    const startCases: [string, Partial<CalendarStripProps>, string][] = [
+      [
+        'some slots booked',
+        { bookedCount: 3, fillableCount: 5 },
+        `Your calendar shows 3 booked slots. Mark the other 5 free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+      [
+        'one slot booked',
+        { bookedCount: 1, fillableCount: 5 },
+        `Your calendar shows 1 booked slot. Mark the other 5 free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+      [
+        'one slot left unbooked',
+        { bookedCount: 3, fillableCount: 1 },
+        `Your calendar shows 3 booked slots. Mark the other slot free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+      [
+        'nothing booked',
+        { bookedCount: 0, fillableCount: 6 },
+        `Your calendar shows nothing booked Aug 12–25. Mark all 6 slots free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+      [
+        'nothing booked, one slot in the poll',
+        { bookedCount: 0, fillableCount: 1 },
+        `Your calendar shows nothing booked Aug 12–25. Mark the slot free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+      // No window to name means no claim about what the calendar shows -- only what the tap does.
+      [
+        'nothing booked and no window to name',
+        { bookedCount: 0, busyWindow: null, fillableCount: 6 },
+        `Mark all 6 slots free, then unmark any days you're away. ${ALL_DAY}`,
+      ],
+    ]
+
+    it.each(startCases)('should say what one tap does with %s', (_name, overrides, expected) => {
+      render(<CalendarStrip {...base} {...start} {...overrides} />)
+      expect(liveText()).toBe(expected)
+    })
+
+    it('should name the count on the fill', async () => {
+      const onFill = jest.fn()
+      render(<CalendarStrip {...base} {...start} onFill={onFill} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Mark 5 slots free' }))
+      expect(onFill).toHaveBeenCalledTimes(1)
+    })
+
+    it('should use the singular for one slot', () => {
+      render(<CalendarStrip {...base} {...start} fillableCount={1} />)
+      expect(screen.getByRole('button', { name: 'Mark 1 slot free' })).toBeInTheDocument()
+    })
+
+    it('should keep Check again beside it', () => {
+      render(<CalendarStrip {...base} {...start} />)
+      expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument()
+    })
+
+    it('should claim no automatic marking', () => {
+      render(<CalendarStrip {...base} {...start} />)
+      expect(screen.queryByText(/automatically/i)).not.toBeInTheDocument()
+    })
+
+    // The ordinary connected copy takes over the moment there is nothing to start from.
+    const notStartCases: [string, Partial<CalendarStripProps>][] = [
+      ['every slot booked', { fillableCount: 0 }],
+      ['no busy layer', { hasBusyLayer: false }],
+      ['a report to give', { report: { kind: 'unchanged' } }],
+      ['a check running', { isChecking: true }],
+    ]
+
+    it.each(notStartCases)('should not lead with the fill given %s', (_name, overrides) => {
+      render(<CalendarStrip {...base} {...start} {...overrides} />)
+      expect(screen.queryByText('Start from your calendar')).not.toBeInTheDocument()
     })
   })
 

@@ -1202,8 +1202,36 @@ describe('PaintingPhase', () => {
       renderSignedIn()
 
       await screen.findAllByRole('button', { pressed: false })
+      expect(liveText()).toBe(
+        "Your calendar shows nothing booked Sep 4–5. Mark all 6 slots free, then unmark any days you're away. We can't see most all-day events, like vacations.",
+      )
+      expect(screen.getByRole('button', { name: 'Mark 6 slots free' })).toBeEnabled()
+    })
+
+    // Once anything is marked, the strip goes back to reporting the check rather than leading with
+    // the fill, and the empty calendar is still named and scoped there.
+    it('should report an empty calendar as a completed check once something is marked', async () => {
+      mockOwnerAvailability(THU_SEVEN_BOOKED, NOTHING)
+
+      renderSignedIn()
+
+      await screen.findAllByRole('button', { pressed: true })
       expect(liveText()).toBe('Checked just now · nothing booked on your primary calendar, Sep 4–5')
       expect(screen.getByRole('button', { name: "Fill in what's free" })).toBeEnabled()
+    })
+
+    // The connect-first path that used to dead-end: an empty grid with booked time behind it leads
+    // with the fill, counted, and one tap marks every unbooked slot.
+    it('should lead an empty grid with a counted fill that marks every unbooked slot', async () => {
+      mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
+
+      renderSignedIn()
+
+      expect(await screen.findByText('Start from your calendar')).toBeInTheDocument()
+      await setupUser().click(screen.getByRole('button', { name: 'Mark 5 slots free' }))
+
+      expect(await screen.findAllByRole('button', { pressed: true })).toHaveLength(5)
+      expect(liveText()).toBe('Marked 5 slots free · skipped 1 booked slot')
     })
 
     // The window the server sends back is its syncedRange, which is unioned across every poll this
@@ -1224,7 +1252,7 @@ describe('PaintingPhase', () => {
       renderSignedIn()
 
       await screen.findAllByRole('button', { pressed: false })
-      expect(liveText()).toBe('Checked just now · nothing booked on your primary calendar, Sep 4–5')
+      expect(liveText()).toContain('Your calendar shows nothing booked Sep 4–5.')
     })
 
     // AC-030 and AC-042. The layer is in the record and is deliberately withheld: a name claiming
@@ -1448,7 +1476,7 @@ describe('PaintingPhase', () => {
       mockOwnerAvailability(NOTHING, THU_SEVEN_BOOKED)
 
       renderSignedIn()
-      await setupUser().click(await screen.findByRole('button', { name: "Fill in what's free" }))
+      await setupUser().click(await screen.findByRole('button', { name: 'Mark 5 slots free' }))
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(await screen.findAllByRole('button', { pressed: true })).toHaveLength(5)
