@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import React from 'react'
 
 import { FOCUS_RING } from '@components/ui/focus-ring'
+import { toSpokenCode } from '@utils/spoken-code'
 
 // h-9: one step below the default control size, so the group sits beside the poll title as
 // quiet header furniture instead of competing with it.
@@ -138,7 +139,7 @@ export const QrButton = ({
                 {/* Real, selectable, resizable text — never an image — and spaced rather than
                     hyphenated because the point of it is being read out loud. */}
                 <dd className="break-words select-all text-3xl font-semibold tracking-wide text-[var(--bone)] sm:text-4xl">
-                  {sessionId.split('-').join(' ')}
+                  {toSpokenCode(sessionId)}
                 </dd>
               </dl>
 

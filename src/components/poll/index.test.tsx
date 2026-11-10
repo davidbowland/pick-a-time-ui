@@ -596,6 +596,48 @@ describe('Poll', () => {
     expect(await screen.findByText('Closes Aug 24, 2026 at 12:30 PM')).toBeInTheDocument()
   })
 
+  describe('poll code', () => {
+    it('shows the poll code as spoken words on the identity step', async () => {
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      const code = await screen.findByText('amber harbor')
+      expect(code.closest('p')).toHaveTextContent('Poll code: amber harbor')
+    })
+
+    it('shows the poll code once a voter is identified', async () => {
+      window.history.pushState(null, '', `?id=${existingUser.userId}`)
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([existingUser])
+      jest.mocked(fetchAvailability).mockResolvedValueOnce({
+        userId: existingUser.userId,
+        free: [
+          [false, false],
+          [false, false],
+          [false, false],
+        ],
+        expiration: 1725453600,
+      })
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      expect(await screen.findByRole('tab', { name: 'Mark your times' })).toBeInTheDocument()
+      expect(screen.getByText('amber harbor')).toBeInTheDocument()
+    })
+
+    it('shows the code as text, not as a control', async () => {
+      jest.mocked(fetchPoll).mockResolvedValueOnce(poll)
+      jest.mocked(fetchUsers).mockResolvedValueOnce([])
+
+      renderWithClient(<Poll now={fixedNow} sessionId="amber-harbor" />)
+
+      await screen.findByText('amber harbor')
+      expect(screen.queryByRole('button', { name: /amber harbor/i })).not.toBeInTheDocument()
+    })
+  })
+
   it("shows the current voter's identity control once the active phase is reached", async () => {
     window.history.pushState(null, '', `?id=${existingUser.userId}`)
     jest.mocked(fetchPoll).mockResolvedValueOnce(poll)

@@ -23,6 +23,7 @@ import { PollData, User } from '@types'
 import { formatExpiration } from '@utils/dates'
 import { detectViewerTimezone } from '@utils/detectViewerTimezone'
 import { hasStatusCode } from '@utils/http-status'
+import { toSpokenCode } from '@utils/spoken-code'
 import { displayName } from '@utils/users'
 
 const TAB_BASE_CLASS = `rounded-full px-4 py-1.5 text-sm font-bold transition-colors duration-150 ease-out ${FOCUS_RING}`
@@ -338,6 +339,18 @@ const PollComponent = ({ now, sessionId, storage }: PollProps): React.ReactNode 
           </h1>
           {phase !== 'identity' && <Share pollName={poll.name} sessionId={sessionId} />}
         </div>
+        {/* The poll's spoken name, read out to invite people, who type it under "Have a poll code?"
+            on the home page. Plain text in every phase, deliberately not a control: anyone sending a
+            message already has Share and Copy link beside the title. The sr-only colon keeps a
+            screen reader from running the label into the code. */}
+        <p className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--slate)]">
+            Poll code<span className="sr-only">{': '}</span>
+          </span>
+          <span className="break-words select-all text-lg font-semibold tracking-wide text-[var(--bone)]">
+            {toSpokenCode(sessionId)}
+          </span>
+        </p>
         <p className="text-xs text-[var(--slate)]">{formatExpiration(poll.expiration, viewerTimezone)}</p>
       </div>
       {phase === 'identity' ? (

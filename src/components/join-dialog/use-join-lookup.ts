@@ -5,15 +5,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { JOIN_COPY, JoinErrorState } from './elements'
 import { fetchPoll, hasStatusCode, parseApiMessage } from '@services/api'
 import { parseSessionCode } from '@utils/session-code'
+import { toSpokenCode } from '@utils/spoken-code'
 
 /**
  * Longest echo worth reading back inside an error. A pasted URL parses to whatever segment it
  * ended with, and repeating ninety characters of it in a sentence is noise, not evidence.
  */
 const ECHO_MAX_LENGTH = 24
-
-/** Codes are stored hyphenated and read aloud as words. Everything on screen uses the spoken form. */
-const spoken = (code: string): string => code.replace(/-/g, ' ')
 
 /**
  * The API's `ApiError.message` is built as `GET /sessions/<code>` — it carries the entered code
@@ -106,7 +104,7 @@ export const useJoinLookup = (): JoinLookup => {
     if (missCountRef.current >= 2) {
       return { lines: [JOIN_COPY.secondMiss, JOIN_COPY.secondMissNote], variant: 'alert' }
     }
-    const spokenCode = spoken(code)
+    const spokenCode = toSpokenCode(code)
     const first = spokenCode.length > ECHO_MAX_LENGTH ? JOIN_COPY.firstMissLong : JOIN_COPY.firstMiss(spokenCode)
     return { lines: [first, JOIN_COPY.firstMissNote], variant: 'alert' }
   }
@@ -140,7 +138,7 @@ export const useJoinLookup = (): JoinLookup => {
       // expecting" that networkMode: 'always' exists to prevent, arriving through a different door.
       if (!isMountedRef.current) return
 
-      setSuccess({ pollName: poll.name, spokenCode: spoken(code) })
+      setSuccess({ pollName: poll.name, spokenCode: toSpokenCode(code) })
       // Encoded, not concatenated: a value that survived the parser still must not be able to mean
       // a path of its own. Matches what every call in services/api already does.
       //
